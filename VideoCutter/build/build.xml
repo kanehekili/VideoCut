@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<project name="Build videocut" default="deploy">
+	<target name="build_dir">
+    	<property file="build.properties"/>
+		<property name="stage" value="stage"/>
+		<property name="rootDir" value="${stage}/videocut"/>
+		<property name="icons" value="${rootDir}/icons"/>
+		<property name="data" value="${rootDir}/data"/>
+		<delete dir="${stage}"/>
+		<mkdir dir="${stage}"/>
+		<mkdir dir="${rootDir}"/>
+		<mkdir dir="${icons}"/>
+		<mkdir dir="${data}"/>
+
+		<property name="source" value="../src"/>
+		<property name="srcIcons" value="${source}/icons"/>
+		<property name="srcData" value="${source}/data"/>
+		
+		<copy todir="${rootDir}">
+			<fileset file="*.desktop">
+			</fileset>
+		</copy>
+		
+		<copy todir="${icons}">
+			<fileset dir="${srcIcons}">
+			</fileset>
+		</copy>
+		<copy todir="${data}">
+			<fileset dir="${srcData}">
+			</fileset>
+		</copy>
+		
+		<copy todir="${rootDir}">
+			<fileset dir="${source}" includes="*.py">
+			</fileset>
+		</copy>
+
+	</target>
+
+	<target name="deploy" depends="build_dir">
+		<delete>
+			<fileset dir="." includes="**/*.tar*"/>
+		</delete>	
+		<tar destfile="videocut${version}.tar">
+			<fileset dir="${stage}"/>
+		</tar>
+		<delete dir="${stage}"/>
+	</target>
+</project>	
