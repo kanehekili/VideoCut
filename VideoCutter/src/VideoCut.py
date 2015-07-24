@@ -483,7 +483,7 @@ class MainFrame(QtGui.QMainWindow):
         self._widgets.stopProgress()
 
     def showWarning(self,aMessage):
-        QtGui.QMessageBox.warning(self,"Tsk Tsk",aMessage,QtGui.QMessageBox.Cancel, QtGui.QMessageBox.NoButton, QtGui.QMessageBox.NoButton)
+        QtGui.QMessageBox.warning(self,"Tsk Tsk",aMessage,QtGui.QMessageBox.Ok, QtGui.QMessageBox.NoButton, QtGui.QMessageBox.NoButton)
     
     
     def enableControls(self,enable):
@@ -522,7 +522,6 @@ class MainFrame(QtGui.QMainWindow):
 
 class VideoPlayer():
     def __init__(self,path,streamProbe):
-        #streamProbe.getPathName()
         self.framecount = 0
         self._file=str(path)
         self._streamProbe = streamProbe
@@ -530,12 +529,13 @@ class VideoPlayer():
         
         
     def _captureFromFile(self):
-        if not self._streamProbe.isKnownVideoFormat():
-            return None
         cap = cv2.VideoCapture()
+#         if not self._streamProbe.isKnownVideoFormat():
+#             return cap
+        
         isValid = cap.open(self._file)
         if not isValid:
-            return None
+            return cap
         self.frameWidth= cap.get(cv2.cv.CV_CAP_PROP_FRAME_WIDTH)
         self.frameHeight= cap.get(cv2.cv.CV_CAP_PROP_FRAME_HEIGHT)
         self.framecount= cap.get(cv2.cv.CV_CAP_PROP_FRAME_COUNT)
@@ -546,7 +546,7 @@ class VideoPlayer():
 #         test = cap.set(cv2.cv.CV_CAP_PROP_POS_FRAMES,self.framecount-10)
 #         self.totalTimeMilliSeconds = cap.get(cv2.cv.CV_CAP_PROP_POS_MSEC);
         if self.frameHeight< 10.0 or self.frameWidth < 10.0 or self.framecount < 10.0 or self.fps < 10.0:
-            return None;
+            return cap;
 
         #too slow: self.__checkMax(cap)
         self.totalTimeMilliSeconds = int(self.framecount/self.fps*1000)
@@ -677,14 +677,17 @@ class VideoControl(QObject):
         if self.player is not None:
             self.player.close()
             self.videoCuts=[]
-        
-        self.streamData = FFStreamProbe(filePath)
-        
-        self.currentPath = OSTools().getPathWithoutExtension(filePath);
+        try:
+            self.streamData = FFStreamProbe(filePath)
+            self.currentPath = OSTools().getPathWithoutExtension(filePath); 
+        except: 
+            self.streamData = None      
         try:            
             self.player = VideoPlayer(filePath,self.streamData) 
-            self.player.validate()
             self._initSliderThread()
+            self.player.validate()
+            if not self.streamData.isKnownVideoFormat():
+                raise Exception('Video format not supported')
             self._updateSliderPosition(0)
             self.gui.enableControls(True)
         except Exception,ex:
