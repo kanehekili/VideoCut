@@ -1,14 +1,14 @@
 # VideoCut
-Version 0.0.1
+Version 0.0.2
 
 MP4 Cutter for Linux on base of OpenCV and ffmpeg. Cutting is lossless, the target file will not be reencoded 
 
-It can be used for cutting out certain parts of the film. 
+It can be used for cutting out certain parts of the film. Has been written in conjunction with the MDVB Recorder for removing ads. Handles avi, mp2,mp4 (PS or TS). Other formats not tested but possible.
  
 ###Prerequisites
 * python2.7
 * OpenCV 2.4
-* ffmpeg 1.2.7
+* ffmpeg 2.7.x
 * python2-pyqt4
 
 ###Features
@@ -16,8 +16,8 @@ Cuts an mpg file into parts and joins them afterwards. All commands can be reach
 
 The cutout parts will be joined without beeing recoded - the quality stays the same
 ###Limitations
-Audio sync seems to be ok, but needs observation on different players (no problem with vlc)
-No codec Info shown
-Playing the film not implemented yet (without sound)
+Using ffmpeg as cutting/joining tool. Some older versions of ffmpeg seem to have problems with syncing audio on avchd (mp4 TS) streams. 
+Current git version of ffmpeg will yield the best results.
+
 
 Have fun
