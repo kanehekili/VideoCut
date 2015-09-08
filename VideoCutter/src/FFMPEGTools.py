@@ -11,6 +11,7 @@ from datetime import timedelta
 import re
 import fcntl
 from time import sleep
+import shutil
 
 
 BIN = "ffmpeg"
@@ -126,7 +127,7 @@ class VideoStreamInfo():
     def getFrameRate(self):
         if 'avg_frame_rate' in self.dataDict:
             z,n= self.dataDict['avg_frame_rate'].split('/')
-            return z
+            return float(z)
         return 1.0
 
     def getCodec(self):
@@ -178,7 +179,8 @@ class VideoStreamInfo():
     def frameRate(self):
         if "r_frame_rate" in self.dataDict:
             (n,z)=self.dataDict["r_frame_rate"].split("/")
-            return float(n)/float(z) 
+            if int(z)!=0:
+                return float(n)/float(z) 
         return 0.0
  
     
@@ -336,9 +338,10 @@ class FFMPEGCutter():
     def __init__(self,srcfilePath,targetPath):
         self.filePath=srcfilePath
         self.targetPath=targetPath
-        self._tempPath='/tmp/vc_'
-        self._tmpCutList=self._tempPath+"cut.txt"
-        self._fragmentCount=1;      
+        self._tempDir ='/tmp'
+        self._tmpCutList=self._getTempPath()+"cut.txt"
+        self._fragmentCount=1;   
+        self._messenger = None   
     
     '''
     cuts a part of the film, saves it an returns the temp filename vor later concatintaion
@@ -367,17 +370,22 @@ class FFMPEGCutter():
         if nbrOfFragments is 1:
             fragment = self.targetPath
         else:
-            fragment = self._tempPath+str(index)+".m2t"
+            fragment = self._getTempPath()+str(index)+".m2t"
         print "generate file:",fragment
-
+        self.say("Cutting part:"+str(index))
         pFFmpeg = subprocess.Popen([BIN,"-hide_banner","-y","-ss",prefetchString,"-i",self.filePath,"-ss",seekString,"-t",durString,"-vcodec","copy","-acodec","copy",fragment], stdout=subprocess.PIPE,stderr=subprocess.STDOUT)
          
         while pFFmpeg.poll() is None:
-            sleep(0.2)    
-            self.non_block_read(pFFmpeg.stdout)
+            sleep(0.2)   
+            if not self.non_block_read("Cut part "+str(index)+":",pFFmpeg.stdout):
+                self.say("Cutting part %s failed"%(str(index)))
+                return False
         
-        print " --READY ---"
+        self.say("Cutting done")
         return True
+    
+    def _getTempPath(self):
+        return self._tempDir+'/vc_'
     
     def join(self):
         #add all files into a catlist: file '/tmp/mat_tmp0.m2t' ..etc
@@ -385,42 +393,99 @@ class FFMPEGCutter():
         if self._fragmentCount is 1:
             return
 
-        print "joining the files..."
+        self.say("Joining files...")
         
         with open(self._tmpCutList, 'w') as cutList:
             for index in range(0,self._fragmentCount):
-                tmp = self._tempPath+str(index)+".m2t"
+                tmp = self._getTempPath()+str(index)+".m2t"
                 cutList.write("file '"+tmp+"'\n")
         
-        pFFmpeg = subprocess.Popen([BIN,"-hide_banner","-y","-f","concat","-i",self._tmpCutList,"-c","copy",self.targetPath],stdout=subprocess.PIPE,stderr=subprocess.STDOUT)        
+        pFFmpeg = subprocess.Popen([BIN,"-hide_banner","-y","-f","concat","-i",self._tmpCutList,"-c","copy",self.targetPath],stdout=subprocess.PIPE,stderr=subprocess.STDOUT)
+       
         while pFFmpeg.poll() is None:
             sleep(0.2)
-            self.non_block_read(pFFmpeg.stdout)
+            if not self.non_block_read("Join:",pFFmpeg.stdout):
+                return False
               
-        print " --JOINED ---"     
+        self.say("Films joined")
+        self._cleanup()
+        return True
     
-    
+    ''' Sets an object that understands say(aText)'''
+    def setMessageDelegator(self,delegator): 
+        self._messenger=delegator
+
+    def say(self,text):
+        if self._messenger is not None:
+            self._messenger.say(text) 
+            
     #reading non blocking
-    def non_block_read(self,output):
+
+    def non_block_read(self,prefix,output):
         fd = output.fileno()
         flags = fcntl.fcntl(fd, fcntl.F_GETFL)
         fcntl.fcntl(fd, fcntl.F_SETFL, flags | os.O_NONBLOCK)
         text = "."
         try:
             text = output.read()
-            print ">",text
-            #print os.read(fd, 1024)
+            #print ">",text
+            m = re.search('frame=[ ]*[0-9]+',text)
+            p1 = m.group(0)
+            m = re.search('time=[ ]*[0-9:.]+',text)
+            p2 = m.group(0)
+            self.say(prefix+" "+p1+" - "+p2)
         except:
-            print text   
+            if len(text)>5:
+                print "<"+text   
         if "failed" in text:
-            print ">>>> Error:",text
-            return text
+            #Place to trigger message
+            self.say(prefix+" >>>> Error:",text)
+            return False
         else:
-            return None 
+            return True 
     
 
+    def ensureAvailableSpace(self):
+        if not self._hasEnoughAvailableSpace(self._tempDir):
+            path=os.path.expanduser("~")
+            self.ensureDirectory(path,"vc_temp")
 
-    def convertToTs(self):
+    def _hasEnoughAvailableSpace(self,tmpDir):
+        result = Popen(["df","--output=avail",tmpDir],stdout=subprocess.PIPE,stderr=subprocess.PIPE).communicate()
+        print "data:"+result[0]
+        if len(result[1])>0:
+            print "Error using df:"+result[1]
+            return False
+        
+        rows = result[0].split('\n')
+        if len(rows) > 1:
+            #Filesystem      Size  Used Avail Use% Mounted on
+            avail = int(rows[1])*1024
+
+        needed = os.path.getsize(self.filePath)
+        print "file size:",needed, " avail:",avail
+        return needed <= avail
+
+    
+    def _cleanup(self):
+        for index in range(self._fragmentCount):
+            fragment = self._getTempPath()+str(index)+".m2t"
+            os.remove(fragment)   
+
+    def ensureDirectory(self,path,tail):
+        #make sure the target dir is present
+        if tail is not None:
+            path = os.path.join(path,tail)
+        if not os.access(path, os.F_OK):
+            try:
+                os.makedirs(path)
+                os.chmod(path,0o777)
+            except OSError:
+                print "Error creating directory"
+                return
+        self._tempDir=path    
+
+    def convertToTs(self,convertedFileName):
         #MOV files need to be converted:
         #ffmpeg -y -i big_buck_bunny_1080p_h264.mov -vcodec copy -bsf:v h264_mp4toannexb -acodec ac3 OUTPUT.ts
         print "TODO"
@@ -434,8 +499,8 @@ if __name__ == "__main__":
 
 '''  
 if __name__ == "__main__":
-    #m=FFStreamProbe("/home/matze/Videos/008Test.m2t")
-    m=FFStreamProbe("/home/matze/Videos/handbrake.txt")
+    m=FFStreamProbe("/home/matze/Videos/kabel_eins/07_02_23_04-Batman & Robin.m2t")
+    #m=FFStreamProbe("/home/matze/Videos/handbrake.txt")
     #m=FFStreamProbe("/home/matze/Videos/CT.m2t")
     #m=FFStreamProbe("/home/matze/Videos/big_buck_bunny_1080p_h264.mov")
     print "-------- Prim video -------------"
@@ -446,6 +511,7 @@ if __name__ == "__main__":
     print "getTimeBase: ",s.getTimeBase()
     print "getAspect ",s.getAspectRatio()
     print "getFrameRate: ",s.getFrameRate()
+    print "getFrameRate?: ",s.frameRate()
     print "getDuration: ",s.duration()
     print "getWidth: ",s.getWidth()
     print "getHeight: ",s.getHeight()
@@ -461,6 +527,8 @@ if __name__ == "__main__":
     print "getCodec:",s.getCodec()
     print "getCodecTimeBase: ",s.getCodecTimeBase()
     print "getTimeBase: ",s.getTimeBase()
+    print "getFrameRate: ",s.getFrameRate()
+    print "getFrameRate?: ",s.frameRate()
     print "getDuration: ",s.duration()
     print "isAudio: ",s.isAudio()
     print "isVideo: ",s.isVideo()
@@ -479,8 +547,8 @@ if __name__ == "__main__":
         print "isAudio: ",s.isAudio()
         print "isVideo: ",s.isVideo()
 
-
-        
+    cutter = FFMPEGCutter("/home/matze/Videos/kabel_eins/07_02_23_04-Batman & Robin.m2t","/home/matze/Videos/x.mp4")
+    cutter.ensureAvailableSpace()    
 ''' 
     #Very slow!!!
     f = FFFrameProbe("/home/matze/Videos/09_21_13_33-Indiana Jones und der Tempel des Todes.m2t")

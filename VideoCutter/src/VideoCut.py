@@ -7,7 +7,7 @@
 
 import cv2
 from cv2 import cv
-import sys
+import sys, traceback
 from datetime import timedelta
 
 from PyQt4 import QtGui,QtCore
@@ -15,11 +15,12 @@ from PyQt4.QtCore import QTimer, QObject
 from PyQt4.QtGui import QApplication, QImage, QPainter, QWidget, QVBoxLayout,\
     QDesktopWidget, QFileDialog, QDial, QColor, QSizePolicy, QLabel,\
     QHBoxLayout, QListWidget, QGridLayout, QListWidgetItem,\
-    QIcon, QMenu, QFrame
+    QIcon, QMenu, QFrame, QSpinBox
 from PyQt4.Qt import QRectF, QSize, QString, Qt, QStatusBar
 from FFMPEGTools import FFMPEGCutter, FFStreamProbe
 import os
-from time import sleep
+from time import sleep, strftime
+import xml.etree.cElementTree as CT
 #import MProfiler
 
 
@@ -42,11 +43,13 @@ def timedeltaToString(deltaTime):
     minutes, seconds = divmod(remainder, 60)
     return '%s:%s:%s' % (hours, minutes, seconds)
 
+#TODO join them with the OSTools class and create an import in ant
 class OSTools():
     
     def getPathWithoutExtension(self,aPath):
         if aPath:
-            rawPath = os.path.splitext(str(aPath))[0]
+            #rawPath = os.path.splitext(str(aPath))[0]
+            rawPath = os.path.splitext(aPath)[0]
         else:
             rawPath=""
         return rawPath
@@ -56,10 +59,57 @@ class OSTools():
         dname = os.path.dirname(abspath)
         return dname               
 
+    def getHomeDirectory(self):
+        return os.path.expanduser("~")
+
     def setCurrentWorkingDirectory(self):
         print "DIR:",self.getWorkingDirectory()
         os.chdir(self.getWorkingDirectory())
+        
+    def getFileNameOnly(self,path):
+        return os.path.basename(path)
+    
+    def fileExists(self,path):
+        return os.path.isfile(path)
+    
+    def removeFile(self,path):
+        if self.fileExists(path):
+            os.remove(path)
 
+
+class XMLAccessor():
+    def __init__(self,path):
+        self._path=path+".xml"
+        
+    def writeXML(self,videoCutEntries):
+        rootElement = CT.Element('VC_Data')
+        for cut in videoCutEntries:
+            entry = CT.SubElement(rootElement,"Entry")
+            entry.attrib["frame"]=str(cut.frameNumber) 
+            entry.attrib["mode"]=str(cut.modeString)
+        
+        with open(self._path, 'w') as aFile:
+            CT.ElementTree(rootElement).write(aFile)
+
+    def readXML(self):
+        cutEntries = []
+        if not OSTools().fileExists(self._path):
+            return cutEntries
+        with open(self._path, 'r') as xmlFile:
+            xmlData = xmlFile.read()
+            
+        root = CT.fromstring(xmlData)
+        for info in root:
+            frameNbr= float(info.get('frame'))
+            markerType= info.get('mode')
+            entry = VideoCutEntry(frameNbr,0,markerType)
+            cutEntries.append(entry)
+        
+        return cutEntries
+
+    def clear(self):
+        OSTools().removeFile(self._path)
+            
 
 class CVImage(QImage):
     def __init__(self,numpyArray):
@@ -83,11 +133,12 @@ class VideoWidget(QFrame):
         self.setFrameStyle(QFrame.Panel | QFrame.Sunken)
         self.setLineWidth(1)
         #self.setMidLineWidth(2)
-
+        
 
     def paintEvent(self, event):
+
         QFrame.paintEvent(self,event)
-        painter = QPainter(self)
+        
         if self._image is None:
             return
         
@@ -104,6 +155,7 @@ class VideoWidget(QFrame):
             imgX = w;
             x=0
             y=(h-imgY)/2
+        painter = QPainter(self)
         painter.drawImage(QRectF(x, y,imgX,imgY), self._image)        
         
     def sizeHint(self):
@@ -209,6 +261,7 @@ class LayoutWindow(QWidget):
         self.ui_Slider =  QtGui.QSlider(QtCore.Qt.Horizontal)
         self.ui_Slider.setMinimum(0)
         self.ui_Slider.setMaximum(self.SLIDER_RESOLUTION)
+        self.ui_Slider.setToolTip("Video track")
         #self.ui_Slider.setTickPosition(Qt.TicksAbove)
         
         self.ui_Dial = QDial(self)
@@ -216,11 +269,17 @@ class LayoutWindow(QWidget):
         self.ui_Dial.setNotchesVisible(True)
         self.ui_Dial.setWrapping(False)
         self.ui_Dial.setNotchTarget(5.0)
+        self.ui_Dial.setToolTip("Fine tuning")
         self.setDialResolution(self.DIAL_RESOLUTION)
 
-        self.ui_InfoLabel = QLabel()
+        self.ui_GotoField = QSpinBox(self)
+        self.ui_GotoField.setValue(1)
+        self.ui_GotoField.setToolTip("Goto Frame")
+        
+        self.ui_InfoLabel = QLabel(self)
         changeBackgroundColor(self.ui_InfoLabel , "lightblue")
-        self.ui_InfoLabel.setText("Info:")
+        self.ui_InfoLabel.setText("")
+        self.ui_InfoLabel.setToolTip("Infos about the video position")
         
         self.ui_List = self.__createListWidget()
         
@@ -237,17 +296,18 @@ class LayoutWindow(QWidget):
         #changeBackgroundColor(mainVBox, "yellow")
 
     def makeGridLayout(self):
-        layout = QGridLayout()
+        gridLayout = QGridLayout()
         self.ui_List.setSizePolicy(QSizePolicy.Minimum,QSizePolicy.Expanding)
-        layout.addWidget(self.ui_List,0,0,5,1)
-        #layout.addWidget(self._listSplitter,0,0,5,1)
-        layout.addWidget(self.ui_VideoFrame,0,2,3,-1);
-        layout.addWidget(self.ui_InfoLabel,4,1,1,-1)
-        layout.addWidget(self.ui_Slider,5,0,1,120)
-        layout.addWidget(self.ui_Dial,5,121)
-        layout.addWidget(self.statusbar,6,0,1,122)
+        gridLayout.addWidget(self.ui_List,0,0,5,1)
+        #row column, rowSpan, columnSpan
+        gridLayout.addWidget(self.ui_VideoFrame,0,2,3,-1);
+        gridLayout.addWidget(self.ui_GotoField,4,1,1,20)
+        gridLayout.addWidget(self.ui_InfoLabel,4,26,1,-1)
+        gridLayout.addWidget(self.ui_Slider,5,0,1,120)
+        gridLayout.addWidget(self.ui_Dial,5,121)
+        gridLayout.addWidget(self.statusbar,6,0,1,122)
 
-        return layout
+        return gridLayout
                                                   
                          
 
@@ -274,6 +334,9 @@ class LayoutWindow(QWidget):
     def showInfo(self,text):
         self.ui_InfoLabel.setText(text)
     
+    def showStatusMessage(self,text):
+        self.statusbar.showMessage(text)
+    
     def setDialResolution(self,resolution):
         self.ui_Dial.setMinimum(-resolution/2)
         self.ui_Dial.setMaximum(resolution/2)
@@ -281,6 +344,13 @@ class LayoutWindow(QWidget):
 
     def syncSliderPos(self,pos):
         self.ui_Slider.setSliderPosition(pos)
+    
+    def setSliderTicks(self,ticks):
+        self.ui_Slider.setSingleStep(ticks)
+        self.ui_Slider.setPageStep(ticks*2)
+    
+    def setGotoFieldMaximum(self,count):
+        self.ui_GotoField.setMaximum(count)
     
     def clearVideoFrame(self):
         self.ui_VideoFrame.showFrame(None)
@@ -312,6 +382,14 @@ class LayoutWindow(QWidget):
         
         self.ui_Dial.valueChanged.connect(aVideoController.dialChanged)
         self.ui_Dial.sliderReleased.connect(self.__resetDial)
+        
+        self.ui_GotoField.editingFinished.connect(self.__gotoFrame)
+        
+        #test
+        self.statusMessenger = StatusDispatcher()
+        self.connect(self.statusMessenger,self.statusMessenger.signal,self.showStatusMessage)
+        #self.connect(self.sliderThread,self.sliderThread.signal,self._showFrame)                                     
+        
         self._hookListActions()
     
     def keyReleaseEvent(self,event):
@@ -322,20 +400,25 @@ class LayoutWindow(QWidget):
         rmAction = QtGui.QAction(QtGui.QIcon('icons/close-x.png'), 'Delete', self)
         rmAction.triggered.connect(self._removeMarker)
         rmAllAction = QtGui.QAction(QtGui.QIcon('icons/clear-all.png'), 'Remove all', self)
-        rmAllAction.triggered.connect(self.clearMarker)
-        gotoAction = QtGui.QAction(QtGui.QIcon('icons/go-next.png'), 'Goto', self)
-        gotoAction.triggered.connect(self._gotoFromMarker)
+        rmAllAction.triggered.connect(self.purgeMarker)
+        self.gotoAction = QtGui.QAction(QtGui.QIcon('icons/go-next.png'), 'Goto', self)
+        self.gotoAction.triggered.connect(self._gotoFromMarker)
   
         #menus      
         self.ui_List.customContextMenuRequested.connect(self._openListMenu)
         self._listMenu = QMenu()
+        self._listMenu.addAction(self.gotoAction)
+        self._listMenu.addSeparator()
         self._listMenu.addAction(rmAction)
         self._listMenu.addAction(rmAllAction)
-        self._listMenu.addAction(gotoAction)
+
         
  
     def __resetDial(self):
         self.ui_Dial.setProperty("value", 0)
+
+    def __gotoFrame(self):
+        self.__videoController._gotoFrame(self.ui_GotoField.value())
 
     def __createProgressBar(self):
         self.progressBar = QtGui.QProgressBar(self)
@@ -370,10 +453,15 @@ class LayoutWindow(QWidget):
         item = selectionList[0]
         self.ui_List.takeItem(item.row())
         self.__videoController.removeVideoCutIndex(item.row())
-        
-    def clearMarker(self):
+
+  
+    def clearMarkerList(self):
         self.ui_List.clear()
-        self.__videoController.removeVideoCuts()
+
+    #remove contents, remove file 
+    def purgeMarker(self):
+        self.ui_List.clear()
+        self.__videoController.purgeVideoCuts()
         
     def _gotoFromMarker(self,whatis):
         selectionList = self.ui_List.selectedIndexes()
@@ -462,6 +550,10 @@ class MainFrame(QtGui.QMainWindow):
         
         self.setWindowTitle("VideoCut")   
         return widgets
+    
+    def updateWindowTitle(self,text):
+        qText = QString(text.decode('utf-8'))
+        self.setWindowTitle("VideoCut - "+qText)
      
     def showInfo(self,text):
         self._widgets.showInfo(text)
@@ -472,6 +564,15 @@ class MainFrame(QtGui.QMainWindow):
 
     def syncSliderPos(self,pos):
         self._widgets.syncSliderPos(pos)
+        
+    def setDialResolution(self,fps):
+        self._widgets.setDialResolution(fps)
+
+    def setGotoMaximum(self,count):
+        self._widgets.setGotoFieldMaximum(count)
+
+    def setSliderTicks(self,ticks):
+        self._widgets.setSliderTicks(ticks)        
 
     def addCutMark(self,frame,cutEntry,rowIndex):
         self._widgets.addCutMark(frame,cutEntry,rowIndex)
@@ -496,69 +597,116 @@ class MainFrame(QtGui.QMainWindow):
         initalPath = self._videoController.getTargetFile()
         result = QFileDialog.getOpenFileName(parent=self, directory=initalPath, caption=QString("Load Video"));
         if result:
-            self._widgets.clearMarker()
-            self._videoController.setFile(result)
-
+            fn = self.__encodeQString(result)
+            self._widgets.clearMarkerList()
+            self._videoController.clearVideoCutEntries()
+            self._videoController.setFile(fn)#encode error: str(result)
+            
     def saveVideo(self):
         initalPath = self._videoController.getTargetFile()
-        result = QFileDialog.getSaveFileName(parent=self, directory=initalPath, caption=QString("Save Video"));
+        qText = QString(initalPath.decode('utf-8'))
+        result = QFileDialog.getSaveFileName(parent=self, directory=qText, caption=QString("Save Video"));
         if result:
+            fn = self.__encodeQString(result)
             self._widgets.showBusy()
-            self._videoController.saveVideo(result)
+            self._videoController.saveVideo(fn)
+    
+    def __encodeQString(self,qString):
+        return unicode(qString).encode('utf-8')
     
     def showCodecInfo(self):
-        #TODO:
-        QtGui.QMessageBox.information(self,"Video Info","Under construction",QtGui.QMessageBox.NoButton, QtGui.QMessageBox.Ok, QtGui.QMessageBox.NoButton)
+        #TODO: More infos, better layout
+        try:
+            videoData = self._videoController.streamData.getVideoStream()
+            audioData = self._videoController.streamData.getAudioStream()
+            '''
+            (FPS Avg,videoData.getFrameRate()),
+            (Aspect,videoData.getAspectRatio()),
+            (Video Codec,videoData.getCodec()),
+            
+            (Width,videoData.getWidth()),
+            (Height,videoData.getHeight()),
+            getCodecTimeBase
+            getTimeBase
+            (Bitrate,videoData.bitRate()),
+            (Duration,videoData.duration())
+            (FPS?,vidoeaData.frameRate())
+            
+            (Audio Codec,audioData.getCodec())
+            '''
+            text = '<table border=0 cellspacing="3",cellpadding="2"><tr border=1><td><b>Video Codec:</b></td><td> %s </td></tr><tr><td><b>Aspect:</b></td><td> %s </td></tr><tr><td><b>FPS:</b></td><td> %s </td></tr><tr><td><b>Audio codec:</b></td><td> %s </td></tr></table>' %(videoData.getCodec(),videoData.getAspectRatio(),videoData.getFrameRate(),audioData.getCodec())
+        except:
+            text = "<br><b>No Information</b><br>"    
+        self.__getInfoDialog(text).show()
         
     def playVideo(self):
-        #TODO:
-        
-        
-        self.playAction.setIcon(QtGui.QIcon('./icons/pause.png'))
-        QtGui.QMessageBox.information(self,"Play video","Under construction",QtGui.QMessageBox.NoButton, QtGui.QMessageBox.Ok, QtGui.QMessageBox.NoButton)
-        self.playAction.setIcon(QtGui.QIcon('./icons/play.png'))
-                
+        isPlaying = self._videoController.toggleVideoPlay()
+        self.setVideoPlayerControls(isPlaying)
+    
+    def setVideoPlayerControls(self,isPlaying):
+        if isPlaying:
+            self.__enableActionsOnVideoPlay(False)
+            self.playAction.setIcon(QtGui.QIcon('./icons/pause.png'))
+        else:
+            self.__enableActionsOnVideoPlay(True)
+            self.playAction.setIcon(QtGui.QIcon('./icons/play.png'))            
+               
     #-------- ACTIONS  END ----------    
+
+    def __enableActionsOnVideoPlay(self,enable):
+        #TODO:Disabling leads to crash ?
+        #self.enableControls(enable)
+        self._widgets.ui_Slider.setEnabled(enable)
+        self.loadAction.setEnabled(enable)
+        self.saveAction.setEnabled(enable) 
+        self._widgets.gotoAction.setEnabled(enable)        
+
+    def __getInfoDialog(self,text):
+        dlg = QtGui.QDialog(self)
+        dlg.setWindowModality(QtCore.Qt.WindowModal)
+        dlg.setWindowTitle("Video Infos")
+        layout = QtGui.QVBoxLayout(dlg)
+        label = QtGui.QLabel(text)
+        layout.addWidget(label)
+        return dlg
+
 
 class VideoPlayer():
     def __init__(self,path,streamProbe):
         self.framecount = 0
+        self.totalTimeMilliSeconds = 0.0 
+        self._streamProbe=streamProbe
         self._file=str(path)
-        self._streamProbe = streamProbe
-        self._capture = self._captureFromFile()
+        self._isValid = self._captureFromFile()
         
         
     def _captureFromFile(self):
-        cap = cv2.VideoCapture()
-#         if not self._streamProbe.isKnownVideoFormat():
-#             return cap
-        
-        isValid = cap.open(self._file)
-        if not isValid:
-            return cap
-        self.frameWidth= cap.get(cv2.cv.CV_CAP_PROP_FRAME_WIDTH)
-        self.frameHeight= cap.get(cv2.cv.CV_CAP_PROP_FRAME_HEIGHT)
-        self.framecount= cap.get(cv2.cv.CV_CAP_PROP_FRAME_COUNT)
-        self.fps= cap.get(cv2.cv.CV_CAP_PROP_FPS)
+        self._capture = cv2.VideoCapture()
+        if self._streamProbe is None or not self._streamProbe.isKnownVideoFormat():
+            return False
+        if not self._capture.open(self._file):
+            return False
+        self.frameWidth= self._capture.get(cv2.cv.CV_CAP_PROP_FRAME_WIDTH)
+        self.frameHeight= self._capture.get(cv2.cv.CV_CAP_PROP_FRAME_HEIGHT)
+        self.framecount= self._capture.get(cv2.cv.CV_CAP_PROP_FRAME_COUNT)
+        self.fps= self._capture.get(cv2.cv.CV_CAP_PROP_FPS)
         
         #The problem: cv has a problem if it is BEHIND the last frame...
         #DO NOT USE;;;;; cap.set(cv2.cv.CV_CAP_PROP_POS_AVI_RATIO,1);
 #         test = cap.set(cv2.cv.CV_CAP_PROP_POS_FRAMES,self.framecount-10)
 #         self.totalTimeMilliSeconds = cap.get(cv2.cv.CV_CAP_PROP_POS_MSEC);
-        if self.frameHeight< 10.0 or self.frameWidth < 10.0 or self.framecount < 10.0 or self.fps < 10.0:
-            return cap;
-
-        #too slow: self.__checkMax(cap)
+#         if self.frameHeight< 10.0 or self.frameWidth < 10.0 or self.framecount < 10.0 or self.fps < 10.0:
+#             return cap;
         self.totalTimeMilliSeconds = int(self.framecount/self.fps*1000)
-        cap.set(cv2.cv.CV_CAP_PROP_POS_FRAMES,0)
-        return cap
+        self._capture.set(cv2.cv.CV_CAP_PROP_POS_FRAMES,0)
+        return True
 
     def validate(self):
         if not self.isValid():
             raise Exception('Invalid file')
 
     def isValid(self):
-        return self._capture is not None 
+        return self._isValid 
 
     def __checkMax(self,cap):
         testPos=self.framecount-self.framecount//100
@@ -577,14 +725,24 @@ class VideoPlayer():
     def getNextFrame(self):
         if not self.isValid():
             return None
-        
+
         ret, frame = self._capture.read()
         if ret:
             return frame
-
+ 
         self.framecount = self.getCurrentFrameNumber()
         print "No more frames @",self.framecount+1;
         return self.__getLastFrame(self._capture,self.framecount)
+
+    def grabNextFrame(self):
+        if not self.isValid():
+            return None
+
+        ret, frame = self._capture.read()
+        if ret:
+            return frame
+        return None
+    
 
     def __getLastFrame(self,cap,frameIndex):
         if frameIndex<1:
@@ -610,11 +768,12 @@ class VideoPlayer():
         return self.getFrameAt(framepos)
     
     def setFrameAt(self,frameNumber):
-        self._capture.set(cv2.cv.CV_CAP_PROP_POS_FRAMES,frameNumber)    
+        self._capture.set(cv2.cv.CV_CAP_PROP_POS_FRAMES,frameNumber)
     
     def getFrameAt(self,frameNumber):
-        self._capture.set(cv2.cv.CV_CAP_PROP_POS_FRAMES,frameNumber-1)
+        self.setFrameAt(frameNumber-1)
         return self.getNextFrame()
+
     '''
     seeks a frame based on AV pos (between 0 and 1) -SLOW!!!!!
     '''
@@ -634,7 +793,10 @@ class VideoPlayer():
             timeSlot=0
         else:    
             timeSlot = self._capture.get(cv2.cv.CV_CAP_PROP_POS_MSEC)
-        td = timedelta(milliseconds=int(timeSlot))
+        try:    
+            td = timedelta(milliseconds=long(timeSlot))
+        except:
+            td = timedelta.max
         return td
     
     def getCurrentTimeMS(self):
@@ -652,14 +814,16 @@ class VideoPlayer():
 '''        
 class VideoControl(QObject):
     def __init__(self,mainFrame):
-        super(VideoControl, self).__init__()
+        #super(VideoControl, self).__init__()
+        QObject.__init__(self)
         self.player = None
         self.gui = mainFrame
         self._frameSet=False
         self._initTimer()
         self.videoCuts=[]
-        self.currentPath = OSTools().getWorkingDirectory()#//TODO get a Video dir
+        self.currentPath = OSTools().getHomeDirectory()#//TODO get a Video dir
         self.streamData = None
+        self._vPlayer = None
 
     def _initTimer(self):
         self._timer = QTimer(self.gui)
@@ -681,41 +845,45 @@ class VideoControl(QObject):
             self.streamData = FFStreamProbe(filePath)
             self.currentPath = OSTools().getPathWithoutExtension(filePath); 
         except: 
-            self.streamData = None      
+            self.streamData = None  
+            self.currentPath = OSTools().getHomeDirectory()    
         try:            
             self.player = VideoPlayer(filePath,self.streamData) 
             self._initSliderThread()
             self.player.validate()
-            if not self.streamData.isKnownVideoFormat():
-                raise Exception('Video format not supported')
-            self._updateSliderPosition(0)
+            
+            self.__initSliderTicks()
             self.gui.enableControls(True)
-        except Exception,ex:
-            msg= "Error opening file: "+str(ex.args[0])
-            print msg
-            #self.currentPath = ""
-            #TODO: self.gui.clearAll();
-            self._updateSliderPosition(0)
+            self.gui.updateWindowTitle(OSTools().getFileNameOnly(filePath))
+            #self._gotoFrame(0)#TODO observe if crashing on start!
+            self._asyncInitVideoViews()
+           
+        except:
+            self.gui.updateWindowTitle(OSTools().getFileNameOnly(filePath))
+            self._gotoFrame(0)
             self._showCurrentFrameInfo(0)
             self.gui.showWarning("Invalid file format!")
             self.gui.enableControls(False)
-
+            traceback.print_exc(file=sys.stdout)
+        
 
     def addStartMarker(self):
-        frame = self.player.getCurrentFrame() 
-        framePos = self.player.getCurrentFrameNumber()
-        timePos = self.player.getCurrentFrameTime()
-        cutEntry = VideoCutEntry(framePos,timePos,VideoCutEntry.MODE_START)
-        self._addVideoCut(frame, cutEntry)
+        self._createVideoCutEntry(VideoCutEntry.MODE_START)
+        self.gui._widgets.statusMessenger.say("Marker created")
 
     def addStopMarker(self):
+        self._createVideoCutEntry(VideoCutEntry.MODE_STOP)
+
+    def _createVideoCutEntry(self,mode,updateXML=True):
+        self.sliderThread.wait()
         frame = self.player.getCurrentFrame()
         framePos = self.player.getCurrentFrameNumber()
         timePos = self.player.getCurrentFrameTime()
-        cutEntry = VideoCutEntry(framePos,timePos,VideoCutEntry.MODE_STOP)
-        self._addVideoCut(frame, cutEntry)
+        cutEntry = VideoCutEntry(framePos,timePos,mode)
+        self._addVideoCut(frame, cutEntry,updateXML)
+        
 
-    def _addVideoCut(self,frame,cutEntry):
+    def _addVideoCut(self,frame,cutEntry,updateXML):
         rowIndex=len(self.videoCuts)
         for idx, videoEntry in enumerate(self.videoCuts):
             frameNbr = videoEntry.frameNumber
@@ -726,17 +894,45 @@ class VideoControl(QObject):
         
         self.videoCuts.insert(rowIndex,cutEntry)
         self.gui.addCutMark(frame,cutEntry,rowIndex)
+        if updateXML:
+            XMLAccessor(self.currentPath).writeXML(self.videoCuts)
+
+    def _asyncInitVideoViews(self):
+        QTimer.singleShot(10,self._gotoFrame)
+        QTimer.singleShot(150, self.restoreVideoCuts)
+
+    def restoreVideoCuts(self):
+        self.sliderThread.wait() #sync with the worker
+        
+        cutList=XMLAccessor(self.currentPath).readXML()  
+        for cut in cutList:
+            fbnr = cut.frameNumber
+            self.player.setFrameAt(fbnr)
+            mode = VideoCutEntry.MODE_STOP
+            if cut.isStartMode():
+                mode = VideoCutEntry.MODE_START
+            self._createVideoCutEntry(mode,False)
+
+
+        self.player.setFrameAt(0)          
     
-    def removeVideoCuts(self):
+    #remove/clear all cuts but leave the file untouched
+    def clearVideoCutEntries(self):
         self.videoCuts=[]
+
+    #clear all cuts and its persistence
+    def purgeVideoCuts(self):
+        self.clearVideoCutEntries()
+        XMLAccessor(self.currentPath).clear()        
     
     def removeVideoCutIndex(self,index):
         cut = self.videoCuts[index]
         self.videoCuts.remove(cut)
+        XMLAccessor(self.currentPath).writeXML(self.videoCuts)
     
     def gotoCutIndex(self,index):
         cut = self.videoCuts[index]
-        self._updateSliderPosition(cut.frameNumber)
+        self._gotoFrame(cut.frameNumber)
     
 
     def saveVideo(self,path):
@@ -779,11 +975,16 @@ class VideoControl(QObject):
 
     def __makeCuts(self,srcPath,targetPath,spanns):
         cutter = FFMPEGCutter(srcPath,targetPath)
+        cutter.setMessageDelegator(self.gui._widgets.statusMessenger)
+        cutter.ensureAvailableSpace()
         slices = len(spanns)
         for index, cutmark in enumerate(spanns):
             t1=cutmark[0].timePos
             t2 = cutmark[1].timePos
-            cutter.cutPart(t1, t2, index,slices)
+            hasSucess = cutter.cutPart(t1, t2, index,slices)
+            if not hasSucess:
+                print"VC-Cut error" #TODO need a signal for error
+                return
         cutter.join()    
         
     '''
@@ -793,66 +994,123 @@ class VideoControl(QObject):
         self.sliderThread = Worker(self.player.getFrameAt)
         self.connect(self.sliderThread,self.sliderThread.signal,self._showFrame)
     
+    #we want 1 minute per single step
+    def __initSliderTicks(self):
+        videoInfo= self.streamData.getVideoStream()
+        fps = videoInfo.getFrameRate()
+        if self.player.framecount > 0:
+            ratio = round(LayoutWindow.SLIDER_RESOLUTION*60*fps/self.player.framecount,1)
+            self.gui.setSliderTicks(ratio)
+            self.gui.setDialResolution(fps)
+            self.gui.setGotoMaximum(self.player.framecount)
+        self._frameSet=False 
+         
+        
     #connected to slider-called whenever position is changed.
     def sliderMoved(self,pos):
         if self.player is None or not self.player.isValid():
             self.gui.syncSliderPos(0)
-        if not self._frameSet:    
+        if not self._frameSet: 
             frameNumber = round(self.player.framecount/LayoutWindow.SLIDER_RESOLUTION*pos,0)
-            self.sliderThread.showFrame(frameNumber)
+            self.__dispatchShowFrame(frameNumber)
         self._frameSet=False
-    
 
-    def dialChanged(self,pos):
-        if self.player is None or pos == 0:
-            self._timer.stop()
-            return
-        self._dialStep = pos
-        self._timer.start(1)
-        
-    def _displayAutoFrame(self):
-        if self.player is None or not self.player.isValid():
-            return
-        self._frameSet = True
-        frameNumber = self.player.getCurrentFrameNumber()+self._dialStep;
-        sliderPos= int(frameNumber*LayoutWindow.SLIDER_RESOLUTION/self.player.framecount)
-        self.gui.syncSliderPos(sliderPos)
-        aFrame = self.player.getFrameAt(frameNumber)
-        self._showFrame(aFrame, frameNumber)
-        self._frameSet = False
-        
-    
-    def _displayFrameAtMS(self,milliseconds):
-        self._videoUI().showFrame(self.player.getFrameAtMS(milliseconds))
-    
-    def _showFrame(self,aFrame,aFrameNumber):
-        self._videoUI().showFrame(aFrame)
-        self._showCurrentFrameInfo(aFrameNumber)
-        
-    def _displayFrame(self,frameNumber):
-        self._videoUI().showFrame(self.player.getFrameAt(frameNumber))
-
-#     def _advanceFrames(self,delta):
-#         dx = self.player.getCurrentFrameNumber()+delta
-#         self._displayFrame(dx)
-
-    def _videoUI(self):
-        return self.gui.getVideoWidget()
-
-    
-    def _showCurrentFrameInfo(self,frameNumber):
-        out = "Frame: %s Time: %s max: %s" %(str(frameNumber), str(self.player.getCurrentFrameTime()),str(self.player.framecount))
-        self.gui.showInfo(out)
-
-    def _updateSliderPosition(self,frameNumber):
+    #display Frame with syncing the slider pos. 
+    def _gotoFrame(self,frameNumber=0):
         self._frameSet=True
         if frameNumber == 0:
             sliderPos=0
         else:
             sliderPos= int(frameNumber*LayoutWindow.SLIDER_RESOLUTION/self.player.framecount)
         self.gui.syncSliderPos(sliderPos)
-        self.sliderThread.showFrame(frameNumber)
+        self.__dispatchShowFrame(frameNumber)
     
+    def __dispatchShowFrame(self,frameNumber):
+        if self._vPlayer is None:
+            self.sliderThread.showFrame(frameNumber)
+    
+    #connected to the dial
+    def dialChanged(self,pos):
+        if self.player is None or pos == 0:
+            self._timer.stop()
+            return
+        self._dialStep = pos
+        #self._dialStep = 1
+        ts=(1/self.player.fps)*2500
+        print "dial:",pos, " time:",ts
+        self._timer.start(ts)
+ 
+    #called by timer on dial change...    
+    def _displayAutoFrame(self):
+        if self.player is None or not self.player.isValid():
+            return
+        self.sliderThread.wait()#No concurrency with worker!
+        self._frameSet = True
+        frameNumber = max(0,self.player.getCurrentFrameNumber()+self._dialStep);
+        sliderPos= int(frameNumber*LayoutWindow.SLIDER_RESOLUTION/self.player.framecount)
+        self.gui.syncSliderPos(sliderPos)
+        aFrame = self.player.getFrameAt(frameNumber)
+        self._showFrame(aFrame)
+#        self._gotoFrame(frameNumber)
+        self._frameSet = False
+        
+    #called by worker ...
+    def _showFrame(self,aFrame):
+        self._videoUI().showFrame(aFrame)
+        x = self.player.getCurrentFrameNumber()
+        self._showCurrentFrameInfo(x)
+        
+    def _displayFrame(self,frameNumber):
+        self._videoUI().showFrame(self.player.getFrameAt(frameNumber))
+
+    def _videoUI(self):
+        return self.gui.getVideoWidget()
+
+    
+    def _showCurrentFrameInfo(self,frameNumber):
+        timeinfo = self.player.getCurrentFrameTime()
+        #basket = "%02d.%03i" %(timeinfo.seconds,timeinfo.microseconds/1000)
+        out = "Frame: %s Time: %s max: %s" %(str(frameNumber), str(timeinfo),str(self.player.framecount))
+        #TODO: Pass 3 values for 3 widgets....
+        self.gui.showInfo(out)
+
+    
+    def toggleVideoPlay(self):
+        if self.streamData is None:
+            return False
+        if self._vPlayer is None:
+            return self.__playVideo()
+        
+        return self.__stopVideo()
+
+    #TODO Warning, if it runs, Worker may NOT be used!
+    def __playVideo(self):
+        self._vPlayer = QTimer(self.gui)
+        self._vPlayer.timeout.connect(self._grabNextFrame)
+        #50 ms if 25 fps and 25 if 50fps
+        fRate=(1/self.player.fps)*1250
+        self._vPlayer.start(fRate)
+        return True
+
+    def __stopVideo(self):
+            self._vPlayer.stop()
+            self._vPlayer = None
+            self._frameSet = False
+            return False
+
+    def _grabNextFrame(self):
+        self._frameSet = True
+        frame= self.player.grabNextFrame()
+        if frame is not None:
+            self._videoUI().showFrame(frame)
+            frameNumber = self.player.getCurrentFrameNumber()
+            sliderPos= int(frameNumber*LayoutWindow.SLIDER_RESOLUTION/self.player.framecount)
+            self._showCurrentFrameInfo(frameNumber)
+            self.gui.syncSliderPos(sliderPos)
+        else:
+            self.gui.setVideoPlayerControls(False)
+            self.player.framecount = self.player.getCurrentFrameNumber()
+            self.__stopVideo()        
 
 
 #-- threads
@@ -866,10 +1124,10 @@ class Worker(QtCore.QThread):
     def run(self):
         current = -1;
         while self.fbnr != current:
-            print "Worker:",self.fbnr
+            #print "Worker:",self.fbnr
             current = self.fbnr
             result = self.func(current)
-            self.emit( self.signal,result,current )
+            self.emit( self.signal,result )
 
     def __del__(self):
         self.wait()
@@ -878,7 +1136,7 @@ class Worker(QtCore.QThread):
         self.fbnr=frameNumber
         self.start()
         
-        
+''' Long running operations for actions that do not draw or paint '''        
 class LongRunningOperation(QtCore.QThread): 
     def __init__(self, func, *args):
         QtCore.QThread.__init__(self)
@@ -887,8 +1145,12 @@ class LongRunningOperation(QtCore.QThread):
         self.arguments = args
 
     def run(self):
-        self.function(*self.arguments)
-        self.emit(self.signalDone)
+        try:
+            self.function(*self.arguments)
+        except:
+            traceback.print_exc(file=sys.stdout)
+        finally:
+            self.emit(self.signalDone)
 
         
     def startOperation(self):
@@ -897,19 +1159,30 @@ class LongRunningOperation(QtCore.QThread):
         print "proc events"
         QtCore.QCoreApplication.processEvents()
 
+class StatusDispatcher(QObject):
+    def __init__(self):
+        QObject.__init__(self)
+        self.text=""
+        self.signal=QtCore.SIGNAL('BroadcastText')
+    def say(self,aString):
+        self.text=aString
+        self.emit(self.signal,aString)
+        
+
 def main():
-    OSTools().setCurrentWorkingDirectory()
-    app = QApplication(sys.argv)
-    app.setWindowIcon(getAppIcon())
-    argv = sys.argv
-    if len(argv)==1:
-        MainFrame()
-    else:
-        path = argv[1]
-        MainFrame(path)        
-    return app
-    
+    try:
+        OSTools().setCurrentWorkingDirectory()
+        argv = sys.argv
+        app = QApplication(argv)
+        app.setWindowIcon(getAppIcon())
+        if len(argv)==1:
+            MainFrame()
+        else:
+            MainFrame(argv[1])  
+        app.exec_()
+    except:
+        traceback.print_exc(file=sys.stdout)
+
         
 if __name__ == '__main__':
-    app = main()
-    sys.exit(app.exec_())
+    sys.exit(main())
