@@ -63,7 +63,6 @@ class OSTools():
         return os.path.expanduser("~")
 
     def setCurrentWorkingDirectory(self):
-        print "DIR:",self.getWorkingDirectory()
         os.chdir(self.getWorkingDirectory())
         
     def getFileNameOnly(self,path):
@@ -936,7 +935,6 @@ class VideoControl(QObject):
     
 
     def saveVideo(self,path):
-        print "generate"
         spanns=[]
         block = None
         for cutEntry in self.videoCuts:
@@ -1037,7 +1035,7 @@ class VideoControl(QObject):
         self._dialStep = pos
         #self._dialStep = 1
         ts=(1/self.player.fps)*2500
-        print "dial:",pos, " time:",ts
+        #print "dial:",pos, " time:",ts
         self._timer.start(ts)
  
     #called by timer on dial change...    
@@ -1156,7 +1154,6 @@ class LongRunningOperation(QtCore.QThread):
     def startOperation(self):
         self.start() #invokes run - process pending QT events
         sleep(0.5)
-        print "proc events"
         QtCore.QCoreApplication.processEvents()
 
 class StatusDispatcher(QObject):
