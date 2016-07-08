@@ -15,12 +15,12 @@ from PyQt4.QtCore import QTimer, QObject
 from PyQt4.QtGui import QApplication, QImage, QPainter, QWidget, QVBoxLayout,\
     QDesktopWidget, QFileDialog, QDial, QColor, QSizePolicy, QLabel,\
     QHBoxLayout, QListWidget, QGridLayout, QListWidgetItem,\
-    QIcon, QMenu, QFrame, QSpinBox
+    QIcon, QMenu, QFrame, QSpinBox, QCheckBox
 from PyQt4.Qt import QRectF, QSize, QString, Qt, QStatusBar
 from FFMPEGTools import FFMPEGCutter, FFStreamProbe
 import os
-from time import sleep, strftime
-import xml.etree.cElementTree as CT
+from time import sleep
+import xml.etree.cElementTree as CETree
 #import MProfiler
 
 
@@ -81,14 +81,14 @@ class XMLAccessor():
         self._path=path+".xml"
         
     def writeXML(self,videoCutEntries):
-        rootElement = CT.Element('VC_Data')
+        rootElement = CETree.Element('VC_Data')
         for cut in videoCutEntries:
-            entry = CT.SubElement(rootElement,"Entry")
+            entry = CETree.SubElement(rootElement,"Entry")
             entry.attrib["frame"]=str(cut.frameNumber) 
             entry.attrib["mode"]=str(cut.modeString)
         
         with open(self._path, 'w') as aFile:
-            CT.ElementTree(rootElement).write(aFile)
+            CETree.ElementTree(rootElement).write(aFile)
 
     def readXML(self):
         cutEntries = []
@@ -97,7 +97,7 @@ class XMLAccessor():
         with open(self._path, 'r') as xmlFile:
             xmlData = xmlFile.read()
             
-        root = CT.fromstring(xmlData)
+        root = CETree.fromstring(xmlData)
         for info in root:
             frameNbr= float(info.get('frame'))
             markerType= info.get('mode')
@@ -280,6 +280,11 @@ class LayoutWindow(QWidget):
         self.ui_InfoLabel.setText("")
         self.ui_InfoLabel.setToolTip("Infos about the video position")
         
+        self.ui_CB_Reencode = QCheckBox(self)
+        self.ui_CB_Reencode.setText("Exact cut")
+        self.ui_CB_Reencode.setChecked(False)
+        self.ui_CB_Reencode.setToolTip("Exact cut is slow, but precise")
+        
         self.ui_List = self.__createListWidget()
         
         #self._listSplitter = QSplitter() ->add as widget...+QVBoxLayout
@@ -301,7 +306,8 @@ class LayoutWindow(QWidget):
         #row column, rowSpan, columnSpan
         gridLayout.addWidget(self.ui_VideoFrame,0,2,3,-1);
         gridLayout.addWidget(self.ui_GotoField,4,1,1,20)
-        gridLayout.addWidget(self.ui_InfoLabel,4,26,1,-1)
+        gridLayout.addWidget(self.ui_InfoLabel,4,26,1,90)
+        gridLayout.addWidget(self.ui_CB_Reencode,4,121)
         gridLayout.addWidget(self.ui_Slider,5,0,1,120)
         gridLayout.addWidget(self.ui_Dial,5,121)
         gridLayout.addWidget(self.statusbar,6,0,1,122)
@@ -383,6 +389,8 @@ class LayoutWindow(QWidget):
         self.ui_Dial.sliderReleased.connect(self.__resetDial)
         
         self.ui_GotoField.editingFinished.connect(self.__gotoFrame)
+        
+        self.ui_CB_Reencode.stateChanged.connect(aVideoController.setExactCut)
         
         #test
         self.statusMessenger = StatusDispatcher()
@@ -823,6 +831,7 @@ class VideoControl(QObject):
         self.currentPath = OSTools().getHomeDirectory()#//TODO get a Video dir
         self.streamData = None
         self._vPlayer = None
+        self.exactcut = False
 
     def _initTimer(self):
         self._timer = QTimer(self.gui)
@@ -864,7 +873,9 @@ class VideoControl(QObject):
             self.gui.showWarning("Invalid file format!")
             self.gui.enableControls(False)
             traceback.print_exc(file=sys.stdout)
-        
+    
+    def setExactCut(self,reencode): 
+        self.exactcut = Qt.Checked==reencode   
 
     def addStartMarker(self):
         self._createVideoCutEntry(VideoCutEntry.MODE_START)
@@ -979,7 +990,7 @@ class VideoControl(QObject):
         for index, cutmark in enumerate(spanns):
             t1=cutmark[0].timePos
             t2 = cutmark[1].timePos
-            hasSucess = cutter.cutPart(t1, t2, index,slices)
+            hasSucess = cutter.cutPart(t1, t2, index,slices,self.exactcut)
             if not hasSucess:
                 print"VC-Cut error" #TODO need a signal for error
                 return
