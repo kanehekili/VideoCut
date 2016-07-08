@@ -21,5 +21,7 @@ The cutout parts will be joined without beeing recoded - the quality stays the s
 Using ffmpeg as cutting/joining tool. Some older versions of ffmpeg seem to have problems with syncing audio on avchd (mp4 TS) streams. 
 Current git version of ffmpeg will yield the best results.
 
+08.07.2016
+Added "Exact cut" feature. Ensures that the cut of the mp4 is exact (Frame exact). Takes longer, since the video has to be reencoded. 
 
 Have fun
