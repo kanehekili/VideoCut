@@ -542,12 +542,8 @@ class FFMPEGCutter():
     cuts a part of the film, saves it an returns the temp filename for later concatination
     index = if more than one part of the film is cut
     '''
-<<<<<<< HEAD
     #def cutPart(self,startTimedelta,endTimedelta,index=0,nbrOfFragments=1,reencode=False):        
     def cutPart(self,startTimedelta,endTimedelta,index=0,nbrOfFragments=1):
-=======
-    def cutPart(self,startTimedelta,endTimedelta,index=0,nbrOfFragments=1,reencode=False):
->>>>>>> branch 'master' of https://github.com/kanehekili/VideoCut
         self._fragmentCount = nbrOfFragments
         scanTime = timedelta(seconds=20)
         prefetchTime = (startTimedelta - scanTime)
@@ -561,17 +557,7 @@ class FFMPEGCutter():
         deltaMillis = (endTimedelta - startTimedelta).microseconds
         deltaSeconds = (endTimedelta - startTimedelta).seconds 
         durString=timedeltaToFFMPEGString(timedelta(seconds=deltaSeconds,microseconds=deltaMillis))
-<<<<<<< HEAD
 
-=======
-        encodeMode = "copy"
-        if reencode:
-            encodeMode="libx264"
-        #startString=timedeltaToFFMPEGString(startTimedelta)
-        #ffmpeg -i in.m2t -ss 00:05:30.00 -t 00:29:00 -vcodec copy  -acodec copy out.mp4
-        #ffmpeg -ss 00:05:00 -i in.m2t -ss 00:00:30.00 -t 00:29:00 -vcodec copy  -acodec copy out.mp4
-        #print "ffmpeg -ss",prefetchString,"-i",self.filePath,"-ss",seekString,"-t",durString,"-vcodec","copy","-acodec","copy",self.targetPath
->>>>>>> branch 'master' of https://github.com/kanehekili/VideoCut
         #fast search - then slow search
         log(prefetchString,"+",seekString,">>",durString)
         if nbrOfFragments is 1:
@@ -580,7 +566,6 @@ class FFMPEGCutter():
             fragment = self._getTempPath()+str(index)+".m2t"
         log("generate file:",fragment)
         self.say("Cutting part:"+str(index))
-<<<<<<< HEAD
         
         cmdExt = self._videoMode(self.MODE_CUT)
         audioMode = self._audioMode(self.MODE_CUT)
@@ -595,10 +580,6 @@ class FFMPEGCutter():
         #reencode:         pFFmpeg = subprocess.Popen([BIN,"-hide_banner","-y","-ss",prefetchString,"-i",self.filePath,"-ss",seekString,"-t",durString,"-vcodec",encodeMode,"-acodec","copy",fragment], stdout=subprocess.PIPE,stderr=subprocess.STDOUT)
         pFFmpeg = subprocess.Popen(cmd , stdout=subprocess.PIPE,stderr=subprocess.STDOUT)
          
-=======
-        #pFFmpeg = subprocess.Popen([BIN,"-hide_banner","-y","-ss",prefetchString,"-i",self.filePath,"-ss",seekString,"-t",durString,"-vcodec","copy","-acodec","copy",fragment], stdout=subprocess.PIPE,stderr=subprocess.STDOUT)
-        pFFmpeg = subprocess.Popen([BIN,"-hide_banner","-y","-ss",prefetchString,"-i",self.filePath,"-ss",seekString,"-t",durString,"-vcodec",encodeMode,"-acodec","copy",fragment], stdout=subprocess.PIPE,stderr=subprocess.STDOUT)
->>>>>>> branch 'master' of https://github.com/kanehekili/VideoCut
         while pFFmpeg.poll() is None:
             #?sleep(0.2)   
             if not self.non_block_read("Cut part "+str(index)+":",pFFmpeg.stdout):

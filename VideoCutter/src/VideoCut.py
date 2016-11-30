@@ -25,20 +25,11 @@ from PyQt4.QtGui import QApplication, QImage, QPainter, QWidget, QVBoxLayout,\
     QDesktopWidget, QFileDialog, QDial, QColor, QSizePolicy, QLabel,\
     QHBoxLayout, QListWidget, QGridLayout, QListWidgetItem,\
     QIcon, QMenu, QFrame, QSpinBox, QCheckBox
-<<<<<<< HEAD
 from PyQt4.Qt import QRectF, QSize, QString, Qt, QStatusBar #, QFrame
 from FFMPEGTools import FFMPEGCutter, FFStreamProbe, CuttingConfig
-=======
-from PyQt4.Qt import QRectF, QSize, QString, Qt, QStatusBar
-from FFMPEGTools import FFMPEGCutter, FFStreamProbe
->>>>>>> branch 'master' of https://github.com/kanehekili/VideoCut
 import os
 from time import sleep
-<<<<<<< HEAD
 import xml.etree.cElementTree as CT
-=======
-import xml.etree.cElementTree as CETree
->>>>>>> branch 'master' of https://github.com/kanehekili/VideoCut
 #import MProfiler
 
 
@@ -181,14 +172,14 @@ class XMLAccessor():
         self._path=path+".xml"
         
     def writeXML(self,videoCutEntries):
-        rootElement = CETree.Element('VC_Data')
+        rootElement = CT.Element('VC_Data')
         for cut in videoCutEntries:
-            entry = CETree.SubElement(rootElement,"Entry")
+            entry = CT.SubElement(rootElement,"Entry")
             entry.attrib["frame"]=str(cut.frameNumber) 
             entry.attrib["mode"]=str(cut.modeString)
         
         with open(self._path, 'w') as aFile:
-            CETree.ElementTree(rootElement).write(aFile)
+            CT.ElementTree(rootElement).write(aFile)
 
     def readXML(self):
         cutEntries = []
@@ -197,7 +188,7 @@ class XMLAccessor():
         with open(self._path, 'r') as xmlFile:
             xmlData = xmlFile.read()
             
-        root = CETree.fromstring(xmlData)
+        root = CT.fromstring(xmlData)
         for info in root:
             frameNbr= float(info.get('frame'))
             markerType= info.get('mode')
@@ -493,8 +484,6 @@ class LayoutWindow(QWidget):
         self.ui_Dial.sliderReleased.connect(self.__resetDial)
         
         self.ui_GotoField.editingFinished.connect(self.__gotoFrame)
-        
-        self.ui_CB_Reencode.stateChanged.connect(aVideoController.setExactCut)
         
         self.ui_CB_Reencode.stateChanged.connect(aVideoController.setExactCut)
         
@@ -1000,10 +989,6 @@ class VideoControl(QObject):
             
             self.gui.showWarning(msg)
             self.gui.enableControls(False)
-<<<<<<< HEAD
-=======
-            traceback.print_exc(file=sys.stdout)
->>>>>>> branch 'master' of https://github.com/kanehekili/VideoCut
     
     def setExactCut(self,reencode): 
         self.exactcut = Qt.Checked==reencode   
@@ -1126,12 +1111,8 @@ class VideoControl(QObject):
         for index, cutmark in enumerate(spanns):
             t1=cutmark[0].timePos
             t2 = cutmark[1].timePos
-<<<<<<< HEAD
             hasSucess = cutter.cutPart(t1, t2, index,slices)
             # addon! hasSucess = cutter.cutPart(t1, t2, index,slices,self.exactcut)
-=======
-            hasSucess = cutter.cutPart(t1, t2, index,slices,self.exactcut)
->>>>>>> branch 'master' of https://github.com/kanehekili/VideoCut
             if not hasSucess:
                 print"VC-Cut error" #TODO need a signal for error
                 return
