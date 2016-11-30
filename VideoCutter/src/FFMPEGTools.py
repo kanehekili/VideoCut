@@ -1,6 +1,6 @@
 '''
 Created on Oct 4, 2014
-FFMPG Wrapper - AVCONV will follow
+FFMPEG Wrapper - AVCONV will not be supported - ever.
 @author: matze
 '''
 
@@ -11,7 +11,6 @@ from datetime import timedelta
 import re
 import fcntl
 from time import sleep
-import shutil
 
 
 BIN = "ffmpeg"
@@ -27,6 +26,11 @@ def timedeltaToFFMPEGString(deltaTime):
     mso=str(ms).rjust(3,'0')
     return '%s:%s:%s.%s' % (ho, mo, so, mso)
 
+def log(*messages):
+    #Hook for logger...
+    #cnt = len(messages)
+    print "{0} {1}".format(*messages)
+
 
 
 class FFStreamProbe():
@@ -36,22 +40,28 @@ class FFStreamProbe():
         self._readData()
         
     def _readData(self):
-        result = Popen(["ffprobe","-show_streams",self.path,"-v","quiet"],stdout=subprocess.PIPE,stderr=subprocess.PIPE).communicate()
+        result = Popen(["ffprobe","-show_format","-show_streams",self.path,"-v","quiet"],stdout=subprocess.PIPE,stderr=subprocess.PIPE).communicate()
         if len(result[0])==0:
             raise IOError('No such media file '+self.path)
         self.streams=[]
         datalines=[]
         self.video=[]
         self.audio=[]
+        self.formatInfo = None
     
 
-        #for a in str(a.decode(sys.stdout.encoding)).split('\n'):
         lines = result[0].split('\n')
         for a in lines:
             if re.match('\[STREAM\]',a):
                 datalines=[]
             elif re.match('\[\/STREAM\]',a):
                 self.streams.append(VideoStreamInfo(datalines))
+                datalines=[]
+
+            elif re.match('\[FORMAT\]',a):
+                datalines=[]
+            elif re.match('\[\/FORMAT\]',a):
+                self.formatInfo = VideoFormatInfo(datalines)
                 datalines=[]
             else:
                 datalines.append(a)
@@ -66,8 +76,30 @@ class FFStreamProbe():
         self._convTable["mpeg2video"]="mpg"
         self._convTable["h264"]="mp4"
         self._convTable["msmpeg4v2"]="avi"
+        self._convTable["rawvideo"]="swf"
+        self._convTable["vp6f"]="flv"
+        self._convTable["matroska"]="mkv"
+        self._convTable["webm"]="mkv"
+        self._convTable["mp4"]="mp4" #or mov,m4a,3gp,3g2,mj2
+        
+        
+
         #self._convTable["ansi"]="txt"
         #--more to come
+        '''
+        Container  Audio formats supported
+        MKV/MKA    Vorbis, MP2, MP3, LC-AAC, HE-AAC, WMAv1, WMAv2, AC3, eAC3, Opus
+        MP4/M4A    MP2, MP3, LC-AAC, HE-AAC, AC3
+        FLV/F4V    MP3, LC-AAC, HE-AAC
+        3GP/3G2    LC-AAC, HE-AAC
+        MPG        MP2, MP3
+        PS/TS Stream    MP2, MP3, LC-AAC, HE-AAC, AC3
+        M2TS       AC3, eAC3
+        VOB        MP2, AC3
+        RMVB       Vorbis, HE-AAC
+        WebM       Vorbis, Opus
+        OGG        Vorbis, Opus 
+        '''
 
                 
     def getVideoStream(self):
@@ -76,9 +108,10 @@ class FFStreamProbe():
         return self.video[0]
     
     def getAudioStream(self):
-        if len(self.audio)==0:
-            return None        
-        return self.audio[0]
+        for stream in self.audio:
+            if stream.getBitRate()>0:
+                return stream     
+        return None
     
     def getTargetExtension(self):
         codec = self.getVideoStream().getCodec()
@@ -86,9 +119,153 @@ class FFStreamProbe():
             return self._convTable[codec]
         return ""
     
+    def needsAudioADTSFilter(self):
+        if self.getAudioStream() is None:
+            return False
+        return self.getTargetExtension()=="mp4" and self.getAudioStream().getCodec() =="aac"
+    
+    '''
+    check if needs the h264_mp4toannexb filter-
+    Used on mp4 or h264, but not for transport streams
+    '''
+    def needsH264Filter(self):
+        if self.isTransportStream():
+            return False;
+        return self.isMP4() or self.isH264()
+    
+    #VideoFormat is format info....
+    def getFormatNames(self):
+        return self.formatInfo.formatNames()
+    
+    def hasFormat(self,formatName):
+        return formatName in self.getFormatNames() 
+    
     def isKnownVideoFormat(self):
         codec = self.getVideoStream().getCodec()
         return codec in self._convTable
+    
+    def isTransportStream(self):
+        self.hasFormat("mpegts")
+    
+    '''
+    is MP4? Since its a formatcheck it can't be mp4-TS
+    '''
+    def isMP4(self): 
+        return self.hasFormat("mp4")
+    
+    def isMPEG2(self):
+        return "mpeg" in self.getVideoStream().getCodec()
+        
+    def isH264(self):
+        return "h264" == self.getVideoStream().getCodec()
+    
+    def printCodecInfo(self):
+        print "-------- Video -------------"
+        s = self.getVideoStream()
+        print "Index:",s.getStreamIndex()
+        print "codec",s.getCodec()
+        print "getCodecTimeBase: ",s.getCodecTimeBase()
+        print "getTimeBase: ",s.getTimeBase()
+        print "getAspect ",s.getAspectRatio()
+        print "getFrameRate: ",s.getFrameRate()
+        print "getCMFRameRate: ",s.frameRate() #Common denominator
+        print "getDuration: ",s.duration()
+        print "getWidth: ",s.getWidth()
+        print "getHeight: ",s.getHeight()
+        print "isAudio: ",s.isAudio()
+        print "isVideo: ",s.isVideo()
+        
+        print "-------- Audio -------------"
+        s = self.getAudioStream()  
+        if not s:
+            print "No audio"
+            exit(0)  
+        print "Index:",s.getStreamIndex()
+        print "getCodec:",s.getCodec()
+        print "bitrate(kb)",s.getBitRate()
+        print "getCodecTimeBase: ",s.getCodecTimeBase()
+        print "getTimeBase: ",s.getTimeBase()
+        print "getDuration: ",s.duration()
+        print "isAudio: ",s.isAudio()
+        print "isVideo: ",s.isVideo()
+        print "-----------EOF---------------"
+        
+
+
+    '''
+[FORMAT]
+filename=../Path/test.mp4
+nb_streams=2
+nb_programs=0
+format_name=mov,mp4,m4a,3gp,3g2,mj2
+format_long_name=QuickTime / MOV
+start_time=0.000000
+duration=62.484000
+size=136068832
+bit_rate=17421270
+probe_score=100
+TAG:major_brand=mp42
+TAG:minor_version=0
+TAG:compatible_brands=isommp42
+TAG:creation_time=2016-08-29 09:55:41
+TAG:com.android.version=6.0.1
+[/FORMAT]
+
+    '''
+class VideoFormatInfo():
+    NA="N/A"
+    TAG="TAG:"
+    def __init__(self,dataArray):
+        self.dataDict={}
+        self.tagDict={}
+        self._parse(dataArray)
+
+    def _parse(self,dataArray):
+        for entry in dataArray:
+            try:
+                (key,val)=entry.strip().split('=')
+            except:
+                log("Error in entry:",entry)
+            if self.NA!=val:
+                if self.TAG in key:
+                    key=key.split(':')[1]
+                    self.tagDict[key]=val
+                else:
+                    self.dataDict[key]=val
+
+    def _print(self):
+        print "***format data***"
+        for key,value in self.dataDict.items():
+            print key,"->",value
+        
+        print "***tag data***"
+        for key,value in self.tagDict.items():
+            print key,"->",value
+    
+    
+    def getDuration(self):
+        if "duration" in self.dataDict:
+            return float(self.dataDict['duration'])
+        return 0.0
+    
+    def getBitRate(self):
+        if "bit_rate" in self.dataDict:
+            kbit= int(self.dataDict["bit_rate"])/float(1024)
+            return round(kbit)
+        return 0
+    
+    def formatNames(self):
+        if "format_name" in self.dataDict:
+            values = self.dataDict['format_name']
+            return values.split(',')
+        return [self.NA]
+            
+    def getSizeKB(self):
+        if "size" in self.dataDict:
+            kbyte= int(self.dataDict["size"])/float(1024)
+            return round(kbyte)
+        return 0.0
+         
 
 class VideoStreamInfo():
     #int values
@@ -106,9 +283,8 @@ class VideoStreamInfo():
             try:
                 (key,val)=entry.strip().split('=')
             except:
-                print "Error in entry:",entry
+                log("Error in entry:",entry)
             if self.NA!=val:
-                #print ">>",key,"->",val
                 self.dataDict[key]=val
         
     def getStreamIndex(self):
@@ -127,13 +303,30 @@ class VideoStreamInfo():
     def getFrameRate(self):
         if 'avg_frame_rate' in self.dataDict:
             z,n= self.dataDict['avg_frame_rate'].split('/')
-            return float(z)
+            if int(n) !=0:
+                return float(z)/int(n)
+        return 1.0
+
+    '''
+    Smallest framerate in float
+    r_frame_rate is NOT the average frame rate, it is the smallest frame rate that can accurately represent all timestamps. 
+    So no, it is not wrong if it is larger than the average! For example, if you have mixed 25 and 30 fps content, 
+    then r_frame_rate will be 150 (it is the least common multiple).
+    '''
+    def frameRate(self):
+        if "r_frame_rate" in self.dataDict:
+            (n,z)=self.dataDict["r_frame_rate"].split("/")
+            if int(z)!=0:
+                return float(n)/float(z) 
         return 1.0
 
     def getCodec(self):
         if 'codec_name' in self.dataDict:
             return self.dataDict['codec_name']
         return self.NA
+    
+    def hasAACCodec(self):
+        return self.getCodec()=="aac"
     
     def getWidth(self):
         if 'width' in self.dataDict:
@@ -144,7 +337,10 @@ class VideoStreamInfo():
             return self.dataDict['height']
         return self.NA       
     
-    
+    def isAVC(self):#MOV, h264
+        if 'is_avc' in self.dataDict:
+            return "true" == self.dataDict['is_avc']
+        return False
     
     def getCodecTimeBase(self):
         if 'codec_time_base' in self.dataDict:
@@ -158,11 +354,12 @@ class VideoStreamInfo():
       
  
     '''
-    bitrate in kb (int)
+    bitrate in kb (int)-Audio only
     '''
-    def bitRate(self):
+    def getBitRate(self):
         if "bit_rate" in self.dataDict:
-            return int(self.dataDict["bit_rate"])/1000
+            kbit= int(self.dataDict["bit_rate"])/float(1024)
+            return round(kbit)
         return 0
 
     '''
@@ -173,34 +370,23 @@ class VideoStreamInfo():
             return float(self.dataDict["duration"])
         return 0.0 
    
-    '''
-    FPS in float
-    '''
-    def frameRate(self):
-        if "r_frame_rate" in self.dataDict:
-            (n,z)=self.dataDict["r_frame_rate"].split("/")
-            if int(z)!=0:
-                return float(n)/float(z) 
-        return 0.0
- 
+
     
     def isAudio(self):
-        #Is this stream labelled as an audio stream?
-        val=False
+        #Is this stream labeled as an audio stream?
         if 'codec_type' in self.dataDict:
             if str(self.dataDict['codec_type']) == 'audio':
-                val=True
-        return val
+                return True
+        return False
 
     def isVideo(self):
         """
-        Is the stream labelled as a video stream.
+        Is the stream labeled as a video stream.
         """
-        val=False
         if 'codec_type' in self.dataDict:
             if str(self.dataDict['codec_type']) == 'video':
-                val=True
-        return val
+                return True
+        return False
 
 
 class FFFrameProbe():
@@ -213,7 +399,6 @@ class FFFrameProbe():
     
     def _readDataByLines(self):
         p = subprocess.Popen(["ffprobe","-select_streams","v:0","-show_frames",self.path,"-v","quiet"], stdout=subprocess.PIPE)
-        dataBucket=[]
         proc =0;
         while True:
             line = p.stdout.readline()
@@ -221,7 +406,7 @@ class FFFrameProbe():
                 break
             if re.match('\[\/FRAME\]',line):
                 proc+=1
-                print "p ",proc
+                log("p ",proc)
                 
 #             dataBucket = self.__processLine(line,dataBucket)
 #             if len(dataBucket)==0:
@@ -332,22 +517,37 @@ class VideoFrameInfo():
         if self.dataDict["coded_picture_number"]:
             return int(self.dataDict["coded_picture_number"])
         
-
+class CuttingConfig():
+    def __init__(self,srcfilePath,targetPath):
+        ''' Sets an object that understands say(aText)'''
+        self.messenger = None
+        self.reencode = False
+        self.streamData = None
+        self.srcfilePath=srcfilePath
+        self.targetPath=targetPath
+        
+    
 
 class FFMPEGCutter():
-    def __init__(self,srcfilePath,targetPath):
-        self.filePath=srcfilePath
-        self.targetPath=targetPath
+    MODE_JOIN =1;
+    MODE_CUT = 2;
+    def __init__(self,cutConfig):
+        self._config = cutConfig
         self._tempDir ='/tmp'
         self._tmpCutList=self._getTempPath()+"cut.txt"
         self._fragmentCount=1;   
-        self._messenger = None   
+  
     
     '''
-    cuts a part of the film, saves it an returns the temp filename vor later concatintaion
+    cuts a part of the film, saves it an returns the temp filename for later concatination
     index = if more than one part of the film is cut
     '''
+<<<<<<< HEAD
+    #def cutPart(self,startTimedelta,endTimedelta,index=0,nbrOfFragments=1,reencode=False):        
+    def cutPart(self,startTimedelta,endTimedelta,index=0,nbrOfFragments=1):
+=======
     def cutPart(self,startTimedelta,endTimedelta,index=0,nbrOfFragments=1,reencode=False):
+>>>>>>> branch 'master' of https://github.com/kanehekili/VideoCut
         self._fragmentCount = nbrOfFragments
         scanTime = timedelta(seconds=20)
         prefetchTime = (startTimedelta - scanTime)
@@ -361,6 +561,9 @@ class FFMPEGCutter():
         deltaMillis = (endTimedelta - startTimedelta).microseconds
         deltaSeconds = (endTimedelta - startTimedelta).seconds 
         durString=timedeltaToFFMPEGString(timedelta(seconds=deltaSeconds,microseconds=deltaMillis))
+<<<<<<< HEAD
+
+=======
         encodeMode = "copy"
         if reencode:
             encodeMode="libx264"
@@ -368,18 +571,36 @@ class FFMPEGCutter():
         #ffmpeg -i in.m2t -ss 00:05:30.00 -t 00:29:00 -vcodec copy  -acodec copy out.mp4
         #ffmpeg -ss 00:05:00 -i in.m2t -ss 00:00:30.00 -t 00:29:00 -vcodec copy  -acodec copy out.mp4
         #print "ffmpeg -ss",prefetchString,"-i",self.filePath,"-ss",seekString,"-t",durString,"-vcodec","copy","-acodec","copy",self.targetPath
+>>>>>>> branch 'master' of https://github.com/kanehekili/VideoCut
         #fast search - then slow search
-        print prefetchString,"+",seekString,">>",durString
+        log(prefetchString,"+",seekString,">>",durString)
         if nbrOfFragments is 1:
-            fragment = self.targetPath
+            fragment = self.targetPath()
         else:
             fragment = self._getTempPath()+str(index)+".m2t"
-        print "generate file:",fragment
+        log("generate file:",fragment)
         self.say("Cutting part:"+str(index))
+<<<<<<< HEAD
+        
+        cmdExt = self._videoMode(self.MODE_CUT)
+        audioMode = self._audioMode(self.MODE_CUT)
+        
+        #the prefetch time finds a keyframe closest. The seek time is the cut. TODO-encode that as Iframes only
+        
+        cmd =[BIN,"-hide_banner","-y","-ss",prefetchString,"-i",self.filePath(),"-ss",seekString,"-t",durString]
+        cmdExt.extend(audioMode)
+        cmdExt.extend([fragment])
+        cmd.extend(cmdExt)
+        log("cut:",cmd)
+        #reencode:         pFFmpeg = subprocess.Popen([BIN,"-hide_banner","-y","-ss",prefetchString,"-i",self.filePath,"-ss",seekString,"-t",durString,"-vcodec",encodeMode,"-acodec","copy",fragment], stdout=subprocess.PIPE,stderr=subprocess.STDOUT)
+        pFFmpeg = subprocess.Popen(cmd , stdout=subprocess.PIPE,stderr=subprocess.STDOUT)
+         
+=======
         #pFFmpeg = subprocess.Popen([BIN,"-hide_banner","-y","-ss",prefetchString,"-i",self.filePath,"-ss",seekString,"-t",durString,"-vcodec","copy","-acodec","copy",fragment], stdout=subprocess.PIPE,stderr=subprocess.STDOUT)
         pFFmpeg = subprocess.Popen([BIN,"-hide_banner","-y","-ss",prefetchString,"-i",self.filePath,"-ss",seekString,"-t",durString,"-vcodec",encodeMode,"-acodec","copy",fragment], stdout=subprocess.PIPE,stderr=subprocess.STDOUT)
+>>>>>>> branch 'master' of https://github.com/kanehekili/VideoCut
         while pFFmpeg.poll() is None:
-            sleep(0.2)   
+            #?sleep(0.2)   
             if not self.non_block_read("Cut part "+str(index)+":",pFFmpeg.stdout):
                 self.say("Cutting part %s failed"%(str(index)))
                 return False
@@ -387,12 +608,64 @@ class FFMPEGCutter():
         self.say("Cutting done")
         return True
     
+    '''
+    Rules:
+    aac_adtstoasc only in an mp4/mov container
+    ac3 to aac should optional and only if mp4 container
+    reencode must change the container(.extension) to mp4
+    test: AC-3 problems
+    Test mp2: good
+    Base problem: AC-3 should be replaced by either mp2 or aac in mp4 container (AVC Video)
+    '''
+    def _audioMode(self,mode):
+        #streamData is FFStreamProbe
+        log("audio:",self._config.streamData.getAudioStream().getCodec())
+        if self._config.streamData.needsAudioADTSFilter():            
+            return ["-c:a","copy","-bsf:a","aac_adtstoasc"]
+
+        if self._config.streamData.isMPEG2() and (self._fragmentCount ==1 or mode==self.MODE_JOIN):
+            return ["-c:a","copy","-f","dvd"]
+
+        #This must be configurable - at least for tests. mp2 seems to work for kodi+mp4
+#        if self._config.streamData.getVideoStream().getCodec()=="h264" and self._config.streamData.getAudioStream().getCodec()=="ac3":
+#            return ["-c:a","mp2"] #test for kodi or aac?       
+#             elif (codec == "ac3"): #TDO and avc /mp4 video codec.
+#                 return ["-c:a","aac"]
+
+        return ["-c:a","copy"]
+    
+    
+    def _videoMode(self,mode=None):
+        videoStream = self._config.streamData.getVideoStream() 
+        
+        log("video:",videoStream.getCodec())
+        if self._config.reencode:
+            return ["-c:v","libx264","-preset","faster"]  #-preset slow -crf 22
+        
+        if self._config.streamData.needsH264Filter():
+            if self._fragmentCount==1:#CUT ONLY -NOT JOIN!
+                return ["-c:v","copy","-bsf:v","h264_mp4toannexb"] 
+            else:
+                return ["-c:v","copy","-bsf:v","h264_mp4toannexb","-f","mpegts"]
+                
+        return ["-c:v","copy"]
+
+    
     def _getTempPath(self):
         return self._tempDir+'/vc_'
     
+    
+    def filePath(self):
+        return self._config.srcfilePath
+    
+    def targetPath(self):
+        return self._config.targetPath
+    
     def join(self):
-        #add all files into a catlist: file '/tmp/mat_tmp0.m2t' ..etc
+        
+        #add all files into a catlist: file '/tmp/vc_tmp0.m2t' ..etc
         #ffmpeg -f concat -i catlist.txt  -c copy concat.mp4
+        #reencoding takes place in the cut - NOT here.
         if self._fragmentCount is 1:
             return
 
@@ -402,8 +675,12 @@ class FFMPEGCutter():
             for index in range(0,self._fragmentCount):
                 tmp = self._getTempPath()+str(index)+".m2t"
                 cutList.write("file '"+tmp+"'\n")
-        
-        pFFmpeg = subprocess.Popen([BIN,"-hide_banner","-y","-f","concat","-i",self._tmpCutList,"-c","copy",self.targetPath],stdout=subprocess.PIPE,stderr=subprocess.STDOUT)
+
+
+        base = [BIN,"-hide_banner","-y","-f","concat","-safe","0","-async", "1","-i",self._tmpCutList,"-c:v","copy"]
+        cmd=base+self._audioMode(self.MODE_JOIN)+[self.targetPath()]
+        log("join:",cmd)
+        pFFmpeg = subprocess.Popen(cmd,stdout=subprocess.PIPE,stderr=subprocess.STDOUT)
        
         while pFFmpeg.poll() is None:
             sleep(0.2)
@@ -413,17 +690,12 @@ class FFMPEGCutter():
         self.say("Films joined")
         self._cleanup()
         return True
-    
-    ''' Sets an object that understands say(aText)'''
-    def setMessageDelegator(self,delegator): 
-        self._messenger=delegator
 
     def say(self,text):
-        if self._messenger is not None:
-            self._messenger.say(text) 
+        if self._config.messenger is not None:
+            self._config.messenger.say(text) 
             
     #reading non blocking
-
     def non_block_read(self,prefix,output):
         fd = output.fileno()
         flags = fcntl.fcntl(fd, fcntl.F_GETFL)
@@ -431,7 +703,6 @@ class FFMPEGCutter():
         text = "."
         try:
             text = output.read()
-            #print ">",text
             m = re.search('frame=[ ]*[0-9]+',text)
             p1 = m.group(0)
             m = re.search('time=[ ]*[0-9:.]+',text)
@@ -441,8 +712,9 @@ class FFMPEGCutter():
             if len(text)>5:
                 print "<"+text   
         if "failed" in text:
-            #Place to trigger message
-            self.say(prefix+" >>>> Error:",text)
+            #TODO needs to be logged
+            print "?????"+text
+            self.say(prefix+" !Conversion failed!")
             return False
         else:
             return True 
@@ -451,11 +723,10 @@ class FFMPEGCutter():
     def ensureAvailableSpace(self):
         if not self._hasEnoughAvailableSpace(self._tempDir):
             path=os.path.expanduser("~")
-            self.ensureDirectory(path,"vc_temp")
+            self.ensureDirectory(path,".vc_temp")
 
     def _hasEnoughAvailableSpace(self,tmpDir):
         result = Popen(["df","--output=avail",tmpDir],stdout=subprocess.PIPE,stderr=subprocess.PIPE).communicate()
-        print "data:"+result[0]
         if len(result[1])>0:
             print "Error using df:"+result[1]
             return False
@@ -465,8 +736,8 @@ class FFMPEGCutter():
             #Filesystem      Size  Used Avail Use% Mounted on
             avail = int(rows[1])*1024
 
-        needed = os.path.getsize(self.filePath)
-        print "file size:",needed, " avail:",avail
+        needed = os.path.getsize(self.filePath())
+        print "file size:",needed, " avail:",avail, "has enough:",needed <= avail
         return needed <= avail
 
     
@@ -492,135 +763,3 @@ class FFMPEGCutter():
         #MOV files need to be converted:
         #ffmpeg -y -i big_buck_bunny_1080p_h264.mov -vcodec copy -bsf:v h264_mp4toannexb -acodec ac3 OUTPUT.ts
         print "TODO"
-'''
-if __name__ == "__main__":
-    m = FFMPEGCutter("/home/matze/Videos/T3.m2t","/home/matze/Videos/T3x.mp4")
-    starttd = timedelta(seconds=5)
-    endtd = timedelta(seconds=700)
-    m.cutPart(starttd, endtd, 0)
-               
-
-'''  
-if __name__ == "__main__":
-    m=FFStreamProbe("/home/matze/Videos/kabel_eins/07_02_23_04-Batman & Robin.m2t")
-    #m=FFStreamProbe("/home/matze/Videos/handbrake.txt")
-    #m=FFStreamProbe("/home/matze/Videos/CT.m2t")
-    #m=FFStreamProbe("/home/matze/Videos/big_buck_bunny_1080p_h264.mov")
-    print "-------- Prim video -------------"
-    s = m.getVideoStream()
-    print "Index:",s.getStreamIndex()
-    print "codec",s.getCodec()
-    print "getCodecTimeBase: ",s.getCodecTimeBase()
-    print "getTimeBase: ",s.getTimeBase()
-    print "getAspect ",s.getAspectRatio()
-    print "getFrameRate: ",s.getFrameRate()
-    print "getFrameRate?: ",s.frameRate()
-    print "getDuration: ",s.duration()
-    print "getWidth: ",s.getWidth()
-    print "getHeight: ",s.getHeight()
-    print "isAudio: ",s.isAudio()
-    print "isVideo: ",s.isVideo()
-    
-    print "-------- Prim audio -------------"
-    s=m.getAudioStream()  
-    if not s:
-        print "No audio"
-        exit(0)  
-    print "Index:",s.getStreamIndex()
-    print "getCodec:",s.getCodec()
-    print "getCodecTimeBase: ",s.getCodecTimeBase()
-    print "getTimeBase: ",s.getTimeBase()
-    print "getFrameRate: ",s.getFrameRate()
-    print "getFrameRate?: ",s.frameRate()
-    print "getDuration: ",s.duration()
-    print "isAudio: ",s.isAudio()
-    print "isVideo: ",s.isVideo()
-
-    print "-------- all streams -------------"    
-    for s in m.streams:
-        print "Index:",s.getStreamIndex()
-        print "getCodec:",s.getCodec()
-        print "getCodecTimeBase: ",s.getCodecTimeBase()
-        print "getTimeBase: ",s.getTimeBase()
-        print "getAspect ",s.getAspectRatio()
-        print "getFrameRate: ",s.getFrameRate()
-        print "getDuration: ",s.duration()
-        print "getWidth: ",s.getWidth()
-        print "getHeight: ",s.getHeight()
-        print "isAudio: ",s.isAudio()
-        print "isVideo: ",s.isVideo()
-
-    cutter = FFMPEGCutter("/home/matze/Videos/kabel_eins/07_02_23_04-Batman & Robin.m2t","/home/matze/Videos/x.mp4")
-    cutter.ensureAvailableSpace()    
-''' 
-    #Very slow!!!
-    f = FFFrameProbe("/home/matze/Videos/09_21_13_33-Indiana Jones und der Tempel des Todes.m2t")
-    print len(f.frames)
-'''        
-#----------- documatation -------------
-
-'''
->> Header info very fast
-ffprobe -select_streams v:0 -show_streams Videos/007Test.mp4 -v quiet
-[STREAM]
-index=0
-codec_name=h264
-codec_long_name=H.264 / AVC / MPEG-4 AVC / MPEG-4 part 10
-profile=High
-codec_type=video
-codec_time_base=1/100
-codec_tag_string=avc1
-codec_tag=0x31637661
-width=1280
-height=720
-has_b_frames=0
-sample_aspect_ratio=1:1
-display_aspect_ratio=16:9
-pix_fmt=yuv420p
-level=40
-color_range=tv
-color_space=bt709
-timecode=N/A
-id=N/A
-r_frame_rate=50/1
-avg_frame_rate=50/1
-time_base=1/90000
-start_pts=44730
-start_time=0.497000
-duration_ts=27415800
-duration=304.620000
-bit_rate=7576497
-max_bit_rate=N/A
-bits_per_raw_sample=8
-nb_frames=15231
-nb_read_frames=N/A
-nb_read_packets=N/A
-DISPOSITION:default=1
-DISPOSITION:dub=0
-DISPOSITION:original=0
-DISPOSITION:comment=0
-DISPOSITION:lyrics=0
-DISPOSITION:karaoke=0
-DISPOSITION:forced=0
-DISPOSITION:hearing_impaired=0
-DISPOSITION:visual_impaired=0
-DISPOSITION:clean_effects=0
-DISPOSITION:attached_pic=0
-TAG:language=und
-TAG:handler_name=VideoHandler
-[/STREAM]
-
-add -count_Frames (takes very long!) and you get:
-nb_frames=15231
-nb_read_frames=15228
-
-#line by line thru pipe: makes progress posible
-p = subprocess.Popen(["ls"], stdout=subprocess.PIPE)
-while True:
-    line = p.stdout.readline()
-    if not line:
-        break
-    print line
-
-'''
-    

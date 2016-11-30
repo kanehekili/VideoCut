@@ -31,7 +31,7 @@
 		</copy>
 		
 		<copy todir="${rootDir}">
-			<fileset dir="${source}" includes="*.py">
+			<fileset dir="${source}" includes="*.py" excludes="*Tests*">
 			</fileset>
 		</copy>
 
