@@ -1,12 +1,21 @@
 # -*- coding: utf-8 -*-
+from PyQt4.Qt import QMessageBox
 
 # 2014 Matze Wegmann (mat.wegmann@gmail.com)
 #
 
 
+try:
+    import cv2
+except ImportError:
+    print "OpenCV not found! Please install."
+        
+try:
+    from cv2 import cv #this is cv2!
+except ImportError:
+    print "OpenCV 2 not found, expecting Version 3 now"    
 
-import cv2
-from cv2 import cv
+
 import sys, traceback
 from datetime import timedelta
 
@@ -16,17 +25,16 @@ from PyQt4.QtGui import QApplication, QImage, QPainter, QWidget, QVBoxLayout,\
     QDesktopWidget, QFileDialog, QDial, QColor, QSizePolicy, QLabel,\
     QHBoxLayout, QListWidget, QGridLayout, QListWidgetItem,\
     QIcon, QMenu, QFrame, QSpinBox, QCheckBox
-from PyQt4.Qt import QRectF, QSize, QString, Qt, QStatusBar
-from FFMPEGTools import FFMPEGCutter, FFStreamProbe
+from PyQt4.Qt import QRectF, QSize, QString, Qt, QStatusBar #, QFrame
+from FFMPEGTools import FFMPEGCutter, FFStreamProbe, CuttingConfig
 import os
 from time import sleep
-import xml.etree.cElementTree as CETree
+import xml.etree.cElementTree as CT
 #import MProfiler
 
 
 # sizes ..
 SIZE_ICON=80
-
 
 def changeBackgroundColor(widget, colorString):
     widget.setAttribute(QtCore.Qt.WA_StyledBackground, True)
@@ -75,20 +83,103 @@ class OSTools():
         if self.fileExists(path):
             os.remove(path)
 
+'''
+Compat layer for cv2 and 3
+'''
+class OpenCV2():
+    def __init__(self,):
+        self._cap = cv2.VideoCapture()
+        
+    def getCapture(self):
+        return self._cap
+
+        
+    def setColor(self,numpyArray):
+        cv2.cvtColor(numpyArray, cv.CV_BGR2RGB, numpyArray)#@UndefinedVariable
+        
+    def getFrameWidth(self):
+        return self._cap.get(cv2.cv.CV_CAP_PROP_FRAME_WIDTH)#@UndefinedVariable
+     
+    def getFrameHeight(self):
+        return self._cap.get(cv2.cv.CV_CAP_PROP_FRAME_HEIGHT)#@UndefinedVariable
+    
+    def getFrameCount(self):
+        return self._cap.get(cv2.cv.CV_CAP_PROP_FRAME_COUNT)#@UndefinedVariable
+    
+    def getFPS(self):
+        return self._cap.get(cv2.cv.CV_CAP_PROP_FPS)#@UndefinedVariable
+    
+    def setFramePosition(self,pos):
+        self._cap.set(cv2.cv.CV_CAP_PROP_POS_FRAMES,pos)#@UndefinedVariable
+    
+    def getFramePosition(self):
+        return self._cap.get(cv2.cv.CV_CAP_PROP_POS_FRAMES)#@UndefinedVariable
+        
+    def setAVIPosition(self,pos):
+        self._cap.set(cv2.cv.CV_CAP_PROP_POS_AVI_RATIO,pos)#@UndefinedVariable
+        
+    def setTimePosition(self,ms):
+        self._cap.set(cv2.cv.CV_CAP_PROP_POS_MSEC,ms)#@UndefinedVariable
+        
+    def getTimePosition(self):
+        return self._cap.get(cv2.cv.CV_CAP_PROP_POS_MSEC)#@UndefinedVariable     
+        
+
+class OpenCV3():
+    def __init__(self):
+        self._cap = cv2.VideoCapture()
+    
+    def getCapture(self):
+        return self._cap
+    
+    def setColor(self,numpyArray):
+        cv2.cvtColor(numpyArray, cv2.COLOR_BGR2RGB, numpyArray)#@UndefinedVariable
+        
+    def getFrameWidth(self):
+        return self._cap.get(cv2.CAP_PROP_FRAME_WIDTH)#@UndefinedVariable
+     
+    def getFrameHeight(self):
+        return self._cap.get(cv2.CAP_PROP_FRAME_HEIGHT)#@UndefinedVariable
+    
+    def getFrameCount(self):
+        return self._cap.get(cv2.CAP_PROP_FRAME_COUNT)#@UndefinedVariable
+    
+    def getFPS(self):
+        return self._cap.get(cv2.CAP_PROP_FPS)#@UndefinedVariable
+    
+    def setFramePosition(self,pos):
+        self._cap.set(cv2.CAP_PROP_POS_FRAMES,pos)#@UndefinedVariable
+    
+    def getFramePosition(self):
+        return self._cap.get(cv2.CAP_PROP_POS_FRAMES)#@UndefinedVariable
+        
+    def setAVIPosition(self,pos):
+        self._cap.set(cv2.CAP_PROP_POS_AVI_RATIO,pos)#@UndefinedVariable
+        
+    def setTimePosition(self,ms):
+        self._cap.set(cv2.CAP_PROP_POS_MSEC,ms)#@UndefinedVariable
+        
+    def getTimePosition(self):
+        return self._cap.get(cv2.CAP_PROP_POS_MSEC)#@UndefinedVariable
+    
+if "3." in cv2.__version__:
+    OPENCV=OpenCV3()
+else:
+    OPENCV=OpenCV2()    
 
 class XMLAccessor():
     def __init__(self,path):
         self._path=path+".xml"
         
     def writeXML(self,videoCutEntries):
-        rootElement = CETree.Element('VC_Data')
+        rootElement = CT.Element('VC_Data')
         for cut in videoCutEntries:
-            entry = CETree.SubElement(rootElement,"Entry")
+            entry = CT.SubElement(rootElement,"Entry")
             entry.attrib["frame"]=str(cut.frameNumber) 
             entry.attrib["mode"]=str(cut.modeString)
         
         with open(self._path, 'w') as aFile:
-            CETree.ElementTree(rootElement).write(aFile)
+            CT.ElementTree(rootElement).write(aFile)
 
     def readXML(self):
         cutEntries = []
@@ -97,7 +188,7 @@ class XMLAccessor():
         with open(self._path, 'r') as xmlFile:
             xmlData = xmlFile.read()
             
-        root = CETree.fromstring(xmlData)
+        root = CT.fromstring(xmlData)
         for info in root:
             frameNbr= float(info.get('frame'))
             markerType= info.get('mode')
@@ -114,15 +205,18 @@ class CVImage(QImage):
     def __init__(self,numpyArray):
         height, width, bytesPerComponent = numpyArray.shape
         bytesPerLine = bytesPerComponent * width;
-        cv2.cvtColor(numpyArray, cv.CV_BGR2RGB, numpyArray)
+        #cv2.cvtColor(numpyArray, cv2.COLOR_BGR2RGB, numpyArray)
+        #cv2: cv2.cvtColor(numpyArray, cv.CV_BGR2RGB, numpyArray)
+        OPENCV.setColor(numpyArray)
         super(CVImage,self).__init__(numpyArray.data,width,height,bytesPerLine, QImage.Format_RGB888)
 
 
 class VideoWidget(QFrame):
     """ A class for rendering video coming from OpenCV """
 
-    def __init__(self, parent=None):
+    def __init__(self, parent):
         QFrame.__init__(self,parent)
+        #super(VideoWidget,self).__init__(parent)
         self._defaultHeight=576
         self._defaultWidth=720
         self.setSizePolicy(QSizePolicy.Expanding,QSizePolicy.Expanding)
@@ -131,16 +225,14 @@ class VideoWidget(QFrame):
         self.setDefaultRatio()
         self.setFrameStyle(QFrame.Panel | QFrame.Sunken)
         self.setLineWidth(1)
-        #self.setMidLineWidth(2)
-        
+   
 
     def paintEvent(self, event):
 
         QFrame.paintEvent(self,event)
-        
         if self._image is None:
             return
-        
+
         qSize = self.size()
         w= qSize.width()
         h= qSize.height()
@@ -154,8 +246,11 @@ class VideoWidget(QFrame):
             imgX = w;
             x=0
             y=(h-imgY)/2
+        
         painter = QPainter(self)
-        painter.drawImage(QRectF(x, y,imgX,imgY), self._image)        
+        painter.drawImage(QRectF(x, y,imgX,imgY), self._image)
+        #painter.end()
+  
         
     def sizeHint(self):
         return QSize(self._defaultWidth,self._defaultHeight)
@@ -168,7 +263,7 @@ class VideoWidget(QFrame):
                 self._image.loadFromData(contents, format=None)
                 box = self._image.rect()
                 self.imageRatio=box.width()/float(box.height())
-        else:    
+        else:   
             self.setDefaultRatio()
             self._image = CVImage(aFrame)
         self.update()
@@ -256,7 +351,7 @@ class LayoutWindow(QWidget):
 
     def initWidgets(self):
         
-        self.ui_VideoFrame = VideoWidget()
+        self.ui_VideoFrame = VideoWidget(self)
         self.ui_Slider =  QtGui.QSlider(QtCore.Qt.Horizontal)
         self.ui_Slider.setMinimum(0)
         self.ui_Slider.setMaximum(self.SLIDER_RESOLUTION)
@@ -392,10 +487,8 @@ class LayoutWindow(QWidget):
         
         self.ui_CB_Reencode.stateChanged.connect(aVideoController.setExactCut)
         
-        #test
         self.statusMessenger = StatusDispatcher()
         self.connect(self.statusMessenger,self.statusMessenger.signal,self.showStatusMessage)
-        #self.connect(self.sliderThread,self.sliderThread.signal,self._showFrame)                                     
         
         self._hookListActions()
     
@@ -498,6 +591,7 @@ class MainFrame(QtGui.QMainWindow):
         if aPath is not None:
             self._videoController.setFile(aPath)
 
+
     
     def initUI(self):
         
@@ -550,12 +644,7 @@ class MainFrame(QtGui.QMainWindow):
 
         widgets = LayoutWindow()
         self.setCentralWidget(widgets);
-        w = QDesktopWidget().width()
-        h= QDesktopWidget().height()
-        #self.setGeometry(w/2,h/2,700,550)
-        self.setGeometry(w/4,h/4,700,550)
-        
-        self.setWindowTitle("VideoCut")   
+        self.setWindowTitle("VideoCut") 
         return widgets
     
     def updateWindowTitle(self,text):
@@ -591,7 +680,7 @@ class MainFrame(QtGui.QMainWindow):
         self._widgets.stopProgress()
 
     def showWarning(self,aMessage):
-        QtGui.QMessageBox.warning(self,"Tsk Tsk",aMessage,QtGui.QMessageBox.Ok, QtGui.QMessageBox.NoButton, QtGui.QMessageBox.NoButton)
+        QtGui.QMessageBox.warning(self,"Not supported",aMessage,QtGui.QMessageBox.Ok, QtGui.QMessageBox.NoButton, QtGui.QMessageBox.NoButton)
     
     
     def enableControls(self,enable):
@@ -677,27 +766,58 @@ class MainFrame(QtGui.QMainWindow):
         layout.addWidget(label)
         return dlg
 
+    def getErrorDialog(self,text,infoText,detailedText):
+        dlg = QMessageBox(self)
+        dlg.setIcon(QMessageBox.Warning)
+        dlg.setWindowModality(QtCore.Qt.WindowModal)
+        dlg.setWindowTitle("Error")
+        dlg.setText(text)
+        dlg.setInformativeText(infoText)
+        dlg.setDetailedText(detailedText)
+        dlg.setStandardButtons(QMessageBox.Ok)
+        
+        return dlg
+        
+
 
 class VideoPlayer():
     def __init__(self,path,streamProbe):
         self.framecount = 0
         self.totalTimeMilliSeconds = 0.0 
         self._streamProbe=streamProbe
+        self._capture = None
         self._file=str(path)
         self._isValid = self._captureFromFile()
         
         
     def _captureFromFile(self):
-        self._capture = cv2.VideoCapture()
         if self._streamProbe is None or not self._streamProbe.isKnownVideoFormat():
+            print "STREAM NOT KNOWN"
             return False
+        self._capture = OPENCV.getCapture();
         if not self._capture.open(self._file):
+            print "STREAM NOT OPENED"
             return False
+
+        self 
+        self.frameWidth= OPENCV.getFrameWidth()
+        self.frameHeight= OPENCV.getFrameHeight()
+        self.framecount= OPENCV.getFrameCount()
+        self.fps= OPENCV.getFPS()
+        
+        '''
+        self.frameWidth= self._capture.get(cv2.CAP_PROP_FRAME_WIDTH)
+        self.frameHeight= self._capture.get(cv2.CAP_PROP_FRAME_HEIGHT)
+        self.framecount= self._capture.get(cv2.CAP_PROP_FRAME_COUNT)
+        self.fps= self._capture.get(cv2.CAP_PROP_FPS)
+        
+        this is cv2: code:
         self.frameWidth= self._capture.get(cv2.cv.CV_CAP_PROP_FRAME_WIDTH)
         self.frameHeight= self._capture.get(cv2.cv.CV_CAP_PROP_FRAME_HEIGHT)
         self.framecount= self._capture.get(cv2.cv.CV_CAP_PROP_FRAME_COUNT)
         self.fps= self._capture.get(cv2.cv.CV_CAP_PROP_FPS)
-        
+
+        '''
         #The problem: cv has a problem if it is BEHIND the last frame...
         #DO NOT USE;;;;; cap.set(cv2.cv.CV_CAP_PROP_POS_AVI_RATIO,1);
 #         test = cap.set(cv2.cv.CV_CAP_PROP_POS_FRAMES,self.framecount-10)
@@ -705,7 +825,8 @@ class VideoPlayer():
 #         if self.frameHeight< 10.0 or self.frameWidth < 10.0 or self.framecount < 10.0 or self.fps < 10.0:
 #             return cap;
         self.totalTimeMilliSeconds = int(self.framecount/self.fps*1000)
-        self._capture.set(cv2.cv.CV_CAP_PROP_POS_FRAMES,0)
+        OPENCV.setFramePosition(0)
+        print "STREAM OK"
         return True
 
     def validate(self):
@@ -714,15 +835,6 @@ class VideoPlayer():
 
     def isValid(self):
         return self._isValid 
-
-    def __checkMax(self,cap):
-        testPos=self.framecount-self.framecount//100
-        ret = True
-        cap.set(cv2.cv.CV_CAP_PROP_POS_FRAMES,testPos)
-        while ret:
-            ret = cap.grab()
-            testPos+=1
-        self.framecount = testPos-1
 
     """Milliseconds per frame."""
     def mspf(self):
@@ -754,7 +866,7 @@ class VideoPlayer():
     def __getLastFrame(self,cap,frameIndex):
         if frameIndex<1:
             return None
-        cap.set(cv2.cv.CV_CAP_PROP_POS_FRAMES,frameIndex-1)
+        OPENCV.setFramePosition(frameIndex-1)
         ret, frame = cap.read()
         if not ret:
             return self.__getLastFrame(cap,frameIndex-1)
@@ -775,7 +887,7 @@ class VideoPlayer():
         return self.getFrameAt(framepos)
     
     def setFrameAt(self,frameNumber):
-        self._capture.set(cv2.cv.CV_CAP_PROP_POS_FRAMES,frameNumber)
+        OPENCV.setFramePosition(frameNumber)
     
     def getFrameAt(self,frameNumber):
         self.setFrameAt(frameNumber-1)
@@ -785,11 +897,11 @@ class VideoPlayer():
     seeks a frame based on AV pos (between 0 and 1) -SLOW!!!!!
     '''
     def getFrameAtAVPos(self,avPos):
-        self._capture.set(cv2.cv.CV_CAP_PROP_POS_AVI_RATIO,avPos)
+        OPENCV.setAVIPosition(avPos)
         return self.getNextFrame()
  
     def getFrameAtMS(self,ms):
-        self._capture.set(cv2.cv.CV_CAP_PROP_POS_MSEC,ms)
+        OPENCV.setTimePosition(ms)
         return self.getNextFrame()
  
     def getFrameSize(self):
@@ -798,8 +910,9 @@ class VideoPlayer():
     def getCurrentFrameTime(self):
         if not self.isValid():
             timeSlot=0
-        else:    
-            timeSlot = self._capture.get(cv2.cv.CV_CAP_PROP_POS_MSEC)
+        else:
+            timeSlot = OPENCV.getTimePosition()    
+
         try:    
             td = timedelta(milliseconds=long(timeSlot))
         except:
@@ -807,10 +920,10 @@ class VideoPlayer():
         return td
     
     def getCurrentTimeMS(self):
-        return self._capture.get(cv2.cv.CV_CAP_PROP_POS_MSEC)
-    
+        return OPENCV.getTimePosition()
+     
     def getCurrentFrameNumber(self):
-        return self._capture.get(cv2.cv.CV_CAP_PROP_POS_FRAMES)
+        return OPENCV.getFramePosition()
 
     def close(self):
         if self._capture is not None:
@@ -863,16 +976,19 @@ class VideoControl(QObject):
             self.__initSliderTicks()
             self.gui.enableControls(True)
             self.gui.updateWindowTitle(OSTools().getFileNameOnly(filePath))
-            #self._gotoFrame(0)#TODO observe if crashing on start!
             self._asyncInitVideoViews()
            
         except:
             self.gui.updateWindowTitle(OSTools().getFileNameOnly(filePath))
             self._gotoFrame(0)
             self._showCurrentFrameInfo(0)
-            self.gui.showWarning("Invalid file format!")
+            if not OSTools().fileExists(filePath):
+                msg = "File not found"
+            else:
+                msg = "Invalid file format!"
+            
+            self.gui.showWarning(msg)
             self.gui.enableControls(False)
-            traceback.print_exc(file=sys.stdout)
     
     def setExactCut(self,reencode): 
         self.exactcut = Qt.Checked==reencode   
@@ -908,7 +1024,8 @@ class VideoControl(QObject):
             XMLAccessor(self.currentPath).writeXML(self.videoCuts)
 
     def _asyncInitVideoViews(self):
-        QTimer.singleShot(10,self._gotoFrame)
+        #QTimer.singleShot(10,self._gotoFrame)
+        QTimer.singleShot(10,self._grabNextFrame)
         QTimer.singleShot(150, self.restoreVideoCuts)
 
     def restoreVideoCuts(self):
@@ -983,14 +1100,19 @@ class VideoControl(QObject):
  
 
     def __makeCuts(self,srcPath,targetPath,spanns):
-        cutter = FFMPEGCutter(srcPath,targetPath)
-        cutter.setMessageDelegator(self.gui._widgets.statusMessenger)
+        config = CuttingConfig(srcPath,targetPath)
+        config.streamData = self.streamData
+        config.reencode = self.exactcut
+        config.messenger = self.gui._widgets.statusMessenger
+        cutter = FFMPEGCutter(config)
+        
         cutter.ensureAvailableSpace()
         slices = len(spanns)
         for index, cutmark in enumerate(spanns):
             t1=cutmark[0].timePos
             t2 = cutmark[1].timePos
-            hasSucess = cutter.cutPart(t1, t2, index,slices,self.exactcut)
+            hasSucess = cutter.cutPart(t1, t2, index,slices)
+            # addon! hasSucess = cutter.cutPart(t1, t2, index,slices,self.exactcut)
             if not hasSucess:
                 print"VC-Cut error" #TODO need a signal for error
                 return
@@ -1027,6 +1149,8 @@ class VideoControl(QObject):
     #display Frame with syncing the slider pos. 
     def _gotoFrame(self,frameNumber=0):
         self._frameSet=True
+        if self.player.framecount < 1:
+            return;
         if frameNumber == 0:
             sliderPos=0
         else:
@@ -1175,22 +1299,33 @@ class StatusDispatcher(QObject):
     def say(self,aString):
         self.text=aString
         self.emit(self.signal,aString)
+
+WIN=None
+
+def handle_exception(exc_type, exc_value, exc_traceback):
+    """ handle all exceptions """
+    if WIN is not None:
         
+        infoText = exc_value.message
+        detailText ="*".join(traceback.format_exception(exc_type, exc_value, exc_traceback))
+        WIN.getErrorDialog("Unexpected error",infoText,detailText).show()
+     
 
 def main():
     try:
+        global WIN
         OSTools().setCurrentWorkingDirectory()
         argv = sys.argv
         app = QApplication(argv)
         app.setWindowIcon(getAppIcon())
         if len(argv)==1:
-            MainFrame()
+            WIN = MainFrame() #keep python reference!
         else:
-            MainFrame(argv[1])  
+            WIN = MainFrame(argv[1])  
         app.exec_()
     except:
         traceback.print_exc(file=sys.stdout)
-
         
 if __name__ == '__main__':
+    sys.excepthook=handle_exception
     sys.exit(main())
