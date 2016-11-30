@@ -22,6 +22,12 @@ Using ffmpeg as cutting/joining tool. Some older versions of ffmpeg seem to have
 Current git version of ffmpeg will yield the best results.
 :boom: Be aware that this tool does not cut exact on frame - except you reencode the whole film.
 
+### How to install
+* Download the videocut*.tar contained in the "build" folder
+* Upack it to a location that suits you.
+* Copy the VideoCut.desktop file to ~/.local/share/applications
+* Change the absolute paths & user name to the location where you've copied the files.
+
 ### Plans
 * Exact frame cut - by generating intermediate I-Frames until the cut point. 
 * Conversion tools - from one container to another, change audio or video codecs...
