@@ -661,6 +661,8 @@ class FFMPEGCutter():
     '''
     def _audioMode(self,mode):
         #streamData is FFStreamProbe
+        if self._config.streamData.getAudioStream() is None:
+            return []
         log("audio:",self._config.streamData.getAudioStream().getCodec())
         if self._config.streamData.needsAudioADTSFilter():            
             return ["-c:a","copy","-bsf:a","aac_adtstoasc"]
