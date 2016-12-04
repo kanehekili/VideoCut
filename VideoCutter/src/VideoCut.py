@@ -30,8 +30,6 @@ from FFMPEGTools import FFMPEGCutter, FFStreamProbe, CuttingConfig
 import os
 from time import sleep
 import xml.etree.cElementTree as CT
-#import MProfiler
-
 
 # sizes ..
 SIZE_ICON=80
@@ -205,24 +203,21 @@ class CVImage(QImage):
     def __init__(self,numpyArray):
         height, width, bytesPerComponent = numpyArray.shape
         bytesPerLine = bytesPerComponent * width;
-        #cv2.cvtColor(numpyArray, cv2.COLOR_BGR2RGB, numpyArray)
-        #cv2: cv2.cvtColor(numpyArray, cv.CV_BGR2RGB, numpyArray)
         OPENCV.setColor(numpyArray)
         super(CVImage,self).__init__(numpyArray.data,width,height,bytesPerLine, QImage.Format_RGB888)
 
 
 class VideoWidget(QFrame):
     """ A class for rendering video coming from OpenCV """
-
+    
     def __init__(self, parent):
         QFrame.__init__(self,parent)
-        #super(VideoWidget,self).__init__(parent)
         self._defaultHeight=576
         self._defaultWidth=720
         self.setSizePolicy(QSizePolicy.Expanding,QSizePolicy.Expanding)
         changeBackgroundColor(self, "lightgray")       
         self._image = None
-        self.setDefaultRatio()
+        self.imageRatio = 16.0/9.0
         self.setFrameStyle(QFrame.Panel | QFrame.Sunken)
         self.setLineWidth(1)
    
@@ -264,14 +259,12 @@ class VideoWidget(QFrame):
                 box = self._image.rect()
                 self.imageRatio=box.width()/float(box.height())
         else:   
-            self.setDefaultRatio()
             self._image = CVImage(aFrame)
         self.update()
         
-        
-    def setDefaultRatio(self):
-        self.imageRatio = 16.0/9.0; #Pixel aspect ratio is not considered yet!
-        
+    def setVideoRatio(self,ratio):
+        self.imageRatio = float(ratio)
+
 
 class VideoCutEntry():
     MODE_START = "Start"
@@ -288,56 +281,6 @@ class VideoCutEntry():
         return ':'.join(str(self.timePos).split(':')[:3])
     
 
-# class MarkerListEntry(QWidget):
-#     def __init__(self,frame,ratio,videoCutEntry=None):
-#         QWidget.__init__(self,None)
-#         self._entry=videoCutEntry
-#         self._ratio=ratio
-#         self._createUI(frame,videoCutEntry)
-#     
-#     def _createUI(self,frame,entry):
-#         self._modeLabel = QLabel(entry.modeString)
-#         self.modeLabel.setStyleSheet('''QLabel { background-color : red; color : blue; }''')
-#         self._timeLabel = QLabel(entry.getTimeString())
-#         self._frameLabel = QLabel(str(entry.frameNumber))
-#         self._ico = MarkerIcon(frame,self._ratio*SIZE_ICON,SIZE_ICON)
-#         vbox = QVBoxLayout()
-#         vbox.addWidget(self._modeLabel)
-#         vbox.addWidget(self._timeLabel)
-#         vbox.addWidget(self._frameLabel)
-#         vbox.setSpacing(0)
-#         vbox.setContentsMargins(0,0,0,0)
-# #        self.setLayout(vbox)
-#          
-#         hbox = QHBoxLayout()
-#         hbox.setContentsMargins(0,0,0,0)
-#         hbox.addWidget(self._ico)
-#         hbox.addLayout(vbox)
-#         self.setLayout(hbox)
-#         self.adjustSize()
-#         
-#         
-# #     def paintEvent(self, event):
-# #         print" Marker paint"
-# #         QWidget.paintEvent(self,event)
-#         
-#         
-#         
-# class MarkerIcon(QWidget):
-#     def __init__(self,frame,width,height):
-#         QWidget.__init__(self,None)
-#         self._image = CVImage(frame)
-#         self.ico_dim = QRect(0, 0,width,height)
-#         #self.setGeometry(0,0,width,height)
-# 
-#     def paintEvent(self, event):
-#         print "Marker icon paint"
-#         painter = QPainter(self)
-#         painter.drawImage(self.ico_dim, self._image)
-# 
-#     def sizeHint(self):
-#         print "Marker:",QSize(self.ico_dim.width(),self.ico_dim.height())
-#         return QSize(self.ico_dim.width(),self.ico_dim.height())
 
         
 #widget that contains the widgets
@@ -353,12 +296,16 @@ class LayoutWindow(QWidget):
         
         self.ui_VideoFrame = VideoWidget(self)
         self.ui_Slider =  QtGui.QSlider(QtCore.Qt.Horizontal)
+        #contribution:
+        #self.ui_Slider.setStyleSheet(stylesheet(self))
+        
         self.ui_Slider.setMinimum(0)
         self.ui_Slider.setMaximum(self.SLIDER_RESOLUTION)
         self.ui_Slider.setToolTip("Video track")
         #self.ui_Slider.setTickPosition(Qt.TicksAbove)
         
         self.ui_Dial = QDial(self)
+        
         self.ui_Dial.setProperty("value", 0)
         self.ui_Dial.setNotchesVisible(True)
         self.ui_Dial.setWrapping(False)
@@ -392,7 +339,6 @@ class LayoutWindow(QWidget):
         self.statusbar.addPermanentWidget(self.__createProgressBar())
         self.setLayout(self.makeGridLayout())
         self.adjustSize()
-        #changeBackgroundColor(mainVBox, "yellow")
 
     def makeGridLayout(self):
         gridLayout = QGridLayout()
@@ -626,22 +572,47 @@ class MainFrame(QtGui.QMainWindow):
         self.playAction.setShortcut('Ctrl+P')
         self.playAction.triggered.connect(self.playVideo)
         
+        '''
+        the conversion menues
+        '''
+        #self.convertToMP4 = QtGui.QAction(QtGui.QIcon('./icons/stop-red-icon.png'),"Convert to mp4",self)
+        self.convertToMP4 = QtGui.QAction("Convert to mp4",self)
+        self.convertToMP4.setCheckable(True)
+        self.selectContainer = QtGui.QAction(QtGui.QIcon('./icons/stop-red-icon.png'),"change to a different container",self)
+        self.extractMP3 = QtGui.QAction(QtGui.QIcon('./icons/stop-red-icon.png'),"Extract MP3",self)
+        self.switchAudio = QtGui.QAction(QtGui.QIcon('./icons/stop-red-icon.png'),"Swtich audio",self)
+        
+        '''
+        toolbar defs
+        '''
         self.toolbar = self.addToolBar('Main')
         self.toolbar.addAction(self.loadAction)
+        self.toolbar.addAction(self.saveAction)
+        self.toolbar.addSeparator()
         self.toolbar.addAction(self.startAction)
         self.toolbar.addAction(self.stopAction)
-        self.toolbar.addAction(self.saveAction)
+        self.toolbar.addSeparator()
         self.toolbar.addAction(self.infoAction)
         self.toolbar.addAction(self.playAction)
 
         menubar = self.menuBar()
         fileMenu = menubar.addMenu('&File')
         fileMenu.addAction(self.loadAction)
+        fileMenu.addAction(self.saveAction)
+        fileMenu.addSeparator();
         fileMenu.addAction(self.startAction)
         fileMenu.addAction(self.stopAction)
-        fileMenu.addAction(self.saveAction)
+        fileMenu.addSeparator();
         fileMenu.addAction(self.exitAction)
 
+        '''
+        #TODO - add functions:
+        fileMenu = menubar.addMenu('&Conversion')
+        fileMenu.addAction(self.convertToMP4)
+        fileMenu.addAction(self.selectContainer)
+        fileMenu.addAction(self.extractMP3)
+        fileMenu.addAction(self.switchAudio)
+        '''
         widgets = LayoutWindow()
         self.setCentralWidget(widgets);
         self.setWindowTitle("VideoCut") 
@@ -975,6 +946,9 @@ class VideoControl(QObject):
             
             self.__initSliderTicks()
             self.gui.enableControls(True)
+            #set ratio
+            self.gui.getVideoWidget().setVideoRatio(self.streamData.getAspectRatio())
+
             self.gui.updateWindowTitle(OSTools().getFileNameOnly(filePath))
             self._asyncInitVideoViews()
            
@@ -1112,7 +1086,6 @@ class VideoControl(QObject):
             t1=cutmark[0].timePos
             t2 = cutmark[1].timePos
             hasSucess = cutter.cutPart(t1, t2, index,slices)
-            # addon! hasSucess = cutter.cutPart(t1, t2, index,slices,self.exactcut)
             if not hasSucess:
                 print"VC-Cut error" #TODO need a signal for error
                 return
@@ -1325,6 +1298,82 @@ def main():
         app.exec_()
     except:
         traceback.print_exc(file=sys.stdout)
+
+def stylesheet(self):
+        return """
+QSlider::groove:horizontal {
+    border: 1px solid #bbb;
+    background: white;
+    height: 8px;
+    border-radius: 4px;
+    margin:2px 0;
+}
+QSlider::sub-page:horizontal {
+    background: qlineargradient(x1: 0, y1: 0,    x2: 0, y2: 1,
+        stop: 0 #66e, stop: 1 #bbf);
+    background: qlineargradient(x1: 0, y1: 0.2, x2: 1, y2: 1,
+        stop: 0 #bbf, stop: 1 #55f);
+    border: 1px solid #b8b8b8;
+    height: 8px;
+    border-radius: 4px;
+}
+
+QSlider::add-page:horizontal {
+    background: qlineargradient(x1: 0, y1: 0,    x2: 0, y2: 1,
+        stop: 0 #b3b3b3, stop: 1 #eee);
+    border: 1px solid #b8b8b8;
+    height: 8px;
+    border-radius: 4px;
+}
+
+QSlider::handle:horizontal {
+    background: qlineargradient(x1:0, y1:0, x2:1, y2:1,
+        stop:0 #eee, stop:1 #a3a3a3);
+    border: 1px solid #777;
+    width: 15px;
+    margin: -4px 0;
+    border-radius: 8px;
+}
+
+QSlider::handle:horizontal:hover 
+{
+    background: qlineargradient(x1:0, y1:0, x2:1, y2:1,
+    stop:0 #fff, stop:1 #b3b3b3);
+    border: 1px solid #444;
+    border-radius: 8px;
+}
+
+QSlider::sub-page:horizontal:disabled 
+{
+    background: qlineargradient(x1: 0, y1: 0,    x2: 0, y2: 1,
+        stop: 0 #66e, stop: 1 #bbf);
+    background: qlineargradient(x1: 0, y1: 0.2, x2: 1, y2: 1,
+        stop: 0 #bbf, stop: 1 #55f);
+    border-color: #999;
+}
+
+QSlider::add-page:horizontal:disabled 
+{
+    background: qlineargradient(x1: 0, y1: 0,    x2: 0, y2: 1,
+    stop: 0 #b3b3b3, stop: 1 #eee);
+    border-color: #999;
+}
+
+QSlider::handle:horizontal:disabled {
+    background: #eee;
+    border: 1px solid #aaa;
+    border-radius: 8px;
+}
+
+QSlider:focus
+{
+    border: 1px dotted #9E9E9E;
+    border-radius: 4px;
+}
+
+"""
+
+
         
 if __name__ == '__main__':
     sys.excepthook=handle_exception

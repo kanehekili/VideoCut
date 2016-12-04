@@ -22,9 +22,64 @@ if __name__ == "__main__":
 
 '''  
 
+# class MarkerListEntry(QWidget):
+#     def __init__(self,frame,ratio,videoCutEntry=None):
+#         QWidget.__init__(self,None)
+#         self._entry=videoCutEntry
+#         self._ratio=ratio
+#         self._createUI(frame,videoCutEntry)
+#     
+#     def _createUI(self,frame,entry):
+#         self._modeLabel = QLabel(entry.modeString)
+#         self.modeLabel.setStyleSheet('''QLabel { background-color : red; color : blue; }''')
+#         self._timeLabel = QLabel(entry.getTimeString())
+#         self._frameLabel = QLabel(str(entry.frameNumber))
+#         self._ico = MarkerIcon(frame,self._ratio*SIZE_ICON,SIZE_ICON)
+#         vbox = QVBoxLayout()
+#         vbox.addWidget(self._modeLabel)
+#         vbox.addWidget(self._timeLabel)
+#         vbox.addWidget(self._frameLabel)
+#         vbox.setSpacing(0)
+#         vbox.setContentsMargins(0,0,0,0)
+# #        self.setLayout(vbox)
+#          
+#         hbox = QHBoxLayout()
+#         hbox.setContentsMargins(0,0,0,0)
+#         hbox.addWidget(self._ico)
+#         hbox.addLayout(vbox)
+#         self.setLayout(hbox)
+#         self.adjustSize()
+#         
+#         
+# #     def paintEvent(self, event):
+# #         print" Marker paint"
+# #         QWidget.paintEvent(self,event)
+#         
+#         
+#         
+# class MarkerIcon(QWidget):
+#     def __init__(self,frame,width,height):
+#         QWidget.__init__(self,None)
+#         self._image = CVImage(frame)
+#         self.ico_dim = QRect(0, 0,width,height)
+#         #self.setGeometry(0,0,width,height)
+# 
+#     def paintEvent(self, event):
+#         print "Marker icon paint"
+#         painter = QPainter(self)
+#         painter.drawImage(self.ico_dim, self._image)
+# 
+#     def sizeHint(self):
+#         print "Marker:",QSize(self.ico_dim.width(),self.ico_dim.height())
+#         return QSize(self.ico_dim.width(),self.ico_dim.height())
+
+
 
 if __name__ == '__main__':
-    m=FFStreamProbe("/home/matze/Videos/Handy-M4-Test/MOV_0296.MP4")
+    #m=FFStreamProbe("/home/matze/Videos/Handy-M4-Test/MOV_0296.MP4")
+    #m=FFStreamProbe("/media/matze/Datastore/Videos/VCR/KiKA/11_13_19_25-pur+.m2t")
+    #m=FFStreamProbe("/media/matze/Datastore/Videos/VCR/3sat_HD/11_24_07_00-nano.m2t")
+    m=FFStreamProbe("/media/matze/Datastore/Videos/6.Folge Craftattack.mp4")
     #m=FFStreamProbe("/home/matze/Videos/20051210-w50s.flv")
     #m=FFStreamProbe("/home/matze/Videos/recme/sample.3gp")
     #m=FFStreamProbe("/home/matze/Videos/handbrake.txt")
@@ -33,12 +88,15 @@ if __name__ == '__main__':
 
     m.printCodecInfo()
     m.formatInfo._print()
+    print "getAspect2 ",m.getAspectRatio()
+    
     container = m.formatInfo
     print "-------- container: -------------"
     print "formats:",container.formatNames()
     print "bit-rate kb:",container.getBitRate()
     print "duration:",container.getDuration()
     print "size kb:",container.getSizeKB()
+    print "is TS:",m.isTransportStream()
     
     print "-------- all streams -------------"    
     for s in m.streams:
@@ -60,7 +118,30 @@ if __name__ == '__main__':
     #Very slow!!!
     f = FFFrameProbe("xxx")
     print len(f.frames)
-'''        
+'''   
+        
+'''
+Search for audio sync
+-video_track_timescale
+? ffmpeg -i segment1.mov -af apad -c:v copy <audio encoding params> -shortest -avoid_negative_ts make_zero -fflags +genpts padded1.mov
+? ffmpeg -y -ss 00:00:02.750 -i input.MOV -c copy -t 00:00:05.880 -avoid_negative_ts make_zero -fflags +genpts segment.MOV
+-async?
+-apad: reencoding - very slow! do not use
+-mpegts_copyts 1 : test for cutting. 
+Example
+we have two cuts. First cut checked with 
+ffprobe -show_entries format=start_time:stream=start_time -of compact /tmp/vc_0.m2t
+program|stream|start_time=4.857222
+stream|start_time=1.422111
+
+stream|start_time=4.857222
+stream|start_time=1.422111
+format|start_time=1.422111
+
+means: 3 seconds audio before video starts.
+proove: -shortest needs to be in the CUT, not the join.
+joined file has exactly 3.4 seconds video delay 
+'''             
 #----------- documatation -------------
 
 '''

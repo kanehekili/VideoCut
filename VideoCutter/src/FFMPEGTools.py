@@ -119,14 +119,24 @@ class FFStreamProbe():
             return self._convTable[codec]
         return ""
     
+    def getAspectRatio(self):
+        ratio = self.getVideoStream().getAspectRatio()
+        if ratio == 1.0:
+            ratio = float(self.getVideoStream().getWidth())/float(self.getVideoStream().getHeight())
+        return ratio
+    '''
+    This filter is required for copying an AAC stream from 
+    a raw ADTS AAC or an MPEG-TS container to MP4A-LATM.
+    '''
+    
     def needsAudioADTSFilter(self):
         if self.getAudioStream() is None:
             return False
-        return self.getTargetExtension()=="mp4" and self.getAudioStream().getCodec() =="aac"
+        return self.getAudioStream().getCodec() =="aac" and (self.isH264() or self.isMP4())
     
     '''
     check if needs the h264_mp4toannexb filter-
-    Used on mp4 or h264, but not for transport streams
+    Used on mp4 or h264, for converting INTO transport streams
     '''
     def needsH264Filter(self):
         if self.isTransportStream():
@@ -145,7 +155,7 @@ class FFStreamProbe():
         return codec in self._convTable
     
     def isTransportStream(self):
-        self.hasFormat("mpegts")
+        return self.hasFormat("mpegts")
     
     '''
     is MP4? Since its a formatcheck it can't be mp4-TS
@@ -294,8 +304,9 @@ class VideoStreamInfo():
     def getAspectRatio(self):
         if 'display_aspect_ratio' in self.dataDict:
             z,n= self.dataDict['display_aspect_ratio'].split(':')
-            div = round(float(z+".0")/float(n+".0")*100.0)
-            return div/100.0
+            if z!='0' and n!='0':
+                div = round(float(z+".0")/float(n+".0")*100.0)
+                return div/100.0
         return 1.0
 
 
@@ -541,25 +552,75 @@ class FFMPEGCutter():
     '''
     cuts a part of the film, saves it an returns the temp filename for later concatination
     index = if more than one part of the film is cut
+    * Basically that does not work - or makes the audio go async.*
     '''
-    #def cutPart(self,startTimedelta,endTimedelta,index=0,nbrOfFragments=1,reencode=False):        
+#     def cutPart(self,startTimedelta,endTimedelta,index=0,nbrOfFragments=1):
+#         self._fragmentCount = nbrOfFragments
+#         scanTime = timedelta(seconds=20)
+#         prefetchTime = (startTimedelta - scanTime)
+#         if prefetchTime < scanTime:
+#             prefetchTime = timedelta(0)
+#             scanTime = startTimedelta
+# 
+#         prefetchString = timedeltaToFFMPEGString(prefetchTime)
+#         seekString = timedeltaToFFMPEGString(scanTime)
+#         
+#         deltaMillis = (endTimedelta - startTimedelta).microseconds
+#         deltaSeconds = (endTimedelta - startTimedelta).seconds 
+#         durString=timedeltaToFFMPEGString(timedelta(seconds=deltaSeconds,microseconds=deltaMillis))
+# 
+#         #fast search - then slow search
+#         log(prefetchString,"+",seekString,">>",durString)
+#         if nbrOfFragments is 1:
+#             fragment = self.targetPath()
+#         else:
+#             fragment = self._getTempPath()+str(index)+".m2t"
+#         log("generate file:",fragment)
+#         self.say("Cutting part:"+str(index))
+#         
+#         cmdExt = self._videoMode(self.MODE_CUT)
+#         audioMode = self._audioMode(self.MODE_CUT)
+#         
+#         #the prefetch time finds a keyframe closest. The seek time is the cut. TODO-encode that as Iframes only
+#         
+#         cmd =[BIN,"-hide_banner","-y","-ss",prefetchString,"-i",self.filePath(),"-ss",seekString,"-t",durString]
+#         cmdExt.extend(audioMode)
+#         cmdExt.extend(["-avoid_negative_ts","1",fragment])
+#         cmd.extend(cmdExt)
+#         log("cut:",cmd)
+#         #reencode:         pFFmpeg = subprocess.Popen([BIN,"-hide_banner","-y","-ss",prefetchString,"-i",self.filePath,"-ss",seekString,"-t",durString,"-vcodec",encodeMode,"-acodec","copy",fragment], stdout=subprocess.PIPE,stderr=subprocess.STDOUT)
+#         pFFmpeg = subprocess.Popen(cmd , stdout=subprocess.PIPE,stderr=subprocess.STDOUT)
+#          
+#         while pFFmpeg.poll() is None:
+#             #?sleep(0.2)   
+#             if not self.non_block_read("Cut part "+str(index)+":",pFFmpeg.stdout):
+#                 self.say("Cutting part %s failed"%(str(index)))
+#                 return False
+#         
+#         self.say("Cutting done")
+#         return True
+
+    '''
+    current limitation:
+    Basically, if you specify "second 157" and there is no key frame until 
+    second 159, it will include two seconds of audio (with no video) at the start, 
+    then will start from the first key frame. 
+    So be careful when splitting and doing codec copy
+    '''
+
     def cutPart(self,startTimedelta,endTimedelta,index=0,nbrOfFragments=1):
         self._fragmentCount = nbrOfFragments
-        scanTime = timedelta(seconds=20)
-        prefetchTime = (startTimedelta - scanTime)
-        if prefetchTime < scanTime:
-            prefetchTime = timedelta(0)
-            scanTime = startTimedelta
+        
+        prefetchTime = startTimedelta #comp
 
         prefetchString = timedeltaToFFMPEGString(prefetchTime)
-        seekString = timedeltaToFFMPEGString(scanTime)
         
         deltaMillis = (endTimedelta - startTimedelta).microseconds
         deltaSeconds = (endTimedelta - startTimedelta).seconds 
         durString=timedeltaToFFMPEGString(timedelta(seconds=deltaSeconds,microseconds=deltaMillis))
 
-        #fast search - then slow search
-        log(prefetchString,"+",seekString,">>",durString)
+        #fast search - which is key search
+        log(prefetchString,">>",durString)
         if nbrOfFragments is 1:
             fragment = self.targetPath()
         else:
@@ -570,14 +631,13 @@ class FFMPEGCutter():
         cmdExt = self._videoMode(self.MODE_CUT)
         audioMode = self._audioMode(self.MODE_CUT)
         
-        #the prefetch time finds a keyframe closest. The seek time is the cut. TODO-encode that as Iframes only
+        #the prefetch time finds a keyframe closest. post seek does not improve the result 
         
-        cmd =[BIN,"-hide_banner","-y","-ss",prefetchString,"-i",self.filePath(),"-ss",seekString,"-t",durString]
+        cmd =[BIN,"-hide_banner","-y","-ss",prefetchString,"-i",self.filePath(),"-t",durString]
         cmdExt.extend(audioMode)
-        cmdExt.extend([fragment])
+        cmdExt.extend(["-avoid_negative_ts","1","-shortest",fragment])
         cmd.extend(cmdExt)
         log("cut:",cmd)
-        #reencode:         pFFmpeg = subprocess.Popen([BIN,"-hide_banner","-y","-ss",prefetchString,"-i",self.filePath,"-ss",seekString,"-t",durString,"-vcodec",encodeMode,"-acodec","copy",fragment], stdout=subprocess.PIPE,stderr=subprocess.STDOUT)
         pFFmpeg = subprocess.Popen(cmd , stdout=subprocess.PIPE,stderr=subprocess.STDOUT)
          
         while pFFmpeg.poll() is None:
@@ -588,6 +648,7 @@ class FFMPEGCutter():
         
         self.say("Cutting done")
         return True
+
     
     '''
     Rules:
@@ -658,7 +719,7 @@ class FFMPEGCutter():
                 cutList.write("file '"+tmp+"'\n")
 
 
-        base = [BIN,"-hide_banner","-y","-f","concat","-safe","0","-async", "1","-i",self._tmpCutList,"-c:v","copy"]
+        base = [BIN,"-hide_banner","-y","-f","concat","-safe","0","-i",self._tmpCutList,"-c:v","copy"]
         cmd=base+self._audioMode(self.MODE_JOIN)+[self.targetPath()]
         log("join:",cmd)
         pFFmpeg = subprocess.Popen(cmd,stdout=subprocess.PIPE,stderr=subprocess.STDOUT)
