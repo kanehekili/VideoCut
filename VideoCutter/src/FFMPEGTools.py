@@ -74,13 +74,16 @@ class FFStreamProbe():
     def _setupConversionTable(self):
         self._convTable={}
         self._convTable["mpeg2video"]="mpg"
+        self._convTable["mpeg1video"]="mpg"
         self._convTable["h264"]="mp4"
+        self._convTable["msmpeg4v1"]="avi"
         self._convTable["msmpeg4v2"]="avi"
+        self._convTable["msmpeg4v3"]="avi"
         self._convTable["rawvideo"]="swf"
         self._convTable["vp6f"]="flv"
         self._convTable["matroska"]="mkv"
         self._convTable["webm"]="mkv"
-        self._convTable["mp4"]="mp4" #or mov,m4a,3gp,3g2,mj2
+        self._convTable["mpeg4"]="mp4" #or mov,m4a,3gp,3g2,mj2
         
         
 

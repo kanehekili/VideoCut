@@ -120,7 +120,10 @@ class OpenCV2():
         self._cap.set(cv2.cv.CV_CAP_PROP_POS_MSEC,ms)#@UndefinedVariable
         
     def getTimePosition(self):
-        return self._cap.get(cv2.cv.CV_CAP_PROP_POS_MSEC)#@UndefinedVariable     
+        return self._cap.get(cv2.cv.CV_CAP_PROP_POS_MSEC)#@UndefinedVariable 
+    
+    def isOpened(self):
+        return self._cap.isOpened()    
         
 
 class OpenCV3():
@@ -159,6 +162,9 @@ class OpenCV3():
         
     def getTimePosition(self):
         return self._cap.get(cv2.CAP_PROP_POS_MSEC)#@UndefinedVariable
+    
+    def isOpened(self):
+        return self._cap.isOpened() 
     
 if "3." in cv2.__version__:
     OPENCV=OpenCV3()
@@ -937,6 +943,8 @@ class VideoControl(QObject):
             self.streamData = FFStreamProbe(filePath)
             self.currentPath = OSTools().getPathWithoutExtension(filePath); 
         except: 
+            print "Unexpected error1:"
+            traceback.print_exc(file=sys.stdout)
             self.streamData = None  
             self.currentPath = OSTools().getHomeDirectory()    
         try:            
@@ -946,13 +954,13 @@ class VideoControl(QObject):
             
             self.__initSliderTicks()
             self.gui.enableControls(True)
-            #set ratio
             self.gui.getVideoWidget().setVideoRatio(self.streamData.getAspectRatio())
-
             self.gui.updateWindowTitle(OSTools().getFileNameOnly(filePath))
             self._asyncInitVideoViews()
            
         except:
+            print "Unexpected error2:"
+            traceback.print_exc(file=sys.stdout)
             self.gui.updateWindowTitle(OSTools().getFileNameOnly(filePath))
             self._gotoFrame(0)
             self._showCurrentFrameInfo(0)
@@ -1157,7 +1165,6 @@ class VideoControl(QObject):
         self.gui.syncSliderPos(sliderPos)
         aFrame = self.player.getFrameAt(frameNumber)
         self._showFrame(aFrame)
-#        self._gotoFrame(frameNumber)
         self._frameSet = False
         
     #called by worker ...
@@ -1199,10 +1206,11 @@ class VideoControl(QObject):
         return True
 
     def __stopVideo(self):
+        if self._vPlayer is not None:
             self._vPlayer.stop()
             self._vPlayer = None
-            self._frameSet = False
-            return False
+        self._frameSet = False
+        return False
 
     def _grabNextFrame(self):
         self._frameSet = True
