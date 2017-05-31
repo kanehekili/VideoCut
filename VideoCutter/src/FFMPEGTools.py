@@ -11,9 +11,100 @@ from datetime import timedelta
 import re
 import fcntl
 from time import sleep
+import logging
+
+
+class Logger():
+    HomeDir = os.path.dirname(__file__)
+    UserPath=os.path.expanduser("~")
+    DataDir=os.path.join(HomeDir,"data")
+    
+    LogPath= None
+    
+
+    def __init__(self):
+        self.__setupDirectories()
+       
+        
+    def __setupDirectories(self):
+        OSTools().ensureDirectory(self.DataDir,None)
+        self.setupLogging()
+        
+    def setupLogging(self): 
+        path = os.path.join(self.DataDir,"VC.log")
+        logging.basicConfig(filename=path,level=logging.DEBUG,format='%(asctime)s %(message)s')  
+        self.LogPath = path         
+
+    def logInfo(self,aString):
+        logging.log(logging.INFO,aString)
+
+    def logError(self,aString):
+        logging.log(logging.ERROR,aString)
+    
+    def logClose(self):
+        logging.shutdown() 
+
+    def logException(self,text):
+         logging.exception(text)
+  
+
+
+#TODO join them with the OSTools class and create an import in ant
+class OSTools():
+    
+    def getPathWithoutExtension(self,aPath):
+        if aPath:
+            #rawPath = os.path.splitext(str(aPath))[0]
+            rawPath = os.path.splitext(aPath)[0]
+        else:
+            rawPath=""
+        return rawPath
+
+    def getWorkingDirectory(self):
+        abspath = os.path.abspath(__file__)
+        dname = os.path.dirname(abspath)
+        return dname               
+
+    def getHomeDirectory(self):
+        return os.path.expanduser("~")
+
+    def setCurrentWorkingDirectory(self):
+        os.chdir(self.getWorkingDirectory())
+        
+    def getFileNameOnly(self,path):
+        return os.path.basename(path)
+    
+    def fileExists(self,path):
+        return os.path.isfile(path)
+    
+    def removeFile(self,path):
+        if self.fileExists(path):
+            os.remove(path)
+
+    def ensureDirectory(self,path,tail):
+        #make sure the target dir is present
+        if tail is not None:
+            path = os.path.join(path,tail)
+        if not os.access(path, os.F_OK):
+            try:
+                os.makedirs(path)
+                os.chmod(path,0o777) 
+            except OSError as osError:
+                logging.log(logging.ERROR,"target not created:"+path)
+                logging.log(logging.ERROR,"Error: "+ str(osError.strerror))
+    
+    def ensureFile(self,path,tail):
+        fn = os.path.join(path,tail)
+        ensureDirectory(path, None)
+        with open(fn, 'a'):
+            os.utime(fn, None)
+        return fn
+
+
 
 
 BIN = "ffmpeg"
+Log = Logger()
 
 def timedeltaToFFMPEGString(deltaTime):
     ms=deltaTime.microseconds/1000
@@ -29,8 +120,8 @@ def timedeltaToFFMPEGString(deltaTime):
 def log(*messages):
     #Hook for logger...
     #cnt = len(messages)
-    print "{0} {1}".format(*messages)
-
+    #print "{0} {1}".format(*messages)
+    Log.logInfo("{0} {1}".format(*messages))
 
 
 class FFStreamProbe():
@@ -623,7 +714,7 @@ class FFMPEGCutter():
         durString=timedeltaToFFMPEGString(timedelta(seconds=deltaSeconds,microseconds=deltaMillis))
 
         #fast search - which is key search
-        log(prefetchString,">>",durString)
+        log('Prefetch seek/dur: ',prefetchString,">>",durString)
         if nbrOfFragments is 1:
             fragment = self.targetPath()
         else:
@@ -755,6 +846,7 @@ class FFMPEGCutter():
             m = re.search('time=[ ]*[0-9:.]+',text)
             p2 = m.group(0)
             self.say(prefix+" "+p1+" - "+p2)
+            log(prefix,'frame %s time %s'%(p1,p2))
         except:
             if len(text)>5:
                 print "<"+text   
@@ -805,8 +897,3 @@ class FFMPEGCutter():
                 print "Error creating directory"
                 return
         self._tempDir=path    
-
-    def convertToTs(self,convertedFileName):
-        #MOV files need to be converted:
-        #ffmpeg -y -i big_buck_bunny_1080p_h264.mov -vcodec copy -bsf:v h264_mp4toannexb -acodec ac3 OUTPUT.ts
-        print "TODO"

@@ -1,7 +1,8 @@
 # -*- coding: utf-8 -*-
 from PyQt4.Qt import QMessageBox
 
-# 2014 Matze Wegmann (mat.wegmann@gmail.com)
+
+# 2014 kanehekili (mat.wegmann@gmail.com)
 #
 
 
@@ -26,7 +27,7 @@ from PyQt4.QtGui import QApplication, QImage, QPainter, QWidget, QVBoxLayout,\
     QHBoxLayout, QListWidget, QGridLayout, QListWidgetItem,\
     QIcon, QMenu, QFrame, QSpinBox, QCheckBox
 from PyQt4.Qt import QRectF, QSize, QString, Qt, QStatusBar #, QFrame
-from FFMPEGTools import FFMPEGCutter, FFStreamProbe, CuttingConfig
+from FFMPEGTools import FFMPEGCutter, FFStreamProbe, CuttingConfig,OSTools,Logger
 import os
 from time import sleep
 import xml.etree.cElementTree as CT
@@ -49,37 +50,7 @@ def timedeltaToString(deltaTime):
     minutes, seconds = divmod(remainder, 60)
     return '%s:%s:%s' % (hours, minutes, seconds)
 
-#TODO join them with the OSTools class and create an import in ant
-class OSTools():
-    
-    def getPathWithoutExtension(self,aPath):
-        if aPath:
-            #rawPath = os.path.splitext(str(aPath))[0]
-            rawPath = os.path.splitext(aPath)[0]
-        else:
-            rawPath=""
-        return rawPath
 
-    def getWorkingDirectory(self):
-        abspath = os.path.abspath(__file__)
-        dname = os.path.dirname(abspath)
-        return dname               
-
-    def getHomeDirectory(self):
-        return os.path.expanduser("~")
-
-    def setCurrentWorkingDirectory(self):
-        os.chdir(self.getWorkingDirectory())
-        
-    def getFileNameOnly(self,path):
-        return os.path.basename(path)
-    
-    def fileExists(self,path):
-        return os.path.isfile(path)
-    
-    def removeFile(self,path):
-        if self.fileExists(path):
-            os.remove(path)
 
 '''
 Compat layer for cv2 and 3
@@ -584,9 +555,13 @@ class MainFrame(QtGui.QMainWindow):
         #self.convertToMP4 = QtGui.QAction(QtGui.QIcon('./icons/stop-red-icon.png'),"Convert to mp4",self)
         self.convertToMP4 = QtGui.QAction("Convert to mp4",self)
         self.convertToMP4.setCheckable(True)
-        self.selectContainer = QtGui.QAction(QtGui.QIcon('./icons/stop-red-icon.png'),"change to a different container",self)
-        self.extractMP3 = QtGui.QAction(QtGui.QIcon('./icons/stop-red-icon.png'),"Extract MP3",self)
-        self.switchAudio = QtGui.QAction(QtGui.QIcon('./icons/stop-red-icon.png'),"Swtich audio",self)
+#         self.selectContainer = QtGui.QAction(QtGui.QIcon('./icons/stop-red-icon.png'),"change to a different container",self)
+#         self.extractMP3 = QtGui.QAction(QtGui.QIcon('./icons/stop-red-icon.png'),"Extract MP3",self)
+#         self.switchAudio = QtGui.QAction(QtGui.QIcon('./icons/stop-red-icon.png'),"Swtich audio",self)
+        self.mediaSettings= QtGui.QAction(QtGui.QIcon('./icons/settings.png'),"Output settings",self)
+        self.mediaSettings.setShortcut('Ctrl+T')
+        self.mediaSettings.triggered.connect(self.openMediaSettings)
+
         
         '''
         toolbar defs
@@ -600,7 +575,8 @@ class MainFrame(QtGui.QMainWindow):
         self.toolbar.addSeparator()
         self.toolbar.addAction(self.infoAction)
         self.toolbar.addAction(self.playAction)
-
+        self.toolbar.addAction(self.mediaSettings)
+                               
         menubar = self.menuBar()
         fileMenu = menubar.addMenu('&File')
         fileMenu.addAction(self.loadAction)
@@ -687,6 +663,10 @@ class MainFrame(QtGui.QMainWindow):
     def __encodeQString(self,qString):
         return unicode(qString).encode('utf-8')
     
+    def openMediaSettings(self):
+        #TODO: Dialog
+        self.__getInfoDialog("Media Settings").show()
+    
     def showCodecInfo(self):
         #TODO: More infos, better layout
         try:
@@ -770,10 +750,11 @@ class VideoPlayer():
     def _captureFromFile(self):
         if self._streamProbe is None or not self._streamProbe.isKnownVideoFormat():
             print "STREAM NOT KNOWN"
+            Log.logInfo("STREAM NOT KNOWN")
             return False
         self._capture = OPENCV.getCapture();
         if not self._capture.open(self._file):
-            print "STREAM NOT OPENED"
+            Log.logError( "STREAM NOT OPENED")
             return False
 
         self 
@@ -781,29 +762,17 @@ class VideoPlayer():
         self.frameHeight= OPENCV.getFrameHeight()
         self.framecount= OPENCV.getFrameCount()
         self.fps= OPENCV.getFPS()
-        
-        '''
-        self.frameWidth= self._capture.get(cv2.CAP_PROP_FRAME_WIDTH)
-        self.frameHeight= self._capture.get(cv2.CAP_PROP_FRAME_HEIGHT)
-        self.framecount= self._capture.get(cv2.CAP_PROP_FRAME_COUNT)
-        self.fps= self._capture.get(cv2.CAP_PROP_FPS)
-        
-        this is cv2: code:
-        self.frameWidth= self._capture.get(cv2.cv.CV_CAP_PROP_FRAME_WIDTH)
-        self.frameHeight= self._capture.get(cv2.cv.CV_CAP_PROP_FRAME_HEIGHT)
-        self.framecount= self._capture.get(cv2.cv.CV_CAP_PROP_FRAME_COUNT)
-        self.fps= self._capture.get(cv2.cv.CV_CAP_PROP_FPS)
 
-        '''
+
         #The problem: cv has a problem if it is BEHIND the last frame...
         #DO NOT USE;;;;; cap.set(cv2.cv.CV_CAP_PROP_POS_AVI_RATIO,1);
 #         test = cap.set(cv2.cv.CV_CAP_PROP_POS_FRAMES,self.framecount-10)
-#         self.totalTimeMilliSeconds = cap.get(cv2.cv.CV_CAP_PROP_POS_MSEC);
+#         self.totalTimeMilliSeconds p= cap.get(cv2.cv.CV_CAP_PROP_POS_MSEC);
 #         if self.frameHeight< 10.0 or self.frameWidth < 10.0 or self.framecount < 10.0 or self.fps < 10.0:
 #             return cap;
         self.totalTimeMilliSeconds = int(self.framecount/self.fps*1000)
         OPENCV.setFramePosition(0)
-        print "STREAM OK"
+        Log.logInfo("STREAM OK")
         return True
 
     def validate(self):
@@ -827,7 +796,7 @@ class VideoPlayer():
             return frame
  
         self.framecount = self.getCurrentFrameNumber()
-        print "No more frames @",self.framecount+1;
+        Log.logInfo("No more frames @"+str(self.framecount+1));
         return self.__getLastFrame(self._capture,self.framecount)
 
     def grabNextFrame(self):
@@ -943,8 +912,8 @@ class VideoControl(QObject):
             self.streamData = FFStreamProbe(filePath)
             self.currentPath = OSTools().getPathWithoutExtension(filePath); 
         except: 
-            print "Unexpected error1:"
-            traceback.print_exc(file=sys.stdout)
+            print "Error -see log:"
+            Log.logException("Error 1")
             self.streamData = None  
             self.currentPath = OSTools().getHomeDirectory()    
         try:            
@@ -959,8 +928,8 @@ class VideoControl(QObject):
             self._asyncInitVideoViews()
            
         except:
-            print "Unexpected error2:"
-            traceback.print_exc(file=sys.stdout)
+            print "Error -see log:"
+            Log.logException("Error 2")
             self.gui.updateWindowTitle(OSTools().getFileNameOnly(filePath))
             self._gotoFrame(0)
             self._showCurrentFrameInfo(0)
@@ -1051,22 +1020,22 @@ class VideoControl(QObject):
             
             if cutEntry.isStartMode():
                 if block:
-                    print "Start invalid:", cutEntry.getTimeString()
+                    Log.logInfo( "Start invalid: %s"%(cutEntry.getTimeString()))
                 else:
                     block=[]
                     block.append(cutEntry)
                     print "Start ok:", cutEntry.getTimeString()
             else:
                 if block:
-                    print "Stop:", cutEntry.getTimeString()
+                    Log.logInfo( "Stop:"+ cutEntry.getTimeString())
                     block.append(cutEntry)
                     spanns.append(block)
                     block=None
                 else:
-                    print "Stop ignored:", cutEntry.getTimeString()
+                   Log.logInfo( "Stop ignored:"+ cutEntry.getTimeString())
     
         for cutmarks in spanns:
-            print cutmarks[0].getTimeString(),"-",cutmarks[1].getTimeString()
+            Log.logInfo('cut: %s -%s'%(cutmarks[0].getTimeString(),cutmarks[1].getTimeString()))
         
         src = self.player._file
         #need that without extension!
@@ -1096,6 +1065,7 @@ class VideoControl(QObject):
             hasSucess = cutter.cutPart(t1, t2, index,slices)
             if not hasSucess:
                 print"VC-Cut error" #TODO need a signal for error
+                Log.logError("***Cutting failed***")
                 return
         cutter.join()    
         
@@ -1181,9 +1151,11 @@ class VideoControl(QObject):
 
     
     def _showCurrentFrameInfo(self,frameNumber):
-        timeinfo = self.player.getCurrentFrameTime()
-        #basket = "%02d.%03i" %(timeinfo.seconds,timeinfo.microseconds/1000)
-        out = "Frame: %s Time: %s max: %s" %(str(frameNumber), str(timeinfo),str(self.player.framecount))
+        timeinfo = long(self.player.getCurrentTimeMS())
+        s= long(timeinfo/1000)
+        ms= long(timeinfo%1000)
+        ts= '{:02}:{:02}:{:02}.{:03}'.format(s // 3600, s % 3600 // 60, s % 60, ms)
+        out = "Frame: %08d  Time: %s  max: %i" %(frameNumber, ts,self.player.framecount)
         #TODO: Pass 3 values for 3 widgets....
         self.gui.showInfo(out)
 
@@ -1262,7 +1234,7 @@ class LongRunningOperation(QtCore.QThread):
         try:
             self.function(*self.arguments)
         except:
-            traceback.print_exc(file=sys.stdout)
+            Log.logException("***Error in LongRunningOperation***")
         finally:
             self.emit(self.signalDone)
 
@@ -1295,6 +1267,9 @@ def handle_exception(exc_type, exc_value, exc_traceback):
 def main():
     try:
         global WIN
+        global Log
+        Log = Logger()
+        Log.logInfo('*** START ***')
         OSTools().setCurrentWorkingDirectory()
         argv = sys.argv
         app = QApplication(argv)
@@ -1304,8 +1279,11 @@ def main():
         else:
             WIN = MainFrame(argv[1])  
         app.exec_()
+        Log.logInfo('*** STOP ***')
+        Log.logClose()
     except:
-        traceback.print_exc(file=sys.stdout)
+        Log.logException("Error in main:")      
+        #traceback.print_exc(file=sys.stdout)
 
 def stylesheet(self):
         return """
