@@ -667,6 +667,10 @@ class MainFrame(QtGui.QMainWindow):
         #TODO: Dialog
         self.__getInfoDialog("Media Settings").show()
     
+    def openMediaSettings(self):
+        #TODO: Dialog
+        self.__getInfoDialog("Media Settings- under construction right now").show()
+    
     def showCodecInfo(self):
         #TODO: More infos, better layout
         try:
