@@ -1,5 +1,5 @@
 # VideoCut
-Version 0.9.2
+Version 0.9.3
 
 MP4 Cutter for Linux on base of OpenCV and ffmpeg. Cutting is lossless, the target file will not be reencoded 
 
@@ -20,6 +20,7 @@ The cutout parts will be joined without beeing recoded - the quality stays the s
 ### Limitations
 Using ffmpeg as cutting/joining tool. Some older versions of ffmpeg seem to have problems with syncing audio on avchd (mp4 TS) streams. 
 Current git version of ffmpeg will yield the best results.
+Latest opencv version in arch linux is compiled with gstreamer - it is necessary to get a version that has been compiled with ffmpeg
 
 :boom: Be aware that this tool does not cut exact on frame - except you reencode the whole film.
 
@@ -48,6 +49,9 @@ Added "Exact cut" feature. Ensures that the cut of the mp4 is exact (Frame exact
 
 05.2017
 * Added logging, some minor bugfixes/optimizations
+
+09.2018
+The final QT4 version has been committed. 
 
 In case of problems open an issue. 
 Have fun. 
