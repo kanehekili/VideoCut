@@ -13,12 +13,9 @@ import fcntl
 from time import sleep
 import logging
 
-
 class Logger():
     HomeDir = os.path.dirname(__file__)
-    UserPath=os.path.expanduser("~")
     DataDir=os.path.join(HomeDir,"data")
-    
     LogPath= None
     
 
@@ -117,13 +114,90 @@ def timedeltaToFFMPEGString(deltaTime):
     mso=str(ms).rjust(3,'0')
     return '%s:%s:%s.%s' % (ho, mo, so, mso)
 
+def timedeltaToString2(deltaTime):
+    ms=deltaTime.microseconds/1000
+    s = deltaTime.seconds
+    so = str(s).rjust(2,'0')
+    mso=str(ms).rjust(3,'0')
+    return '%s.%s' % (so, mso)
+
 def log(*messages):
     #Hook for logger...
     #cnt = len(messages)
     #print "{0} {1}".format(*messages)
     Log.logInfo("{0} {1}".format(*messages))
+'''
+Probes packets.
+if count = -1 no partial seeking takes place
+time to seek to
+count: number of packets to read 
+currently only pts,dts,dts_time&flags are read
+Available:
+[PACKET]
+codec_type=video
+stream_index=0
+pts=1868670
+pts_time=20.763000
+dts=1866870
+dts_time=20.743000
+duration=1800
+duration_time=0.020000
+convergence_duration=N/A
+convergence_duration_time=N/A
+size=2397
+pos=19111259
+flags=__
+[/PACKET]
+'''
+class FFPacketProbe():
+    def __init__(self,video_file,seekTo,count=None):
+        self.path=video_file
+        self.packetList=[]
+        self._readData(seekTo,count)
+        
 
+    def _readData(self,seekTo,count):
+        cmd = ["ffprobe","-hide_banner"]
+        if count is not None:
+            cmd = cmd+["-read_intervals",seekTo+"%+#"+str(count)]
+        cmd.extend(("-show_packets","-select_streams","v:0","-show_entries","packet=pts,pts_time,dts,dts_time,flags","-of","csv" ,self.path,"-v","quiet"))
+        #log("FFPacket:",cmd)    
+        print "FFPacket:",cmd
+        result = Popen(cmd,stdout=subprocess.PIPE,stderr=subprocess.PIPE).communicate()
+        if len(result[0])==0:
+            raise IOError('No such media file '+self.path)
+        lines = result[0].split('\n')
+        for index,text in enumerate(lines):
+            if len(text)>0:
+                raw=text.split(',')
+                pack = PacketInfo(index)
+                pack.pts=raw[1];
+                pack.pts_time=raw[2]
+                pack.dts=raw[3];
+                pack.dts_time=raw[4]
+                pack.isKeyFrame=('K' in raw[5])
+                self.packetList.append(pack)
+        
+        self.printP(lines)
+        
+    def printP(self,lines):
+        for pack in self.packetList:
+            print ">>",pack.asString()   
 
+class PacketInfo():
+    def __init__(self,index):
+        self.pts=0
+        self.dts=0
+        self.pts_time=0
+        self.dts_time=0
+        self.index = index
+        self.isKeyFrame=0
+    
+    def asString(self):
+        return str(self.index)+") P:"+self.pts+" D:"+self.dts+" pt:"+self.pts_time+" dt:"+self.dts_time+" k:"+str(self.isKeyFrame)
+    
+    
+        
 class FFStreamProbe():
     def __init__(self,video_file):
         self._setupConversionTable()
@@ -167,6 +241,7 @@ class FFStreamProbe():
         self._convTable["mpeg2video"]="mpg"
         self._convTable["mpeg1video"]="mpg"
         self._convTable["h264"]="mp4"
+        self._convTable["hevc"]="mp4"
         self._convTable["msmpeg4v1"]="avi"
         self._convTable["msmpeg4v2"]="avi"
         self._convTable["msmpeg4v3"]="avi"
@@ -174,9 +249,7 @@ class FFStreamProbe():
         self._convTable["vp6f"]="flv"
         self._convTable["matroska"]="mkv"
         self._convTable["webm"]="mkv"
-        self._convTable["mpeg4"]="mp4" #or mov,m4a,3gp,3g2,mj2
-        
-        
+        self._convTable["mpeg4"]="mp4" #or mov,m4a,3gp,3g2,mj2 as EXTENSION..
 
         #self._convTable["ansi"]="txt"
         #--more to come
@@ -235,7 +308,7 @@ class FFStreamProbe():
     def needsH264Filter(self):
         if self.isTransportStream():
             return False;
-        return self.isMP4() or self.isH264()
+        return self.isH264()
     
     #VideoFormat is format info....
     def getFormatNames(self):
@@ -546,7 +619,7 @@ class FFFrameProbe():
             else:
                 datalines.append(a)
 
-#TODO: sublcass the init. Only accessor methods
+#TODO: subclass the init. Only accessor methods
 class VideoFrameInfo():
     '''
     [FRAME]
@@ -897,3 +970,67 @@ class FFMPEGCutter():
                 print "Error creating directory"
                 return
         self._tempDir=path    
+
+class VCCutter():
+    def __init__(self,cutConfig):
+        self.config = cutConfig
+
+    #cutlist = [ [t1,t2] [t3,t4]...]
+    def cut(self,cutlist):
+        #code = remux5 infile outfile -s t1,t2,t3,t4 -e
+        #todo -e if flag is set
+        #todo -d if debug
+        slices = len(cutlist)
+        timeString=[]
+        for index, cutmark in enumerate(cutlist):
+            t1=cutmark[0].timePos
+            t2 = cutmark[1].timePos
+            timeString.append(timedeltaToString2(t1))
+            timeString.append(',')
+            timeString.append(timedeltaToString2(t2))
+            if index+1 < slices:
+                timeString.append(',')    
+                    
+        timeString = ''.join(timeString)
+        cmd=["/home/matze/JWSP/FFMPEG/remux5",self.config.srcfilePath,self.config.targetPath,"-s",timeString]
+        proc = subprocess.Popen(cmd , stdout=subprocess.PIPE,stderr=subprocess.STDOUT)
+         
+        while proc.poll() is None:
+            sleep(0.2)   
+            if not self.non_block_read("Cutting :",proc.stdout):
+                self.say("Cutting failed")
+                return False
+        
+        self.say("Cutting done")
+        return True
+
+    def say(self,text):
+        if self.config.messenger is not None:
+            self.config.messenger.say(text) 
+ 
+    def non_block_read(self,prefix,output):
+        fd = output.fileno()
+        flags = fcntl.fcntl(fd, fcntl.F_GETFL)
+        fcntl.fcntl(fd, fcntl.F_SETFL, flags | os.O_NONBLOCK)
+        text = "."
+        try:
+            text = output.read()
+            #m = re.search('frame=[ ]*[0-9]+',text)
+            #p1 = m.group(0)
+            #m = re.search('time=[ ]*[0-9:.]+',text)
+            #p2 = m.group(0)
+            #self.say(prefix+" "+p1+" - "+p2)
+            #log(prefix,'frame %s time %s'%(p1,p2))
+            print text
+        except:
+            if len(text)>5:
+                print "<"+text   
+        if "failed" in text:
+            #TODO needs to be logged
+            print "?????"+text
+            self.say(prefix+" !Conversion failed!")
+            return False
+        else:
+            return True 
+        
+    
