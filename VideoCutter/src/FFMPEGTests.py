@@ -3,7 +3,7 @@ Created on Nov 26, 2016
 
 @author: matze
 '''
-from FFMPEGTools import FFStreamProbe
+from FFMPEGTools import FFStreamProbe,FFPacketProbe
 
 
 '''
@@ -21,61 +21,7 @@ if __name__ == "__main__":
                
 
 '''  
-
-# class MarkerListEntry(QWidget):
-#     def __init__(self,frame,ratio,videoCutEntry=None):
-#         QWidget.__init__(self,None)
-#         self._entry=videoCutEntry
-#         self._ratio=ratio
-#         self._createUI(frame,videoCutEntry)
-#     
-#     def _createUI(self,frame,entry):
-#         self._modeLabel = QLabel(entry.modeString)
-#         self.modeLabel.setStyleSheet('''QLabel { background-color : red; color : blue; }''')
-#         self._timeLabel = QLabel(entry.getTimeString())
-#         self._frameLabel = QLabel(str(entry.frameNumber))
-#         self._ico = MarkerIcon(frame,self._ratio*SIZE_ICON,SIZE_ICON)
-#         vbox = QVBoxLayout()
-#         vbox.addWidget(self._modeLabel)
-#         vbox.addWidget(self._timeLabel)
-#         vbox.addWidget(self._frameLabel)
-#         vbox.setSpacing(0)
-#         vbox.setContentsMargins(0,0,0,0)
-# #        self.setLayout(vbox)
-#          
-#         hbox = QHBoxLayout()
-#         hbox.setContentsMargins(0,0,0,0)
-#         hbox.addWidget(self._ico)
-#         hbox.addLayout(vbox)
-#         self.setLayout(hbox)
-#         self.adjustSize()
-#         
-#         
-# #     def paintEvent(self, event):
-# #         print" Marker paint"
-# #         QWidget.paintEvent(self,event)
-#         
-#         
-#         
-# class MarkerIcon(QWidget):
-#     def __init__(self,frame,width,height):
-#         QWidget.__init__(self,None)
-#         self._image = CVImage(frame)
-#         self.ico_dim = QRect(0, 0,width,height)
-#         #self.setGeometry(0,0,width,height)
-# 
-#     def paintEvent(self, event):
-#         print "Marker icon paint"
-#         painter = QPainter(self)
-#         painter.drawImage(self.ico_dim, self._image)
-# 
-#     def sizeHint(self):
-#         print "Marker:",QSize(self.ico_dim.width(),self.ico_dim.height())
-#         return QSize(self.ico_dim.width(),self.ico_dim.height())
-
-
-
-if __name__ == '__main__':
+def testFrameProbe():
     #m=FFStreamProbe("/home/matze/Videos/Handy-M4-Test/MOV_0296.MP4")
     #m=FFStreamProbe("/media/matze/Datastore/Videos/VCR/KiKA/11_13_19_25-pur+.m2t")
     #m=FFStreamProbe("/media/matze/Datastore/Videos/VCR/3sat_HD/11_24_07_00-nano.m2t")
@@ -84,7 +30,7 @@ if __name__ == '__main__':
     #m=FFStreamProbe("/home/matze/Videos/recme/sample.3gp")
     #m=FFStreamProbe("/home/matze/Videos/handbrake.txt")
     #m=FFStreamProbe("/home/matze/Videos/CT.m2t")
-    m=FFStreamProbe("/home/mwm/Videos/big_buck_bunny_1080p_h264.mov")
+    m=FFStreamProbe("/home/matze/Videos/recme/purX.m2t")
 
     m.printCodecInfo()
     m.formatInfo._print()
@@ -112,7 +58,14 @@ if __name__ == '__main__':
         print "isAudio: ",s.isAudio()
         print "isVideo: ",s.isVideo()
 
+def testPacketProbe(filename):    
+    #p = FFPacketProbe(filename,0,None)
+    FFPacketProbe(filename,"00:00:32.00",20)
 
+if __name__ == '__main__':
+    #testFrameProbe()
+    #testPacketProbe("/home/matze/Videos/pur/pur+org.m2t")
+    testPacketProbe("/home/matze/Videos/pur/purX.m2t")
 
 ''' 
     #Very slow!!!
