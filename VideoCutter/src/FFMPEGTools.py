@@ -104,7 +104,7 @@ BIN = "ffmpeg"
 Log = Logger()
 
 def timedeltaToFFMPEGString(deltaTime):
-    ms=deltaTime.microseconds/1000
+    ms=int(deltaTime.microseconds/1000)
     s = deltaTime.seconds
     hours, remainder = divmod(s, 3600)
     minutes, seconds = divmod(remainder, 60)
@@ -115,7 +115,7 @@ def timedeltaToFFMPEGString(deltaTime):
     return '%s:%s:%s.%s' % (ho, mo, so, mso)
 
 def timedeltaToString2(deltaTime):
-    ms=deltaTime.microseconds/1000
+    ms=int(deltaTime.microseconds/1000)
     s = deltaTime.seconds
     so = str(s).rjust(2,'0')
     mso=str(ms).rjust(3,'0')
@@ -126,6 +126,17 @@ def log(*messages):
     #cnt = len(messages)
     #print "{0} {1}".format(*messages)
     Log.logInfo("{0} {1}".format(*messages))
+    
+    #execs an command, yielding the lines to caller. Throws exception on error
+def executeAsync(cmd):
+    popen = subprocess.Popen(cmd, stdout=subprocess.PIPE,stderr=subprocess.STDOUT, universal_newlines=True)
+    for stdout_line in iter(popen.stdout.readline, ""):
+        yield stdout_line 
+    popen.stdout.close()
+    return_code = popen.wait()
+    if return_code:
+        raise subprocess.CalledProcessError(return_code, cmd)
+    
 '''
 Probes packets.
 if count = -1 no partial seeking takes place
@@ -161,12 +172,11 @@ class FFPacketProbe():
         if count is not None:
             cmd = cmd+["-read_intervals",seekTo+"%+#"+str(count)]
         cmd.extend(("-show_packets","-select_streams","v:0","-show_entries","packet=pts,pts_time,dts,dts_time,flags","-of","csv" ,self.path,"-v","quiet"))
-        #log("FFPacket:",cmd)    
-        print "FFPacket:",cmd
+        log("FFPacket:",cmd)    
         result = Popen(cmd,stdout=subprocess.PIPE,stderr=subprocess.PIPE).communicate()
         if len(result[0])==0:
             raise IOError('No such media file '+self.path)
-        lines = result[0].split('\n')
+        lines = result[0].decode("utf-8").split('\n')
         for index,text in enumerate(lines):
             if len(text)>0:
                 raw=text.split(',')
@@ -182,7 +192,7 @@ class FFPacketProbe():
         
     def printP(self,lines):
         for pack in self.packetList:
-            print ">>",pack.asString()   
+            print (">>",pack.asString())   
 
 class PacketInfo():
     def __init__(self,index):
@@ -215,7 +225,7 @@ class FFStreamProbe():
         self.formatInfo = None
     
 
-        lines = result[0].split('\n')
+        lines = result[0].decode("utf-8").split('\n')
         for a in lines:
             if re.match('\[STREAM\]',a):
                 datalines=[]
@@ -337,35 +347,35 @@ class FFStreamProbe():
         return "h264" == self.getVideoStream().getCodec()
     
     def printCodecInfo(self):
-        print "-------- Video -------------"
+        print ("-------- Video -------------")
         s = self.getVideoStream()
-        print "Index:",s.getStreamIndex()
-        print "codec",s.getCodec()
-        print "getCodecTimeBase: ",s.getCodecTimeBase()
-        print "getTimeBase: ",s.getTimeBase()
-        print "getAspect ",s.getAspectRatio()
-        print "getFrameRate: ",s.getFrameRate()
-        print "getCMFRameRate: ",s.frameRate() #Common denominator
-        print "getDuration: ",s.duration()
-        print "getWidth: ",s.getWidth()
-        print "getHeight: ",s.getHeight()
-        print "isAudio: ",s.isAudio()
-        print "isVideo: ",s.isVideo()
+        print ("Index:",s.getStreamIndex())
+        print ("codec",s.getCodec())
+        print ("getCodecTimeBase: ",s.getCodecTimeBase())
+        print ("getTimeBase: ",s.getTimeBase())
+        print ("getAspect ",s.getAspectRatio())
+        print ("getFrameRate: ",s.getFrameRate())
+        print ("getCMFRameRate: ",s.frameRate()) #Common denominator
+        print ("getDuration: ",s.duration())
+        print ("getWidth: ",s.getWidth())
+        print ("getHeight: ",s.getHeight())
+        print ("isAudio: ",s.isAudio())
+        print ("isVideo: ",s.isVideo())
         
-        print "-------- Audio -------------"
+        print ("-------- Audio -------------")
         s = self.getAudioStream()  
         if not s:
-            print "No audio"
+            print ("No audio")
             exit(0)  
-        print "Index:",s.getStreamIndex()
-        print "getCodec:",s.getCodec()
-        print "bitrate(kb)",s.getBitRate()
-        print "getCodecTimeBase: ",s.getCodecTimeBase()
-        print "getTimeBase: ",s.getTimeBase()
-        print "getDuration: ",s.duration()
-        print "isAudio: ",s.isAudio()
-        print "isVideo: ",s.isVideo()
-        print "-----------EOF---------------"
+        print ("Index:",s.getStreamIndex())
+        print ("getCodec:",s.getCodec())
+        print ("bitrate(kb)",s.getBitRate())
+        print ("getCodecTimeBase: ",s.getCodecTimeBase())
+        print ("getTimeBase: ",s.getTimeBase())
+        print ("getDuration: ",s.duration())
+        print ("isAudio: ",s.isAudio())
+        print ("isVideo: ",s.isVideo())
+        print ("-----------EOF---------------")
         
 
 
@@ -411,13 +421,13 @@ class VideoFormatInfo():
                     self.dataDict[key]=val
 
     def _print(self):
-        print "***format data***"
+        print ("***format data***")
         for key,value in self.dataDict.items():
-            print key,"->",value
+            print (key,"->",value)
         
-        print "***tag data***"
+        print ("***tag data***")
         for key,value in self.tagDict.items():
-            print key,"->",value
+            print (key,"->",value)
     
     
     def getDuration(self):
@@ -609,7 +619,7 @@ class FFFrameProbe():
         self.frames=[]
         datalines=[]
         
-        lines = result[0].split('\n')
+        lines = result[0].decode("utf-8").split('\n')
         for a in lines:
             if re.match('\[FRAME\]',a):
                 datalines=[]
@@ -805,13 +815,20 @@ class FFMPEGCutter():
         cmdExt.extend(["-avoid_negative_ts","1","-shortest",fragment])
         cmd.extend(cmdExt)
         log("cut:",cmd)
-        pFFmpeg = subprocess.Popen(cmd , stdout=subprocess.PIPE,stderr=subprocess.STDOUT)
-         
-        while pFFmpeg.poll() is None:
-            #?sleep(0.2)   
-            if not self.non_block_read("Cut part "+str(index)+":",pFFmpeg.stdout):
-                self.say("Cutting part %s failed"%(str(index)))
-                return False
+#        pFFmpeg = subprocess.Popen(cmd , stdout=subprocess.PIPE,stderr=subprocess.STDOUT)
+#         while pFFmpeg.poll() is None:
+#             #?sleep(0.2)   
+#             if not self.non_block_read("Cut part "+str(index)+":",pFFmpeg.stdout):
+#                 self.say("Cutting part %s failed"%(str(index)))
+#                 return False
+        prefix =  "Cut part "+str(index)+":"  
+        try:
+            for path in executeAsync(cmd):
+                self.parseAndDispatch(prefix,path)
+                #print(path,end="")
+        except Exception as error:
+            self.say("Cutting part %s failed: %s "%(str(index),error))
+            return False
         
         self.say("Cutting done")
         return True
@@ -891,12 +908,22 @@ class FFMPEGCutter():
         base = [BIN,"-hide_banner","-y","-f","concat","-safe","0","-i",self._tmpCutList,"-c:v","copy"]
         cmd=base+self._audioMode(self.MODE_JOIN)+[self.targetPath()]
         log("join:",cmd)
-        pFFmpeg = subprocess.Popen(cmd,stdout=subprocess.PIPE,stderr=subprocess.STDOUT)
-       
-        while pFFmpeg.poll() is None:
-            sleep(0.2)
-            if not self.non_block_read("Join:",pFFmpeg.stdout):
-                return False
+#         pFFmpeg = subprocess.Popen(cmd,stdout=subprocess.PIPE,stderr=subprocess.STDOUT)
+#        
+#         while pFFmpeg.poll() is None:
+#             sleep(0.2)
+#             if not self.non_block_read("Join:",pFFmpeg.stdout):
+#                 return False
+
+        prefix =  "Join:"  
+        try:
+            for path in executeAsync(cmd):
+                self.parseAndDispatch(prefix,path)
+                #print(path,end="")
+        except Exception as error:
+            self.say("join failed: %s"%(error))
+            return False
+
               
         self.say("Films joined")
         self._cleanup()
@@ -907,13 +934,32 @@ class FFMPEGCutter():
             self._config.messenger.say(text) 
             
     #reading non blocking
-    def non_block_read(self,prefix,output):
-        fd = output.fileno()
-        flags = fcntl.fcntl(fd, fcntl.F_GETFL)
-        fcntl.fcntl(fd, fcntl.F_SETFL, flags | os.O_NONBLOCK)
-        text = "."
-        try:
-            text = output.read()
+#     def non_block_read(self,prefix,output):
+#         fd = output.fileno()
+#         flags = fcntl.fcntl(fd, fcntl.F_GETFL)
+#         fcntl.fcntl(fd, fcntl.F_SETFL, flags | os.O_NONBLOCK)
+#         text = "."
+#         try:
+#             text = output.read()
+#             m = re.search('frame=[ ]*[0-9]+',text)
+#             p1 = m.group(0)
+#             m = re.search('time=[ ]*[0-9:.]+',text)
+#             p2 = m.group(0)
+#             self.say(prefix+" "+p1+" - "+p2)
+#             log(prefix,'frame %s time %s'%(p1,p2))
+#         except:
+#             if len(text)>5:
+#                 print ("<"+text)   
+#         if "failed" in text:
+#             #TODO needs to be logged
+#             print ("?????"+text)
+#             self.say(prefix+" !Conversion failed!")
+#             return False
+#         else:
+#             return True 
+        
+    def parseAndDispatch(self,prefix,text): 
+        try:        
             m = re.search('frame=[ ]*[0-9]+',text)
             p1 = m.group(0)
             m = re.search('time=[ ]*[0-9:.]+',text)
@@ -922,10 +968,9 @@ class FFMPEGCutter():
             log(prefix,'frame %s time %s'%(p1,p2))
         except:
             if len(text)>5:
-                print "<"+text   
+                print ("<"+text)   
         if "failed" in text:
-            #TODO needs to be logged
-            print "?????"+text
+            print ("?????:",text)
             self.say(prefix+" !Conversion failed!")
             return False
         else:
@@ -940,16 +985,16 @@ class FFMPEGCutter():
     def _hasEnoughAvailableSpace(self,tmpDir):
         result = Popen(["df","--output=avail",tmpDir],stdout=subprocess.PIPE,stderr=subprocess.PIPE).communicate()
         if len(result[1])>0:
-            print "Error using df:"+result[1]
+            print ("Error using df:"+result[1])
             return False
         
-        rows = result[0].split('\n')
+        rows = result[0].decode("utf-8").split('\n')
         if len(rows) > 1:
             #Filesystem      Size  Used Avail Use% Mounted on
             avail = int(rows[1])*1024
 
         needed = os.path.getsize(self.filePath())
-        print "file size:",needed, " avail:",avail, "has enough:",needed <= avail
+        print ("file size:",needed, " avail:",avail, "has enough:",needed <= avail)
         return needed <= avail
 
     
@@ -967,13 +1012,19 @@ class FFMPEGCutter():
                 os.makedirs(path)
                 os.chmod(path,0o777)
             except OSError:
-                print "Error creating directory"
+                print ("Error creating directory")
                 return
         self._tempDir=path    
 
 class VCCutter():
     def __init__(self,cutConfig):
         self.config = cutConfig
+        self.setupBinary()
+
+    def setupBinary(self):
+        p= OSTools().getWorkingDirectory();
+        tail="ffmpeg/bin/remux5"
+        self.bin = os.path.join(p,tail)
 
     #cutlist = [ [t1,t2] [t3,t4]...]
     def cut(self,cutlist):
@@ -992,14 +1043,15 @@ class VCCutter():
                 timeString.append(',')    
                     
         timeString = ''.join(timeString)
-        cmd=["/home/matze/JWSP/FFMPEG/remux5",self.config.srcfilePath,self.config.targetPath,"-s",timeString]
-        proc = subprocess.Popen(cmd , stdout=subprocess.PIPE,stderr=subprocess.STDOUT)
-         
-        while proc.poll() is None:
-            sleep(0.2)   
-            if not self.non_block_read("Cutting :",proc.stdout):
-                self.say("Cutting failed")
-                return False
+        cmd=[self.bin,self.config.srcfilePath,self.config.targetPath,"-s",timeString]
+        print(cmd)
+        try:
+            for path in executeAsync(cmd):
+                self.parseAndDispatch("Cutting :",path)
+
+        except Exception as error:
+            self.say("join failed: %s"%(error))
+            return False
         
         self.say("Cutting done")
         return True
@@ -1007,7 +1059,28 @@ class VCCutter():
     def say(self,text):
         if self.config.messenger is not None:
             self.config.messenger.say(text) 
+
+    def parseAndDispatch(self,prefix,text): 
+        try:        
+            m = re.search('[0-9]+',text)
+            frame = m.group(0)
+            m = re.search('Dt:[0-9]+.[0-9]',text)
+            p1 = m.group(0)
+            dts = p1[3:]
+            self.say(prefix+" Frame: %s DTS: %s"%(frame,dts))
+            #log(prefix," Frame: %s DTS: %s"%(frame,dts))
+        except:
+            if len(text)>5:
+                print ("<"+text)   
+        if "failed" in text:
+            print ("?????:",text)
+            self.say(prefix+" !Conversion failed!")
+            return False
+        else:
+            return True 
+
  
+''' 
     def non_block_read(self,prefix,output):
         fd = output.fileno()
         flags = fcntl.fcntl(fd, fcntl.F_GETFL)
@@ -1021,16 +1094,16 @@ class VCCutter():
             #p2 = m.group(0)
             #self.say(prefix+" "+p1+" - "+p2)
             #log(prefix,'frame %s time %s'%(p1,p2))
-            print text
+            print (text)
         except:
             if len(text)>5:
-                print "<"+text   
+                print ("<"+text)   
         if "failed" in text:
             #TODO needs to be logged
-            print "?????"+text
+            print ("?????"+text)
             self.say(prefix+" !Conversion failed!")
             return False
         else:
             return True 
-        
+'''        
     

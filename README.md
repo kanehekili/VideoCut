@@ -1,15 +1,16 @@
 # VideoCut
-Version 0.9.3
+Version 0.9.4
 
 MP4 Cutter for Linux on base of OpenCV and ffmpeg. Cutting is lossless, the target file will not be reencoded 
 
 It can be used for cutting out certain parts of the film. Has been written in conjunction with the MDVB Recorder for removing ads. Handles avi, mp2,mp4 (PS or TS). Other formats not tested but possible.
- 
+
+The new version is written in python3 and uses the qt5 widget kit.  
 ## Prerequisites
-* python2.7
+* python3
 * OpenCV 2.4 or OPENCV 3 (must be build with ffmpeg)
-* ffmpeg 2.7.x
-* python2-pyqt4
+* ffmpeg > 3.X
+* python3-pyqt5
 
 ### Features
 Cuts an mpg file into parts and joins them afterwards. All commands can be reached via the toolbar.
@@ -52,6 +53,10 @@ Added "Exact cut" feature. Ensures that the cut of the mp4 is exact (Frame exact
 
 09.2018
 The final QT4 version has been committed. 
+
+16.09.2018
+Redesign of the frontend: Using python 3 and qt5.
+Introduction of a native C ffmpeg layer, which can convert the videos much faster than the default interface. (Beta!)
 
 In case of problems open an issue. 
 Have fun. 
