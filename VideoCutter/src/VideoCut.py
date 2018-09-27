@@ -876,6 +876,8 @@ class SettingsDialog(QtWidgets.QDialog):
         outBox.addWidget(frame1)
         outBox.addWidget(frame2)
         self.setLayout(outBox)
+        #make it wider...
+        self.setMinimumSize(400, 0)
         
     def on_combobox_selected(self,value):
         self.model.selectedContainer=value

@@ -37,7 +37,6 @@
 struct StreamInfo{
     int srcIndex; //Index of ifmt_ctx stream
     int dstIndex; //Index of out stream. TODO - currently 0: video, 1: audio
-    int64_t currentDTS; //for keeping 
     AVStream *outStream;
     AVStream *inStream;
     AVCodecContext *codec_ctx; //Decode
@@ -47,6 +46,7 @@ struct StreamInfo{
 	AVRational in_time_base;
 	AVRational out_time_base;
 	int64_t first_dts;
+    int64_t currentDTS; //last dts written
 };
 
 typedef struct {
@@ -178,23 +178,20 @@ int _initOutputContext(char *out_filename){
         fprintf(stderr, "Could not create video output \n");
         return -1;
     }
-     AVRational frameRate = av_stream_get_r_frame_rate(videoStream->inStream);
-     int64_t bitrate = context.ifmt_ctx->bit_rate;
-     printf("Video: frame rate: %d/%d bitrate: %ld \n",frameRate.num,frameRate.den,bitrate);
-     ofmt_ctx->bit_rate = bitrate;
-     //av_stream_set_r_frame_rate(videoStream->outStream,frameRate);
+    int64_t bitrate = context.ifmt_ctx->bit_rate;
+    printf("Video bitrate: %ld \n",bitrate);
+    ofmt_ctx->bit_rate = bitrate;
     /* The VBV Buffer warning is removed: */
     AVCPBProperties *props;
-	props = (AVCPBProperties*) av_stream_new_side_data(videoStream->outStream, AV_PKT_DATA_CPB_PROPERTIES, sizeof(*props));
-	int64_t bit_rate = context.ifmt_ctx->bit_rate;
+    props = (AVCPBProperties*) av_stream_new_side_data(videoStream->outStream, AV_PKT_DATA_CPB_PROPERTIES, sizeof(*props));
+    int64_t bit_rate = context.ifmt_ctx->bit_rate;
 
-	props->buffer_size = 1024 *1024;
-	props->max_bitrate = 15*bit_rate;
-	props->min_bitrate = (2*bit_rate)/3;
-	props->avg_bitrate = bit_rate;
-	props->vbv_delay = UINT64_MAX;
-
-         
+    props->buffer_size = 1024 *1024;
+    props->max_bitrate = 15*bit_rate;
+    props->min_bitrate = (2*bit_rate)/3;
+    props->avg_bitrate = bit_rate;
+    props->vbv_delay = UINT64_MAX;
+     
     if (audioStream->srcIndex>=0) {
         if ((ret = createOutputStream(audioStream))< 0){
             fprintf(stderr, "Could not create video output \n");
@@ -286,6 +283,7 @@ static int _initDecoder(struct StreamInfo *info){
     avcodec_parameters_to_context(dec_ctx, info->inStream->codecpar);
     av_dict_set(&opts, "refcounted_frames","1",0);
     dec_ctx->framerate = av_guess_frame_rate(context.ifmt_ctx, info->inStream, NULL);
+    //dec_ctx->framerate.num is the FPS! -> info->codec_ctx->framerate.num
 
     if ((ret=avcodec_open2(dec_ctx,dec,&opts))<0){ 
        fprintf(stderr, "Failed to open codec context\n");
@@ -305,9 +303,6 @@ static int seekGOPs(struct StreamInfo *info, int64_t ts,CutData *borders) {
     int64_t gop[2]={0,0};
     int64_t last_dts=0;
     int gopSize=0;
-    //DEbug only
-    //int64_t vStreamOffset = videoStream->inStream->start_time;
-    //double_t streamOffset = timeFromPTS(vStreamOffset,info->inStream->time_base);
     if (lookback > ts)
         lookback=ts;
     //const int genPts= context.ifmt_ctx->flags & AVFMT_FLAG_GENPTS; alway 0->so packet buffer is used
@@ -401,37 +396,25 @@ static int write_packet(struct StreamInfo *info,AVPacket *pkt,CutData head,CutDa
 			return 1;
 		}
 
-/* Seen in doxygen examples:
- * typedef struct StreamContext {
-    AVCodecContext *enc_ctx;
-    ->tb of CodecContext ENCODER or CC created with avcodec_alloc_codec3 & tb of stream
-    av_packet_rescale_ts(&enc_pkt,
-                         stream_ctx[stream_index].enc_ctx->time_base,
-                         ofmt_ctx->streams[stream_index]->time_base);
- */ 
-
         pkt->stream_index = info->dstIndex;
-        //from remuxing: = av_rescale_q_rnd(pkt.pts, in_stream->time_base, out_stream->time_base, AV_ROUND_NEAR_INF|AV_ROUND_PASS_MINMAX);
         pkt->pts = av_rescale_q(new_DTS + delta,in_stream->time_base, out_stream->time_base);
         pkt->dts = av_rescale_q(new_DTS,in_stream->time_base, out_stream->time_base);
         pkt->duration = av_rescale_q(pkt->duration, in_stream->time_base, out_stream->time_base);
         pkt->pos=-1;//File pos is unknown if cut..
-        double_t testTS2 = av_q2d(out_stream->time_base)*pkt->dts;//==dtsCalcTime!
-		//if (d1 < head.start){
-		if(pkt->dts < info->currentDTS){
-                //int64_t relHead = av_rescale_q(head.start,videoStream->inStream->time_base, in_stream->time_base);
-				printf("Drop early packet: %c: dts:%ld (%ld) timeOut %.3f timeIn: %.3f currDTS: %ld\n",frm,pkt->dts,d1,testTS2,testTS,info->currentDTS);
-				av_packet_unref(pkt);
-				return 1;
+        
+        if(pkt->dts < info->currentDTS){
+            printf("Drop early packet: %c: dts:%ld pts:%ld currDTS: %ld\n",frm,pkt->dts,pkt->pts,info->currentDTS);
+            av_packet_unref(pkt);
+            return 1;
 		}
-
+        //mark the last dts written.
         info->currentDTS = pkt->dts+pkt->duration;
         
         double_t dtsCalcTime = av_q2d(out_stream->time_base)*pkt->dts;
         double_t ptsCalcTime = av_q2d(out_stream->time_base)*pkt->pts;
         
         printf("%ld,%c:",context.frame_number,frm);
-        printf("P:%ld (%ld) D:%ld (%ld) Pt:%.3f Dt:%.3f idx: (%d) dur %ld (%ld) size: %d flags: %d\n",pkt->pts,p1,pkt->dts,d1,ptsCalcTime,dtsCalcTime,pkt->stream_index ,pkt->duration,dur,pkt->size,pkt->flags);
+        printf("P:%ld (%ld) D:%ld (%ld) Pt:%.3f Dt:%.3f idx: (%d) dur %ld (%ld) size: %d flags: %d curr:%ld\n",pkt->pts,p1,pkt->dts,d1,ptsCalcTime,dtsCalcTime,pkt->stream_index ,pkt->duration,dur,pkt->size,pkt->flags,info->currentDTS);
 
         int ret = av_interleaved_write_frame(context.ofmt_ctx, pkt);
         //int ret = av_write_frame(context.ofmt_ctx, pkt);
@@ -501,11 +484,9 @@ static int dumpDecodingData(){
             streamInfo = audioStream;
         }		
         int64_t streamOffset = streamInfo->inStream->start_time;
-//TODO: PRINT OUT THE STUFF == ANALYSE
-       double_t dtsCalcTime = av_q2d(streamInfo->outStream->time_base)*pkt.dts;
+        double_t dtsCalcTime = av_q2d(streamInfo->outStream->time_base)*pkt.dts;
         double_t ptsCalcTime = av_q2d(streamInfo->outStream->time_base)*pkt.pts;
         double_t xxx = av_q2d(streamInfo->inStream->time_base)*(pkt.pts-streamOffset);
-        
         
         printf("%ld,%c:",frame_number,frm);
         printf("P:%ld  D:%ld Pt:%.3f Dt:%.3f X: %.3f dur %ld \n",pkt.pts,pkt.dts,ptsCalcTime,dtsCalcTime,xxx,pkt.duration);
@@ -514,18 +495,6 @@ static int dumpDecodingData(){
     }
     return 1;                
 }
-/*
- * tb=90000
-start1=6138895457 = head1
-tail1=6141536057
-head2=6170647457
-gap1=(head2-tail1)
-
-head2-gap1-start1
-2640600
-2640600/tb
-29.340 QED
- */
 /** seek to the timeslots and cut them out **/
 static int seekAndMux(double_t timeslots[],int seekCount){
     AVRational time_base = videoStream->in_time_base;
@@ -537,6 +506,10 @@ static int seekAndMux(double_t timeslots[],int seekCount){
     double_t aStreamStartTime = av_q2d(time_base)*aStreamOffset;
     int64_t duration = videoStream->inStream->duration;
 
+    videoStream->currentDTS =0;
+    audioStream->currentDTS =0;
+
+    int64_t gapStep = videoStream->out_time_base.den/videoStream->codec_ctx->framerate.num;
 
     CutData headBorders;
     CutData tailBorders;
@@ -572,7 +545,7 @@ static int seekAndMux(double_t timeslots[],int seekCount){
 		}
 		gap += (head-prevTail);
         context.gap = gap;
-        printf("Gap calc <tail %ld head: %ld gap: %ld dts-v-offset %ld a-offset %ld\n",prevTail,head,context.gap,videoStream->first_dts,audioStream->first_dts);
+        printf("Gap calc <tail %ld head: %ld gap: %ld dts-v-offset %ld a-offset %ld gapStep:%ld\n",prevTail,head,context.gap,videoStream->first_dts,audioStream->first_dts,gapStep);
         prevTail = tailBorders.end;
         
         if (headBorders.start == headBorders.end || tailBorders.start==tailBorders.end){
@@ -590,7 +563,7 @@ static int seekAndMux(double_t timeslots[],int seekCount){
             printf("muxing failed\n");
             return -1;
         }
-        context.streamOffset+=9000; //TEST for gap
+        context.streamOffset+=gapStep; //TEST for gap
     }
     return 1;    
 }

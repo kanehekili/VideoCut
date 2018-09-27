@@ -6,15 +6,18 @@
 		<property name="rootDir" value="${stage}/videocut"/>
 		<property name="icons" value="${rootDir}/icons"/>
 		<property name="data" value="${rootDir}/data"/>
+		<property name="ffmpeg" value="${rootDir}/ffmpeg"/>
 		<delete dir="${stage}"/>
 		<mkdir dir="${stage}"/>
 		<mkdir dir="${rootDir}"/>
 		<mkdir dir="${icons}"/>
 		<mkdir dir="${data}"/>
+		<mkdir dir="${ffmpeg}"/>
 
 		<property name="source" value="../src"/>
 		<property name="srcIcons" value="${source}/icons"/>
 		<property name="srcData" value="${source}/data"/>
+		<property name="srcffmpeg" value="${source}/ffmpeg"/>
 		
 		<copy todir="${rootDir}">
 			<fileset file="*.desktop">
@@ -29,6 +32,11 @@
 			<fileset dir="${srcData}">
 			</fileset>
 		</copy>
+		
+		<copy todir="${ffmpeg}">
+			<fileset dir="${srcffmpeg}">
+			</fileset>
+		</copy>		
 		
 		<copy todir="${rootDir}">
 			<fileset dir="${source}" includes="*.py" excludes="*Tests*">
