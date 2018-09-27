@@ -1,0 +1,7 @@
+sudo apt-get install python3-opencv (includes numpy)
+sudo apt-get install python3-pyqt5
+sudo apt-get install qt5-style-plugins
+
+on gtk base DE add to:  ~/.profile or /etc/environment
+export QT_QPA_PLATFORMTHEME=gtk2
+

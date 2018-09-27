@@ -1045,6 +1045,7 @@ class VCCutter():
         timeString = ''.join(timeString)
         cmd=[self.bin,self.config.srcfilePath,self.config.targetPath,"-s",timeString]
         print(cmd)
+        log("cut file:",cmd)
         try:
             for path in executeAsync(cmd):
                 self.parseAndDispatch("Cutting :",path)

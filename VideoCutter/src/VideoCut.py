@@ -9,11 +9,13 @@ from PyQt5.QtWidgets import QApplication,QWidget
 
 try:
     import cv2 #cv3
+    cvmode=3
     print (cv2.getBuildInformation())
 except ImportError:
     print ("OpenCV 3 not found,, expecting Version 2 now")
     try:
         from cv2 import cv #this is cv2!
+        cvmode=2
     except ImportError:
         print ("OpenCV 2 not found")  
         app = QApplication(sys.argv)
@@ -136,7 +138,7 @@ class OpenCV3():
     def isOpened(self):
         return self._cap.isOpened() 
     
-if "3." in cv2.__version__:
+if cvmode == 3:
     OPENCV=OpenCV3()
     print ("using CV3")
 else:
@@ -354,6 +356,8 @@ class LayoutWindow(QWidget):
         gridLayout.addWidget(self.ui_Slider,5,0,1,11)
         gridLayout.addWidget(self.ui_Dial,5,11,1,-1)
         gridLayout.addWidget(self.statusbar,6,0,1,12)
+        
+        gridLayout.setRowStretch(1, 1)
 
         return gridLayout
                              
@@ -549,7 +553,8 @@ class MainFrame(QtWidgets.QMainWindow):
         self.show() 
         if aPath is not None:
             self._videoController.setFile(aPath)
-
+        else:
+            self.getVideoWidget().showFrame(None)
 
     
     def initUI(self):
@@ -837,9 +842,9 @@ class SettingsDialog(QtWidgets.QDialog):
         frame1.setFrameStyle(QtWidgets.QFrame.Box | QtWidgets.QFrame.Sunken)
         frame1.setLineWidth(1)
        
-#         frame2 =  QtWidgets.QFrame()
-#         frame2.setFrameStyle(QtWidgets.QFrame.Box | QtWidgets.QFrame.Sunken)
-#         frame2.setLineWidth(1)
+        frame2 =  QtWidgets.QFrame()
+        frame2.setFrameStyle(QtWidgets.QFrame.Box | QtWidgets.QFrame.Sunken)
+        frame2.setLineWidth(1)
        
         encodeBox = QtWidgets.QVBoxLayout(frame1)
         self.check_reencode =  QtWidgets.QCheckBox("Reencode (Slow!)")
@@ -852,6 +857,8 @@ class SettingsDialog(QtWidgets.QDialog):
         for item in self.model.containerList:
             self.combo.addItem(item, None)
         
+        self.combo.setEnabled(self.model.reencoding)
+        
         self.combo.setCurrentText(self.model.selectedContainer)
         self.combo.currentTextChanged.connect(self.on_combobox_selected)
         #we want audio as well?
@@ -862,35 +869,12 @@ class SettingsDialog(QtWidgets.QDialog):
         
         encodeBox.addWidget(self.check_reencode)
         encodeBox.addWidget(self.combo)
-        encodeBox.addWidget(self.exRemux)
         
-#         expoBox = QtWidgets.QVBoxLayout(frame2)
-#         radioHBox = QtWidgets.QHBoxLayout()
-#         self.exBasic = QtWidgets.QRadioButton("Basic")
-#         self.exBasic.setChecked(True)
-#         #self.exBasic.toggled.connect(lambda:self.btnstate(self.exBasic))
-#         radioHBox.addWidget(self.exBasic)
-#         
-#         self.exRemux = QtWidgets.QRadioButton("Experimental")
-#         #self.exRemux.toggled.connect(lambda:self.btnstate(self.b2))
-#         radioHBox.addWidget(self.exRemux)
-# 
-#         radioVBox = QtWidgets.QVBoxLayout()
-#         rGroup1 = QtWidgets.QButtonGroup(frame2)
+        expoBox = QtWidgets.QVBoxLayout(frame2)
+        expoBox.addWidget(self.exRemux)
         
-#         self.exIFrame = QtWidgets.QRadioButton("I-Frame")
-#         self.exExact = QtWidgets.QRadioButton("Exact")
-#         rGroup1.addButton(self.exIFrame)
-#         rGroup1.addButton(self.exExact)
-#         radioVBox.addWidget(self.exIFrame)
-#         radioVBox.addWidget(self.exExact)
-#         
-#         expoBox.addLayout(radioHBox)
-#         expoBox.addLayout(radioVBox)
-        
-        #outBox.addWidget(??)
         outBox.addWidget(frame1)
-#         outBox.addWidget(frame2)
+        outBox.addWidget(frame2)
         self.setLayout(outBox)
         
     def on_combobox_selected(self,value):
@@ -898,6 +882,7 @@ class SettingsDialog(QtWidgets.QDialog):
     
     def on_reencodeChanged(self,reencode):
         self.model.reencoding= QtCore.Qt.Checked==reencode
+        self.combo.setEnabled(self.model.reencoding)
         
     def on_experimentalChanged(self,isExperimental):
         self.model.experimental= QtCore.Qt.Checked==isExperimental    
@@ -1123,8 +1108,10 @@ class VideoControl(QtCore.QObject):
             else:
                 msg = "Invalid file format!"
             
+            self._videoUI().showFrame(None)
             self.gui.showWarning(msg)
             self.gui.enableControls(False)
+            
     
     def setExactCut(self,reencode): 
         self.exactcut = QtCore.Qt.Checked==reencode   
@@ -1307,6 +1294,7 @@ class VideoControl(QtCore.QObject):
     def sliderMoved(self,pos):
         if self.player is None or not self.player.isValid():
             self.gui.syncSliderPos(0)
+            return
         if not self._frameSet: 
             frameNumber = round(self.player.framecount/LayoutWindow.SLIDER_RESOLUTION*pos,0)
             self.__dispatchShowFrame(frameNumber)
@@ -1314,6 +1302,8 @@ class VideoControl(QtCore.QObject):
 
     #display Frame with syncing the slider pos. 
     def _gotoFrame(self,frameNumber=0):
+        if self.player is None:
+            return;
         self._frameSet=True
         if self.player.framecount < 1:
             return;
@@ -1470,8 +1460,7 @@ WIN=None
 def handle_exception(exc_type, exc_value, exc_traceback):
     """ handle all exceptions """
     if WIN is not None:
-        
-        infoText = exc_value.message
+        infoText = str(exc_value)
         detailText ="*".join(traceback.format_exception(exc_type, exc_value, exc_traceback))
         WIN.getErrorDialog("Unexpected error",infoText,detailText).show()
      

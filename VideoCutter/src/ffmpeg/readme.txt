@@ -1,9 +1,13 @@
 ffmpeg:
 remux5 is a prototype which simply copies packets from a stream and adds it to to the out put stream.
-No reencoding involved. fast.
+No reencoding involved. Fast.
 Drawback: Not exact, since I frames need to be used for start/end.
 
 currently the binary is compiled on arch linux against ffmpeg version 4.0.2.
+Works as well on debian buster, propably on other distros with ffmpeg 4.0.2
+
+Can be activated by setting the "Experimental" switch to on.(Toolbar ->Clogs icon)
+
 The source was compiled with: (this is geany syntax)
  gcc -g -Wall -c "%f", where %f is the filename (remux5.c)
  
