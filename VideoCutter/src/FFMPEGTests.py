@@ -3,7 +3,7 @@ Created on Nov 26, 2016
 
 @author: matze
 '''
-from FFMPEGTools import FFStreamProbe,FFPacketProbe,OSTools
+from FFMPEGTools import FFStreamProbe,FFPacketProbe,OSTools,FFmpegVersion
 import os
 import subprocess
 from subprocess import Popen
@@ -145,8 +145,14 @@ def testPacketProbe(filename):
     #p = FFPacketProbe(filename,0,None)
     FFPacketProbe(filename,"00:00:32.00",20)
 
+def testFFmpegVersion():
+    fv= FFmpegVersion()
+    val=str(fv.version)[:1]
+    print(">>"+val)
+
 if __name__ == '__main__':
-    testPath()
+    testFFmpegVersion()
+    #testPath()
     #testParse()
     #testNonblockingRead()
     #testFrameProbe()

@@ -24,6 +24,15 @@
   * ~/JWSP/FFMPEG/remux5 nano.m2t 000.mp4 > decode5.txt
   * /home/matze/Videos/3sat_HD-test/nano.m2t /home/matze/Videos/3sat_HD-test/000.mp4  -s 385.980,415.205,510.83,530.00
   * /home/matze/Videos/3sat_HD-test/nano.m2t /home/matze/Videos/3sat_HD-test/000.mp4
+  * 
+  * Versions supported: (libavutil/version.h)
+  * ffmpeg 3.4.2
+  * #define LIBAVCODEC_VERSION_MAJOR  57	 	
+  * #define LIBAVCODEC_VERSION_MINOR 107
+  * 
+  * ffmpeg 4.x
+  * #define LIBAVCODEC_VERSION_MAJOR  58
+  * #define LIBAVCODEC_VERSION_MINOR 18
   */
 #include <libavutil/timestamp.h>
 #include <libavformat/avformat.h>
@@ -33,6 +42,13 @@
 #include <libavutil/mathematics.h>
 #include <unistd.h>
 #include <stdio.h>
+
+#if (LIBAVCODEC_VERSION_MAJOR == 57)
+#define FFMPEG_REGISTER 1
+#endif
+#if (LIBAVCODEC_VERSION_MAJOR < 57)
+#error "Ffmpeg 3.4 or newer is required"
+#endif 
 
 struct StreamInfo{
     int srcIndex; //Index of ifmt_ctx stream
@@ -227,6 +243,10 @@ int _initOutputContext(char *out_filename){
 int _setupStreams(char *in_filename, char *out_filename){
     int ret;
     AVFormatContext *ifmt_ctx = NULL;
+    
+    #ifdef FFMPEG_REGISTER
+        av_register_all();
+    #endif
     
     if ((ret = avformat_open_input(&ifmt_ctx, in_filename, 0, 0)) < 0) {
         fprintf(stderr, "Could not open input file '%s'", in_filename);

@@ -541,14 +541,19 @@ class LayoutWindow(QWidget):
         
 
 class MainFrame(QtWidgets.QMainWindow):
+    MODE_ACTIVE=2
+    signalActive=pyqtSignal()
+    
     def __init__(self,aPath=None):
+        self.__initalMode=0
+        
         super(MainFrame, self).__init__()
         self.setWindowIcon(getAppIcon())
         self.settings = SettingsModel()
         self._videoController = VideoControl(self)
         self._widgets = self.initUI()
         self._widgets.hookEvents(self._videoController)
-
+        
         self.centerWindow()
         self.show() 
         if aPath is not None:
@@ -640,6 +645,21 @@ class MainFrame(QtWidgets.QMainWindow):
         self.setCentralWidget(widgets);
         self.setWindowTitle("VideoCut") 
         return widgets
+    '''
+    overwriting event seems to be the only way to find out WHEN there is the first
+    time where we could display a dialog. So if Show && Activated have arrived
+    the MainFrame sends a signal to whom it may concern...
+    '''
+    def event(self,event):
+        if self.__initalMode < self.MODE_ACTIVE:
+            if event.type() == QtCore.QEvent.Show or event.type() == QtCore.QEvent.WindowActivate:
+                self.__initalMode+=1
+                if self.isActivated():
+                    self.signalActive.emit()
+        return super(MainFrame,self).event(event)
+    
+    def isActivated(self):
+        return self.__initalMode == self.MODE_ACTIVE
     
     def centerWindow(self):
         frameGm = self.frameGeometry()
@@ -685,7 +705,8 @@ class MainFrame(QtWidgets.QMainWindow):
         self._widgets.stopProgress()
 
     def showWarning(self,aMessage):
-        QtWidgets.QMessageBox.warning(self,"Not supported",aMessage)
+        pad ='\t'
+        QtWidgets.QMessageBox.warning(self,"Warning!",aMessage+pad)
     
     def enableControls(self,enable):
         self._widgets.ui_Dial.setEnabled(enable)
@@ -794,13 +815,6 @@ class MainFrame(QtWidgets.QMainWindow):
         layout.setSizeConstraint(QtWidgets.QLayout.SetFixedSize)
         layout.addWidget(label)
         return dlg
-
-    def _getSettingsDialog(self):
-        dlg = QtWidgets.QDialog(self)
-        dlg.setWindowModality(QtCore.Qt.WindowModal)
-        dlg.setWindowTitle("Settings")
-        layout = QtWidgets.QVBoxLayout(dlg)
-        
 
     def getErrorDialog(self,text,infoText,detailedText):
         dlg = DialogBox(self)
@@ -1063,6 +1077,8 @@ class VideoControl(QtCore.QObject):
         self.streamData = None
         self._vPlayer = None
         self.exactcut = False
+        mainFrame.signalActive.connect(self.displayWarningMessage)
+        self.lastError=None
 
     def _initTimer(self):
         self._timer = QtCore.QTimer(self.gui)
@@ -1074,6 +1090,12 @@ class VideoControl(QtCore.QObject):
             return self.currentPath+"."+self.streamData.getTargetExtension()
 
         return self.currentPath
+     
+    def displayWarningMessage(self):
+        if self.lastError is None:
+            return
+        self.gui.showWarning(self.lastError)
+        self.lastError=None
         
     #-- Menu handling ---    
     def setFile(self,filePath):
@@ -1084,7 +1106,6 @@ class VideoControl(QtCore.QObject):
             self.streamData = FFStreamProbe(filePath)
             self.currentPath = OSTools().getPathWithoutExtension(filePath); 
         except: 
-            print ("Error -see log")
             Log.logException("Error 1")
             self.streamData = None  
             self.currentPath = OSTools().getHomeDirectory()    
@@ -1100,20 +1121,20 @@ class VideoControl(QtCore.QObject):
             self._asyncInitVideoViews()
            
         except:
-            print ("Error -see log:")
+            print ("Error -see log")
             Log.logException("Error 2")
             self.gui.updateWindowTitle(OSTools().getFileNameOnly(filePath))
             self._gotoFrame(0)
             self._showCurrentFrameInfo(0)
             if not OSTools().fileExists(filePath):
-                msg = "File not found"
+                self.lastError = "File not found"
             else:
-                msg = "Invalid file format!"
+                self.lastError = "Invalid file format"
             
             self._videoUI().showFrame(None)
-            self.gui.showWarning(msg)
             self.gui.enableControls(False)
-            
+            if self.gui.isActivated():
+                self.displayWarningMessage()
     
     def setExactCut(self,reencode): 
         self.exactcut = QtCore.Qt.Checked==reencode   
