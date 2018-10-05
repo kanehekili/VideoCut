@@ -1022,8 +1022,13 @@ class VCCutter():
         self.setupBinary()
 
     def setupBinary(self):
+        fv= FFmpegVersion()
+        if fv.version < 3.0:
+           self.say("Invalid FFMPEG Version! Needs to be 3.0 or higher") 
+           return
+        val=str(fv.version)[:1]
         p= OSTools().getWorkingDirectory();
-        tail="ffmpeg/bin/remux5"
+        tail="ffmpeg/bin/v"+val+"/remux5"
         self.bin = os.path.join(p,tail)
 
     #cutlist = [ [t1,t2] [t3,t4]...]
@@ -1051,7 +1056,7 @@ class VCCutter():
                 self.parseAndDispatch("Cutting :",path)
 
         except Exception as error:
-            self.say("join failed: %s"%(error))
+            self.say("remux failed: %s"%(error))
             return False
         
         self.say("Cutting done")
@@ -1079,7 +1084,20 @@ class VCCutter():
             return False
         else:
             return True 
-
+class FFmpegVersion():
+    def __init__(self):
+        self.version=0.0;
+        self.figureItOut()
+    
+    def figureItOut(self):
+        result = subprocess.Popen(["ffmpeg","-version"], stdout=subprocess.PIPE).communicate()
+        if len(result[0])>0:
+            text = result[0].decode("utf-8")
+            m=re.search("[0-9].[0-9]+",text )
+            g1=m.group(0)
+            print(g1)
+            self.version =float(g1)
+            log("FFmepg Version:",self.version)
  
 ''' 
     def non_block_read(self,prefix,output):

@@ -323,10 +323,8 @@ class LayoutWindow(QWidget):
         self.ui_InfoLabel.setText("")
         self.ui_InfoLabel.setToolTip("Infos about the video position")
         
-        self.ui_CB_Reencode = QtWidgets.QCheckBox(self)
-        self.ui_CB_Reencode.setText("Exact cut")
-        self.ui_CB_Reencode.setChecked(False)
-        self.ui_CB_Reencode.setToolTip("Exact cut is slow, but precise")
+        self.ui_StatusLabel= QtWidgets.QLabel(self)
+        self.ui_StatusLabel.setStyleSheet("QLabel { border: 1px solid darkgray; border-radius: 3px; background: lightgreen} ");
         
         self.ui_List = self.__createListWidget()
         
@@ -351,8 +349,9 @@ class LayoutWindow(QWidget):
        
         gridLayout.addWidget(self.ui_VideoFrame,0,1,4,-1);
         gridLayout.addWidget(self.ui_GotoField,4,1,1,2)
-        gridLayout.addWidget(self.ui_InfoLabel,4,3,1,8)
-        gridLayout.addWidget(self.ui_CB_Reencode,4,11,1,-1)
+        gridLayout.addWidget(self.ui_InfoLabel,4,3,1,7)
+        #gridLayout.addWidget(self.ui_CB_Reencode,4,11,1,-1)??exact cut,target,experimaenta
+        gridLayout.addWidget(self.ui_StatusLabel,4,10,1,-1)
         gridLayout.addWidget(self.ui_Slider,5,0,1,11)
         gridLayout.addWidget(self.ui_Dial,5,11,1,-1)
         gridLayout.addWidget(self.statusbar,6,0,1,12)
@@ -440,7 +439,7 @@ class LayoutWindow(QWidget):
         #self.ui_GotoField.editingFinished.connect(self.__gotoFrame)
         self.ui_GotoField.valueChanged.connect(self.__gotoFrame)
         
-        self.ui_CB_Reencode.stateChanged.connect(aVideoController.setExactCut)
+        #self.ui_CB_Reencode.stateChanged.connect(aVideoController.setExactCut)
         
         self.statusMessenger = StatusDispatcher()
         self.statusMessenger.signal.connect(self.showStatusMessage)
@@ -541,14 +540,20 @@ class LayoutWindow(QWidget):
         
 
 class MainFrame(QtWidgets.QMainWindow):
+    MODE_ACTIVE=2
+    signalActive=pyqtSignal()
+    
     def __init__(self,aPath=None):
+        self.__initalMode=0
+        
         super(MainFrame, self).__init__()
         self.setWindowIcon(getAppIcon())
-        self.settings = SettingsModel()
+        self.settings = SettingsModel(self)
         self._videoController = VideoControl(self)
         self._widgets = self.initUI()
         self._widgets.hookEvents(self._videoController)
-
+        self.settings.update()
+        
         self.centerWindow()
         self.show() 
         if aPath is not None:
@@ -640,6 +645,21 @@ class MainFrame(QtWidgets.QMainWindow):
         self.setCentralWidget(widgets);
         self.setWindowTitle("VideoCut") 
         return widgets
+    '''
+    overwriting event seems to be the only way to find out WHEN there is the first
+    time where we could display a dialog. So if Show && Activated have arrived
+    the MainFrame sends a signal to whom it may concern...
+    '''
+    def event(self,event):
+        if self.__initalMode < self.MODE_ACTIVE:
+            if event.type() == QtCore.QEvent.Show or event.type() == QtCore.QEvent.WindowActivate:
+                self.__initalMode+=1
+                if self.isActivated():
+                    self.signalActive.emit()
+        return super(MainFrame,self).event(event)
+    
+    def isActivated(self):
+        return self.__initalMode == self.MODE_ACTIVE
     
     def centerWindow(self):
         frameGm = self.frameGeometry()
@@ -685,7 +705,8 @@ class MainFrame(QtWidgets.QMainWindow):
         self._widgets.stopProgress()
 
     def showWarning(self,aMessage):
-        QtWidgets.QMessageBox.warning(self,"Not supported",aMessage)
+        pad ='\t'
+        QtWidgets.QMessageBox.warning(self,"Warning!",aMessage+pad)
     
     def enableControls(self,enable):
         self._widgets.ui_Dial.setEnabled(enable)
@@ -795,13 +816,6 @@ class MainFrame(QtWidgets.QMainWindow):
         layout.addWidget(label)
         return dlg
 
-    def _getSettingsDialog(self):
-        dlg = QtWidgets.QDialog(self)
-        dlg.setWindowModality(QtCore.Qt.WindowModal)
-        dlg.setWindowTitle("Settings")
-        layout = QtWidgets.QVBoxLayout(dlg)
-        
-
     def getErrorDialog(self,text,infoText,detailedText):
         dlg = DialogBox(self)
         dlg.setIcon(QtWidgets.QMessageBox.Warning)
@@ -814,12 +828,22 @@ class MainFrame(QtWidgets.QMainWindow):
         return dlg
 
 class SettingsModel():
-    def __init__(self):
+    def __init__(self,mainframe):
         #keep flags- save them later
         self.experimental=False
         self.selectedContainer="mp4" 
         self.containerList=["mp4","mpg","mkv","flv","m2t"] 
         self.reencoding=False
+        self.mainFrame=mainframe
+    
+    def update(self):
+        cutmode="Fast"
+        mode="FFMPEG"
+        if self.experimental:
+            mode="REMUX"
+        if self.reencoding:
+            cutmode="Exact"
+        self.mainFrame._widgets.ui_StatusLabel.setText(cutmode+" / "+mode)
 
 class SettingsDialog(QtWidgets.QDialog):
 
@@ -881,13 +905,16 @@ class SettingsDialog(QtWidgets.QDialog):
         
     def on_combobox_selected(self,value):
         self.model.selectedContainer=value
+        self.model.update()
     
     def on_reencodeChanged(self,reencode):
         self.model.reencoding= QtCore.Qt.Checked==reencode
         self.combo.setEnabled(self.model.reencoding)
+        self.model.update()
         
     def on_experimentalChanged(self,isExperimental):
-        self.model.experimental= QtCore.Qt.Checked==isExperimental    
+        self.model.experimental= QtCore.Qt.Checked==isExperimental
+        self.model.update()    
         
 class DialogBox(QtWidgets.QMessageBox): #subclassed for reasonable sizing 
 
@@ -1062,7 +1089,11 @@ class VideoControl(QtCore.QObject):
         self.currentPath = OSTools().getHomeDirectory()#//TODO get a Video dir
         self.streamData = None
         self._vPlayer = None
-        self.exactcut = False
+        
+        mainFrame.signalActive.connect(self.displayWarningMessage)
+        self.lastError=None
+        mainFrame.signalActive.connect(self.displayWarningMessage)
+        self.lastError=None
 
     def _initTimer(self):
         self._timer = QtCore.QTimer(self.gui)
@@ -1074,6 +1105,12 @@ class VideoControl(QtCore.QObject):
             return self.currentPath+"."+self.streamData.getTargetExtension()
 
         return self.currentPath
+     
+    def displayWarningMessage(self):
+        if self.lastError is None:
+            return
+        self.gui.showWarning(self.lastError)
+        self.lastError=None
         
     #-- Menu handling ---    
     def setFile(self,filePath):
@@ -1084,7 +1121,6 @@ class VideoControl(QtCore.QObject):
             self.streamData = FFStreamProbe(filePath)
             self.currentPath = OSTools().getPathWithoutExtension(filePath); 
         except: 
-            print ("Error -see log")
             Log.logException("Error 1")
             self.streamData = None  
             self.currentPath = OSTools().getHomeDirectory()    
@@ -1100,24 +1136,21 @@ class VideoControl(QtCore.QObject):
             self._asyncInitVideoViews()
            
         except:
-            print ("Error -see log:")
+            print ("Error -see log")
             Log.logException("Error 2")
             self.gui.updateWindowTitle(OSTools().getFileNameOnly(filePath))
             self._gotoFrame(0)
             self._showCurrentFrameInfo(0)
             if not OSTools().fileExists(filePath):
-                msg = "File not found"
+                self.lastError = "File not found"
             else:
-                msg = "Invalid file format!"
+                self.lastError = "Invalid file format"
             
             self._videoUI().showFrame(None)
-            self.gui.showWarning(msg)
             self.gui.enableControls(False)
-            
+            if self.gui.isActivated():
+                self.displayWarningMessage()
     
-    def setExactCut(self,reencode): 
-        self.exactcut = QtCore.Qt.Checked==reencode   
-
     def addStartMarker(self):
         self._createVideoCutEntry(VideoCutEntry.MODE_START)
         self.gui._widgets.statusMessenger.say("Marker created")
@@ -1237,10 +1270,9 @@ class VideoControl(QtCore.QObject):
     def __makeCuts(self,srcPath,targetPath,spanns,settings):
         config = CuttingConfig(srcPath,targetPath)
         config.streamData = self.streamData
-        config.reencode = self.exactcut
         #TODO: 
         #config.targetContainer = settings.selectedContainer
-        #config.reencode = settings.reencoding
+        config.reencode = settings.reencoding
         
         config.messenger = self.gui._widgets.statusMessenger
         cutter = FFMPEGCutter(config)
@@ -1264,12 +1296,11 @@ class VideoControl(QtCore.QObject):
    
         config = CuttingConfig(srcPath,targetPath)
         config.streamData = self.streamData
-        config.reencode = self.exactcut
         config.messenger = self.gui._widgets.statusMessenger
         
         #TODO
         #config.targetContainer = settings.selectedContainer
-        #config.reencode = settings.reencoding
+        config.reencode = settings.reencoding
         
         cutter = VCCutter(config)
         success = cutter.cut(spanns)
