@@ -552,7 +552,10 @@ class MainFrame(QtWidgets.QMainWindow):
         self._videoController = VideoControl(self)
         self._widgets = self.initUI()
         self._widgets.hookEvents(self._videoController)
+<<<<<<< HEAD
         self.settings.update()
+=======
+>>>>>>> branch 'master' of https://github.com/kanehekili/VideoCut.git
         
         self.centerWindow()
         self.show() 
@@ -1089,9 +1092,13 @@ class VideoControl(QtCore.QObject):
         self.currentPath = OSTools().getHomeDirectory()#//TODO get a Video dir
         self.streamData = None
         self._vPlayer = None
+<<<<<<< HEAD
         
         mainFrame.signalActive.connect(self.displayWarningMessage)
         self.lastError=None
+=======
+        self.exactcut = False
+>>>>>>> branch 'master' of https://github.com/kanehekili/VideoCut.git
         mainFrame.signalActive.connect(self.displayWarningMessage)
         self.lastError=None
 
