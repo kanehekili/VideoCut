@@ -150,8 +150,27 @@ def testFFmpegVersion():
     val=str(fv.version)[:1]
     print(">>"+val)
 
+def testregex():
+    text = "46648 P:1866.05 D:1866.05 25.70%"
+    m= re.search("([0-9]+) P:([0-9.]+) D:([0-9.]+) ([0-9.]+)%",text)
+    print(m.group(0))
+    frame = m.group(1)
+    dts = m.group(3)
+    progress = int(round(float(m.group(4)))) 
+    print("F:%s dts: %s  per: %d"%(frame,dts,progress))
+
+def testCMDffmpegRegex():
+    text = "frame= 1637 fps=0.0 q=-1.0 Lsize=   28826kB time=00:01:05.70 bitrate=3593.8kbits/s speed= 144x"
+    m = re.search('frame=[ ]*[0-9]+',text)
+    print(m.group(0))
+    m = re.search('time=[ ]*[0-9:.]+',text)
+    print(m.group(0))
+    
+    
 if __name__ == '__main__':
-    testFFmpegVersion()
+    testCMDffmpegRegex()
+    #testregex()
+    #testFFmpegVersion()
     #testPath()
     #testParse()
     #testNonblockingRead()

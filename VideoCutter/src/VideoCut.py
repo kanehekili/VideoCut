@@ -439,10 +439,9 @@ class LayoutWindow(QWidget):
         #self.ui_GotoField.editingFinished.connect(self.__gotoFrame)
         self.ui_GotoField.valueChanged.connect(self.__gotoFrame)
         
-        #self.ui_CB_Reencode.stateChanged.connect(aVideoController.setExactCut)
-        
         self.statusMessenger = StatusDispatcher()
         self.statusMessenger.signal.connect(self.showStatusMessage)
+        self.statusMessenger.progressSignal.connect(self.updateProgressBar)
        
         self._hookListActions()
     
@@ -481,20 +480,20 @@ class LayoutWindow(QWidget):
 
     def __createProgressBar(self):
         self.progressBar = QtWidgets.QProgressBar(self)
-        #self.progressBar.setRange(0,1)
-        #self.progressBar.setValue(-1)
-        #self.progressBar.reset()
         self.progressBar.setMinimum(0)
-        self.progressBar.setMaximumWidth(150)
+        self.progressBar.setMaximumWidth(200)
         self.progressBar.setVisible(False)
         return self.progressBar
     
     def showBusy(self):
-        self.progressBar.setRange(0,0)
+        self.progressBar.setRange(0,100)
         self.progressBar.setVisible(True)
     
     def stopProgress(self):
         self.progressBar.setVisible(False)            
+
+    def updateProgressBar(self,percent):
+        self.progressBar.setValue(percent)
 
     def __createListWidget(self):
         iconList=QtWidgets.QListWidget()
@@ -552,10 +551,7 @@ class MainFrame(QtWidgets.QMainWindow):
         self._videoController = VideoControl(self)
         self._widgets = self.initUI()
         self._widgets.hookEvents(self._videoController)
-<<<<<<< HEAD
         self.settings.update()
-=======
->>>>>>> branch 'master' of https://github.com/kanehekili/VideoCut.git
         
         self.centerWindow()
         self.show() 
@@ -720,7 +716,7 @@ class MainFrame(QtWidgets.QMainWindow):
     def loadFile(self):
         initalPath = self._videoController.getTargetFile()
         result = QtWidgets.QFileDialog.getOpenFileName(parent=self, directory=initalPath, caption="Load Video");
-        if result:
+        if result[0]:
             fn = self.__encodeQString(result)
             self._widgets.clearMarkerList()
             self._videoController.clearVideoCutEntries()
@@ -731,7 +727,7 @@ class MainFrame(QtWidgets.QMainWindow):
         #qText = initalPath.decode('utf-8')
         qText = initalPath
         result = QtWidgets.QFileDialog.getSaveFileName(parent=self, directory=qText, caption="Save Video");
-        if result:
+        if result[0]:
             fn = self.__encodeQString(result)
             self._widgets.showBusy()
             self._videoController.saveVideo(fn)
@@ -1092,13 +1088,9 @@ class VideoControl(QtCore.QObject):
         self.currentPath = OSTools().getHomeDirectory()#//TODO get a Video dir
         self.streamData = None
         self._vPlayer = None
-<<<<<<< HEAD
-        
         mainFrame.signalActive.connect(self.displayWarningMessage)
         self.lastError=None
-=======
-        self.exactcut = False
->>>>>>> branch 'master' of https://github.com/kanehekili/VideoCut.git
+
         mainFrame.signalActive.connect(self.displayWarningMessage)
         self.lastError=None
 
@@ -1269,11 +1261,16 @@ class VideoControl(QtCore.QObject):
             worker = LongRunningOperation(self.__directCut,srcPath, targetPath, spanns,settings)
         else:
             worker = LongRunningOperation(self.__makeCuts,srcPath, targetPath, spanns,settings)
-        worker.signal.connect(self.gui.stopProgress)
+        worker.signal.connect(self._cleanupWorker)
         #start the worker thread. 
         worker.startOperation()  
 
-
+    def _cleanupWorker(self,worker):
+        #QThread: Destroyed while thread is still running
+        self.gui.stopProgress()
+        worker.quit()
+        worker.wait();
+        
     def __makeCuts(self,srcPath,targetPath,spanns,settings):
         config = CuttingConfig(srcPath,targetPath)
         config.streamData = self.streamData
@@ -1468,7 +1465,7 @@ class Worker(QtCore.QThread):
         
 ''' Long running operations for actions that do not draw or paint '''        
 class LongRunningOperation(QtCore.QThread):
-    signal = pyqtSignal() 
+    signal = pyqtSignal(object) 
     def __init__(self, func, *args):
         QtCore.QThread.__init__(self)
         self.function = func
@@ -1480,9 +1477,8 @@ class LongRunningOperation(QtCore.QThread):
         except:
             Log.logException("***Error in LongRunningOperation***")
         finally:
-            self.signal.emit()
+            self.signal.emit(self)
 
-        
     def startOperation(self):
         self.start() #invokes run - process pending QT events
         sleep(0.5)
@@ -1490,10 +1486,16 @@ class LongRunningOperation(QtCore.QThread):
 
 class StatusDispatcher(QtCore.QObject):
     signal=pyqtSignal(str)
+    progressSignal = pyqtSignal(int)
     def __init__(self):
         QtCore.QObject.__init__(self)
+    
     def say(self,aString):
         self.signal.emit(aString)
+    
+    def progress(self,percent):
+        self.progressSignal.emit(percent)
+    
 
 WIN=None
 

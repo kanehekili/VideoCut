@@ -72,6 +72,7 @@ typedef struct {
     int64_t frame_number;
     int64_t gap; //sync cutting gaps
 	int64_t streamOffset; //the offset between audio and video stream.
+    double_t videoLen; //Approx duration in seconds
  
 } SourceContext;
 
@@ -433,8 +434,13 @@ static int write_packet(struct StreamInfo *info,AVPacket *pkt,CutData head,CutDa
         double_t dtsCalcTime = av_q2d(out_stream->time_base)*pkt->dts;
         double_t ptsCalcTime = av_q2d(out_stream->time_base)*pkt->pts;
         
-        printf("%ld,%c:",context.frame_number,frm);
-        printf("P:%ld (%ld) D:%ld (%ld) Pt:%.3f Dt:%.3f idx: (%d) dur %ld (%ld) size: %d flags: %d curr:%ld\n",pkt->pts,p1,pkt->dts,d1,ptsCalcTime,dtsCalcTime,pkt->stream_index ,pkt->duration,dur,pkt->size,pkt->flags,info->currentDTS);
+        //thats debug stuff. We would need: Frame,dt time in secs & percent (and only i frame->video)
+        if (isVideo){
+            double_t progress = (dtsCalcTime/context.videoLen)*100;
+            av_log(NULL, AV_LOG_INFO,"%ld P:%.2f D:%.2f %.2f%%\n",context.frame_number,ptsCalcTime,dtsCalcTime,progress);
+        }
+        av_log(NULL, AV_LOG_DEBUG,"%ld,%c:",context.frame_number,frm);
+        av_log(NULL, AV_LOG_DEBUG,"P:%ld (%ld) D:%ld (%ld) Pt:%.3f Dt:%.3f idx: (%d) dur %ld (%ld) size: %d flags: %d curr:%ld\n",pkt->pts,p1,pkt->dts,d1,ptsCalcTime,dtsCalcTime,pkt->stream_index ,pkt->duration,dur,pkt->size,pkt->flags,info->currentDTS);
 
         int ret = av_interleaved_write_frame(context.ofmt_ctx, pkt);
         //int ret = av_write_frame(context.ofmt_ctx, pkt);
@@ -588,6 +594,19 @@ static int seekAndMux(double_t timeslots[],int seekCount){
     return 1;    
 }
 
+int calculateVideoLen(double_t timeslots[],int seekCount){
+    double_t duration = 0.0;
+    int i;
+    for (i = 0; i < (seekCount); ++i){
+        double_t startSecs = timeslots[i];
+        double_t endSecs = timeslots[++i];
+        if (endSecs > startSecs)
+            duration += (endSecs - startSecs);
+        
+    }
+    printf("Video length is about %3.2f seconds\n",duration);
+    return duration;
+}
 
 /******************** Main helper *************************/
 int parseArgs(int argc, char *argv[],double_t array[]) {
@@ -641,6 +660,7 @@ static int shutDown(int ret){
         fprintf(stderr, "Error occurred: %s\n", av_err2str(ret));
         return 1;
     }
+    av_log(NULL, AV_LOG_INFO,"*Done*\n");
     return 0;
 }
 
@@ -682,6 +702,7 @@ int main(int argc, char **argv)
             _initDecoder(videoStream);
         }
         /** ENTER MUX **/
+        context.videoLen = calculateVideoLen(timeslots,seekCount);
         ret=seekAndMux(timeslots,seekCount);
     }
     if (ret)

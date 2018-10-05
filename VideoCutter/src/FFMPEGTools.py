@@ -8,6 +8,7 @@ import os
 import subprocess
 from subprocess import Popen
 from datetime import timedelta
+import time
 import re
 import fcntl
 from time import sleep
@@ -136,6 +137,9 @@ def executeAsync(cmd):
     return_code = popen.wait()
     if return_code:
         raise subprocess.CalledProcessError(return_code, cmd)
+
+def executeCmd(cmd):
+    return subprocess.Popen(cmd, stdout=subprocess.PIPE,stderr=subprocess.STDOUT).communicate()    
     
 '''
 Probes packets.
@@ -787,7 +791,7 @@ class FFMPEGCutter():
 
     def cutPart(self,startTimedelta,endTimedelta,index=0,nbrOfFragments=1):
         self._fragmentCount = nbrOfFragments
-        
+        self.tick=False;
         prefetchTime = startTimedelta #comp
 
         prefetchString = timedeltaToFFMPEGString(prefetchTime)
@@ -815,17 +819,10 @@ class FFMPEGCutter():
         cmdExt.extend(["-avoid_negative_ts","1","-shortest",fragment])
         cmd.extend(cmdExt)
         log("cut:",cmd)
-#        pFFmpeg = subprocess.Popen(cmd , stdout=subprocess.PIPE,stderr=subprocess.STDOUT)
-#         while pFFmpeg.poll() is None:
-#             #?sleep(0.2)   
-#             if not self.non_block_read("Cut part "+str(index)+":",pFFmpeg.stdout):
-#                 self.say("Cutting part %s failed"%(str(index)))
-#                 return False
         prefix =  "Cut part "+str(index)+":"  
         try:
             for path in executeAsync(cmd):
                 self.parseAndDispatch(prefix,path)
-                #print(path,end="")
         except Exception as error:
             self.say("Cutting part %s failed: %s "%(str(index),error))
             return False
@@ -933,40 +930,22 @@ class FFMPEGCutter():
         if self._config.messenger is not None:
             self._config.messenger.say(text) 
             
-    #reading non blocking
-#     def non_block_read(self,prefix,output):
-#         fd = output.fileno()
-#         flags = fcntl.fcntl(fd, fcntl.F_GETFL)
-#         fcntl.fcntl(fd, fcntl.F_SETFL, flags | os.O_NONBLOCK)
-#         text = "."
-#         try:
-#             text = output.read()
-#             m = re.search('frame=[ ]*[0-9]+',text)
-#             p1 = m.group(0)
-#             m = re.search('time=[ ]*[0-9:.]+',text)
-#             p2 = m.group(0)
-#             self.say(prefix+" "+p1+" - "+p2)
-#             log(prefix,'frame %s time %s'%(p1,p2))
-#         except:
-#             if len(text)>5:
-#                 print ("<"+text)   
-#         if "failed" in text:
-#             #TODO needs to be logged
-#             print ("?????"+text)
-#             self.say(prefix+" !Conversion failed!")
-#             return False
-#         else:
-#             return True 
-        
     def parseAndDispatch(self,prefix,text): 
-        try:        
+        try:  
             m = re.search('frame=[ ]*[0-9]+',text)
             p1 = m.group(0)
             m = re.search('time=[ ]*[0-9:.]+',text)
             p2 = m.group(0)
             self.say(prefix+" "+p1+" - "+p2)
-            log(prefix,'frame %s time %s'%(p1,p2))
+            if self.tick:
+                self._config.messenger.progress(100)
+                print("#7")
+            else:
+                self._config.messenger.progress(0)
+                print("#8")
+            self.tick= not self.tick
         except:
+            print("fail RE")
             if len(text)>5:
                 print ("<"+text)   
         if "failed" in text:
@@ -1028,7 +1007,7 @@ class VCCutter():
            return
         val=str(fv.version)[:1]
         p= OSTools().getWorkingDirectory();
-        tail="ffmpeg/bin/v"+val+"/remux5"
+        tail="ffmpeg/bin/V"+val+"/remux5"
         self.bin = os.path.join(p,tail)
 
     #cutlist = [ [t1,t2] [t3,t4]...]
@@ -1052,11 +1031,17 @@ class VCCutter():
         print(cmd)
         log("cut file:",cmd)
         try:
+            start = time.monotonic_ns()
             for path in executeAsync(cmd):
-                self.parseAndDispatch("Cutting :",path)
+                now= time.monotonic_ns()
+                elapsed = (now-start)/1000
+                if elapsed > 1000:
+                    self.parseAndDispatch("Cutting :",path)
+                    start=now
 
         except Exception as error:
-            self.say("remux failed: %s"%(error))
+            self.say("Remux failed: %s"%(error))
+            log("Remux failed",error)
             return False
         
         self.say("Cutting done")
@@ -1068,13 +1053,14 @@ class VCCutter():
 
     def parseAndDispatch(self,prefix,text): 
         try:        
-            m = re.search('[0-9]+',text)
-            frame = m.group(0)
-            m = re.search('Dt:[0-9]+.[0-9]',text)
-            p1 = m.group(0)
-            dts = p1[3:]
+            m= re.search("([0-9]+) P:([0-9.]+) D:([0-9.]+) ([0-9.]+)%",text)
+            frame = m.group(1)
+            dts = m.group(3)
+            progress = int(round(float(m.group(4))))
+
             self.say(prefix+" Frame: %s DTS: %s"%(frame,dts))
-            #log(prefix," Frame: %s DTS: %s"%(frame,dts))
+            print(" Frame: %s DTS: %s"%(frame,dts))
+            self.config.messenger.progress(int(progress))
         except:
             if len(text)>5:
                 print ("<"+text)   
