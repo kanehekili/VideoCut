@@ -1,5 +1,5 @@
 # VideoCut
-Version 0.9.4
+Version 1.0.2
 
 MP4 Cutter for Linux on base of OpenCV and ffmpeg. Cutting is lossless, the target file will not be reencoded 
 
@@ -9,7 +9,7 @@ The new version is written in python3 and uses the qt5 widget kit.
 ## Prerequisites
 * python3
 * OpenCV 2.4 or OPENCV 3 (must be build with ffmpeg)
-* ffmpeg > 3.X
+* ffmpeg > 3.X or 4.0.X
 * python3-pyqt5
 
 ### Features
@@ -26,16 +26,20 @@ Latest opencv version in arch linux is compiled with gstreamer - it is necessary
 :boom: Be aware that this tool does not cut exact on frame - except you reencode the whole film.
 
 ### How to install
-* Download the videocut*.tar contained in the "build" folder ![here](https://github.com/kanehekili/VideoCut/raw/master/VideoCutter/build/videocut0.9.2.tar)
+* Download the videocut*.tar contained in the "build" folder ![here](https://github.com/kanehekili/VideoCut/raw/master/VideoCutter/build/videocut1.0.2.tar)
 * Upack it to a location that suits you.
 * Copy the VideoCut.desktop file to ~/.local/share/applications
 * Change the absolute paths & user name to the location where you've copied the files.
+* python qt5, opencv and ffmpeg are required
 
 ### Currently working on:
 * Exact frame cut - by generating intermediate I-Frames until the cut point. 
 * Conversion tools - from one container to another, change audio or video codecs...
-* I'm experimenting with pyav, but it does not seem to be very stable..
-* Replacement of opencv with pyav
+* ffmpeg bindings
+
+### Using remux instead of ffmpeg
+remuxX is based on ffmpeg, but uses an integrated approch to cut and join videos. Currently there is a bug in ffmpeg to concat mp4. Remux handles it correctly. To activate it, use the "coggs" icon and select "Experimental".
+Please note that excat cut is currently not available for remux...(not yet committed)
 
 ### Changes 
 08.07.2016
@@ -52,11 +56,12 @@ Added "Exact cut" feature. Ensures that the cut of the mp4 is exact (Frame exact
 * Added logging, some minor bugfixes/optimizations
 
 09.2018
-The final QT4 version has been committed. 
+* The final QT4 version has been committed. 
 
 16.09.2018
-Redesign of the frontend: Using python 3 and qt5.
-Introduction of a native C ffmpeg layer, which can convert the videos much faster than the default interface. (Beta!)
+* Redesign of the frontend: Using python 3 and qt5.
+*Introduction of a native C ffmpeg layer, which can convert the videos much faster than the default interface. (Beta!)
+
 
 In case of problems open an issue. 
 Have fun. 
