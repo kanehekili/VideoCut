@@ -3,7 +3,7 @@
 Encoding=UTF-8
 Version=1.0
 Type=Application
-Exec=python2 /home/<user>/bin/videocut/VideoCut.py 
+Exec=python3 /home/<user>/bin/videocut/VideoCut.py 
 Name=Video Cut
 Comment=MPG4 cutter
 Icon=/home/<user>/bin/videocut/icons/movie-icon.png
