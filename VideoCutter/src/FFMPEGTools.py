@@ -1031,12 +1031,13 @@ class VCCutter():
         print(cmd)
         log("cut file:",cmd)
         try:
-            start = time.monotonic_ns()
+            start = time.monotonic()
             for path in executeAsync(cmd):
-                now= time.monotonic_ns()
-                elapsed = (now-start)/1000
-                if elapsed > 1000:
-                    self.parseAndDispatch("Cutting :",path)
+                now= time.monotonic()
+                elapsed = int(now-start)
+                showProgress=elapsed>=1
+                ok= self.parseAndDispatch("Cutting :",path,showProgress)
+                if ok:
                     start=now
 
         except Exception as error:
@@ -1051,22 +1052,20 @@ class VCCutter():
         if self.config.messenger is not None:
             self.config.messenger.say(text) 
 
-    def parseAndDispatch(self,prefix,text): 
+    def parseAndDispatch(self,prefix,text,showProgress): 
         try:        
             m= re.search("([0-9]+) P:([0-9.]+) D:([0-9.]+) ([0-9.]+)%",text)
             frame = m.group(1)
             dts = m.group(3)
             progress = int(round(float(m.group(4))))
-
-            self.say(prefix+" Frame: %s DTS: %s"%(frame,dts))
-            print(" Frame: %s DTS: %s"%(frame,dts))
-            self.config.messenger.progress(int(progress))
+            if showProgress:
+                self.say(prefix+" Frame: %s DTS: %s"%(frame,dts))
+                self.config.messenger.progress(int(progress))
+            else:
+                return False
         except:
             if len(text)>5:
                 print ("<"+text)   
-        if "failed" in text:
-            print ("?????:",text)
-            self.say(prefix+" !Conversion failed!")
             return False
         else:
             return True 

@@ -50,9 +50,6 @@ def timedeltaToString(deltaTime):
     minutes, seconds = divmod(remainder, 60)
     return '%s:%s:%s' % (hours, minutes, seconds)
 
-
-
-
 '''
 Compat layer for cv2 and 3
 '''
@@ -309,22 +306,25 @@ class LayoutWindow(QWidget):
         self.ui_Dial.setToolTip("Fine tuning")
         self.setDialResolution(self.DIAL_RESOLUTION)
 
-        #TODO: subclass spinbox. do not trigger if editing until enter or one of the buttons is pressed.  
-        #self.ui_GotoField = QSpinBox(self)
         self.ui_GotoField = VCSpinbox(self)
         self.ui_GotoField.setValue(1)
         self.ui_GotoField.setToolTip("Goto Frame")
         
-        
         self.ui_InfoLabel = QtWidgets.QLabel(self)
-        #self.ui_InfoLabel.setMargin(4)
-        #changeBackgroundColor(self.ui_InfoLabel , "lightblue")
         self.ui_InfoLabel.setStyleSheet("QLabel { border: 1px solid darkgray; border-radius: 3px; background: lightblue} ");
         self.ui_InfoLabel.setText("")
         self.ui_InfoLabel.setToolTip("Infos about the video position")
         
-        self.ui_StatusLabel= QtWidgets.QLabel(self)
-        self.ui_StatusLabel.setStyleSheet("QLabel { border: 1px solid darkgray; border-radius: 3px; background: lightgreen} ");
+        self.ui_CutModeLabel= QtWidgets.QLabel(self)
+        self.ui_CutModeLabel.setStyleSheet("QLabel { border: 1px solid darkgray; border-radius: 3px; background: lightgreen} ");
+        self.ui_CutModeLabel.setAlignment(QtCore.Qt.AlignCenter)
+        
+        self.ui_BackendLabel= QtWidgets.QLabel(self)
+        self.ui_BackendLabel.setStyleSheet("QLabel { border: 1px solid darkgray; border-radius: 3px; background: lightgreen} ");
+        self.ui_BackendLabel.setAlignment(QtCore.Qt.AlignCenter)
+        self.statusBox = QtWidgets.QHBoxLayout()
+        self.statusBox.addWidget(self.ui_CutModeLabel)
+        self.statusBox.addWidget(self.ui_BackendLabel)
         
         self.ui_List = self.__createListWidget()
         
@@ -346,12 +346,10 @@ class LayoutWindow(QWidget):
         self.ui_List.setMaximumWidth(SIZE_ICON*2.6)
         gridLayout.addWidget(self.ui_List,0,0,5,1)
         #from row,from col, rowSpan, columnSpan
-       
         gridLayout.addWidget(self.ui_VideoFrame,0,1,4,-1);
         gridLayout.addWidget(self.ui_GotoField,4,1,1,2)
         gridLayout.addWidget(self.ui_InfoLabel,4,3,1,7)
-        #gridLayout.addWidget(self.ui_CB_Reencode,4,11,1,-1)??exact cut,target,experimaenta
-        gridLayout.addWidget(self.ui_StatusLabel,4,10,1,-1)
+        gridLayout.addLayout(self.statusBox,4,10,1,-1)
         gridLayout.addWidget(self.ui_Slider,5,0,1,11)
         gridLayout.addWidget(self.ui_Dial,5,11,1,-1)
         gridLayout.addWidget(self.statusbar,6,0,1,12)
@@ -435,8 +433,7 @@ class LayoutWindow(QWidget):
         
         self.ui_Dial.valueChanged.connect(aVideoController.dialChanged)
         self.ui_Dial.sliderReleased.connect(self.__resetDial)
-        
-        #self.ui_GotoField.editingFinished.connect(self.__gotoFrame)
+
         self.ui_GotoField.valueChanged.connect(self.__gotoFrame)
         
         self.statusMessenger = StatusDispatcher()
@@ -607,7 +604,6 @@ class MainFrame(QtWidgets.QMainWindow):
         self.mediaSettings.setShortcut('Ctrl+T')
         self.mediaSettings.triggered.connect(self.openMediaSettings)
 
-        
         '''
         toolbar defs
         '''
@@ -642,7 +638,19 @@ class MainFrame(QtWidgets.QMainWindow):
         '''
         widgets = LayoutWindow()
         self.setCentralWidget(widgets);
-        self.setWindowTitle("VideoCut") 
+        self.setWindowTitle("VideoCut")
+        
+        #connect the labels to their dialogs
+
+        #if not "self" - stops if out of scope!
+        self.cutfilter = SignalOnEvent(widgets.ui_CutModeLabel)
+        self.cutfilter.clicked.connect(self.openMediaSettings)
+        
+        self.backendfilter = SignalOnEvent(widgets.ui_BackendLabel)
+        self.backendfilter.clicked.connect(self.openMediaSettings)
+
+
+         
         return widgets
     '''
     overwriting event seems to be the only way to find out WHEN there is the first
@@ -660,13 +668,16 @@ class MainFrame(QtWidgets.QMainWindow):
     def isActivated(self):
         return self.__initalMode == self.MODE_ACTIVE
     
+    def eventFilter(self, object,event):
+        print("Evt filter:"+str(event.type()))
+        return super(MainFrame,self).eventFilter(object,event)
+    
     def centerWindow(self):
         frameGm = self.frameGeometry()
         screen = QApplication.desktop().screenNumber(QApplication.desktop().cursor().pos())
         centerPoint = QApplication.desktop().screenGeometry(screen).center()
         frameGm.moveCenter(centerPoint)
-        self.move(frameGm.topLeft())        
-
+        self.move(frameGm.topLeft())
     
     def updateWindowTitle(self,text):
         #qText = QtCore.QString(text.decode('utf-8'))
@@ -842,7 +853,9 @@ class SettingsModel():
             mode="REMUX"
         if self.reencoding:
             cutmode="Exact"
-        self.mainFrame._widgets.ui_StatusLabel.setText(cutmode+" / "+mode)
+        #self.mainFrame._widgets.ui_CutModeLabel.setText(cutmode+" / "+mode)
+        self.mainFrame._widgets.ui_CutModeLabel.setText(cutmode)
+        self.mainFrame._widgets.ui_BackendLabel.setText(mode)
 
 class SettingsDialog(QtWidgets.QDialog):
 
@@ -1078,8 +1091,7 @@ class VideoPlayerCV():
 '''        
 class VideoControl(QtCore.QObject):
     def __init__(self,mainFrame):
-        #super(VideoControl, self).__init__()
-        QtCore.QObject.__init__(self)
+        super(VideoControl, self).__init__()
         self.player = None
         self.gui = mainFrame
         self._frameSet=False
@@ -1186,7 +1198,7 @@ class VideoControl(QtCore.QObject):
 
     def restoreVideoCuts(self):
         self.sliderThread.wait() #sync with the worker
-        
+        QApplication.setOverrideCursor(QtCore.Qt.WaitCursor)
         try:
             cutList=XMLAccessor(self.currentPath).readXML()
         except Exception as error:
@@ -1200,8 +1212,8 @@ class VideoControl(QtCore.QObject):
                 mode = VideoCutEntry.MODE_START
             self._createVideoCutEntry(mode,False)
 
-
-        self.player.setFrameAt(0)          
+        self.player.setFrameAt(0)
+        QApplication.restoreOverrideCursor()          
     
     #remove/clear all cuts but leave the file untouched
     def clearVideoCutEntries(self):
@@ -1396,7 +1408,7 @@ class VideoControl(QtCore.QObject):
         s= int(timeinfo/1000)
         ms= int(timeinfo%1000)
         ts= '{:02}:{:02}:{:02}.{:03}'.format(s // 3600, s % 3600 // 60, s % 60, ms)
-        out = "<b>Frame:</b> %08d of %s Time: %s " %(frameNumber,self.player.framecount ,ts,)
+        out = "<b>Frame:</b> %08d of %d <b>Time:</b> %s " %(frameNumber,int(self.player.framecount) ,ts,)
         #TODO: Pass 3 values for 3 widgets....
         self.gui.showInfo(out)
         self.gui.syncSpinButton(frameNumber)
@@ -1462,7 +1474,28 @@ class Worker(QtCore.QThread):
     def showFrame(self,frameNumber):
         self.fbnr=frameNumber
         self.start()
-        
+    
+class SignalOnEvent(QtCore.QObject):
+    clicked = pyqtSignal()
+    
+    def __init__(self, widget):
+        QtCore.QObject.__init__(self)
+        self.widget = widget
+        widget.installEventFilter(self)
+
+    def eventFilter(self, object,event):
+        if object == self.widget:
+            if event.type() == QtCore.QEvent.MouseButtonRelease and object.rect().contains(event.pos()):
+                    self.clicked.emit()
+                    return True
+            return False
+        else:
+            return super(SignalOnEvent,self).eventFilter(object,event)
+             
+   
+    def doit(self):
+        self.widget.installEventFilter(self)
+    
 ''' Long running operations for actions that do not draw or paint '''        
 class LongRunningOperation(QtCore.QThread):
     signal = pyqtSignal(object) 
