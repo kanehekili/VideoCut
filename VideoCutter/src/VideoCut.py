@@ -3,6 +3,7 @@
 #
 
 import sys, traceback, math
+import configparser
 from PyQt5.QtCore import pyqtSignal
 from PyQt5 import QtCore, QtGui, QtWidgets
 from PyQt5.QtWidgets import QApplication,QWidget
@@ -27,13 +28,15 @@ except ImportError:
 from datetime import timedelta
 
 from FFMPEGTools import FFMPEGCutter, FFStreamProbe, CuttingConfig,OSTools,Logger,VCCutter
+import FFMPEGTools 
 import os
-from time import sleep
+from time import sleep,time
 import xml.etree.cElementTree as CT
 
 # sizes ..
 SIZE_ICON=80
 ITEM_ROW_COUNT=3
+
 
 def changeBackgroundColor(widget, colorString):
     widget.setAttribute(QtCore.Qt.WA_StyledBackground, True)
@@ -480,6 +483,7 @@ class LayoutWindow(QWidget):
         self.progressBar.setMinimum(0)
         self.progressBar.setMaximumWidth(200)
         self.progressBar.setVisible(False)
+        self.progressBar.setValue(0);
         return self.progressBar
     
     def showBusy(self):
@@ -487,7 +491,8 @@ class LayoutWindow(QWidget):
         self.progressBar.setVisible(True)
     
     def stopProgress(self):
-        self.progressBar.setVisible(False)            
+        self.progressBar.setVisible(False) 
+        self.progressBar.setValue(0);           
 
     def updateProgressBar(self,percent):
         self.progressBar.setValue(percent)
@@ -840,10 +845,19 @@ class MainFrame(QtWidgets.QMainWindow):
 class SettingsModel():
     def __init__(self,mainframe):
         #keep flags- save them later
-        self.experimental=False
-        self.selectedContainer="mp4" 
-        self.containerList=["mp4","mpg","mkv","flv","m2t"] 
-        self.reencoding=False
+        self.experimental= vc_config.get("useRemux")=='True'
+#         self.selectedContainer = vc_config.get("container")
+#         self.containerList = vc_config.get("containerList").split(',')
+        self.reencoding = vc_config.get("recode")=='True'
+#        vc_config.set("useRemux", "False")
+#         vc_config.set("container","mp4")
+#         vc_config.set("containerList","mp4,mpg,mkv,flv,m2t")
+#         vc_config.set("recode","False")
+#         vc_config.store()
+#         self.experimental=False
+#         self.selectedContainer="mp4" 
+#         self.containerList=["mp4","mpg","mkv","flv","m2t"] 
+#         self.reencoding=False
         self.mainFrame=mainframe
     
     def update(self):
@@ -853,9 +867,21 @@ class SettingsModel():
             mode="REMUX"
         if self.reencoding:
             cutmode="Exact"
-        #self.mainFrame._widgets.ui_CutModeLabel.setText(cutmode+" / "+mode)
         self.mainFrame._widgets.ui_CutModeLabel.setText(cutmode)
         self.mainFrame._widgets.ui_BackendLabel.setText(mode)
+        
+        if self.experimental:
+            vc_config.set("useRemux", "True")
+        else:
+            vc_config.set("useRemux", "False")
+#         vc_config.set("container",self.selectedContainer)
+#         vc_config.set("containerList",','.join(self.containerList))
+        if self.reencoding:
+            vc_config.set("recode","True")
+        else:
+            vc_config.set("recode","False")
+        vc_config.store()
+        print("Store!")
 
 class SettingsDialog(QtWidgets.QDialog):
 
@@ -889,14 +915,14 @@ class SettingsDialog(QtWidgets.QDialog):
         #connect
         self.check_reencode.stateChanged.connect(self.on_reencodeChanged)
         
-        self.combo = QtWidgets.QComboBox()
-        for item in self.model.containerList:
-            self.combo.addItem(item, None)
-        
-        self.combo.setEnabled(self.model.reencoding)
-        
-        self.combo.setCurrentText(self.model.selectedContainer)
-        self.combo.currentTextChanged.connect(self.on_combobox_selected)
+#         self.combo = QtWidgets.QComboBox()
+#         for item in self.model.containerList:
+#             self.combo.addItem(item, None)
+#         
+#         self.combo.setEnabled(self.model.reencoding)
+#         
+#         self.combo.setCurrentText(self.model.selectedContainer)
+#         self.combo.currentTextChanged.connect(self.on_combobox_selected)
         #we want audio as well?
         self.exRemux = QtWidgets.QCheckBox("Experimental")
         self.exRemux.setToolTip("Uses the remux code instead of default ffmpeg commandline")
@@ -904,7 +930,7 @@ class SettingsDialog(QtWidgets.QDialog):
         self.exRemux.stateChanged.connect(self.on_experimentalChanged)
         
         encodeBox.addWidget(self.check_reencode)
-        encodeBox.addWidget(self.combo)
+#         encodeBox.addWidget(self.combo)
         
         expoBox = QtWidgets.QVBoxLayout(frame2)
         expoBox.addWidget(self.exRemux)
@@ -915,13 +941,13 @@ class SettingsDialog(QtWidgets.QDialog):
         #make it wider...
         self.setMinimumSize(400, 0)
         
-    def on_combobox_selected(self,value):
-        self.model.selectedContainer=value
-        self.model.update()
+#     def on_combobox_selected(self,value):
+#         self.model.selectedContainer=value
+#         self.model.update()
     
     def on_reencodeChanged(self,reencode):
         self.model.reencoding= QtCore.Qt.Checked==reencode
-        self.combo.setEnabled(self.model.reencoding)
+        #self.combo.setEnabled(self.model.reencoding)
         self.model.update()
         
     def on_experimentalChanged(self,isExperimental):
@@ -1245,10 +1271,8 @@ class VideoControl(QtCore.QObject):
                 else:
                     block=[]
                     block.append(cutEntry)
-                    print ("Start ok:", cutEntry.getTimeString())
             else:
                 if block:
-                    Log.logInfo( "Stop:"+ cutEntry.getTimeString())
                     block.append(cutEntry)
                     spanns.append(block)
                     block=None
@@ -1264,11 +1288,21 @@ class VideoControl(QtCore.QObject):
     
     #-- Menu handling end ---
 
+    def calculateNewVideoTime(self,spanns):
+        delta =0;
+        for index, cutmark in enumerate(spanns):
+            t1=cutmark[0].timePos
+            t2 = cutmark[1].timePos
+            delta = delta +(t2-t1).seconds
+        return timedelta(seconds=delta)
+        
+            
+
     def cutAsync(self,srcPath,targetPath,spanns):
+        self.cutTimeStart = time();
         settings = self.gui.settings
-        targetContainer = settings.selectedContainer
+        #targetContainer = settings.selectedContainer
         isExperimental =settings.experimental
-        isReeincoding = settings.reencoding
         if isExperimental:
             worker = LongRunningOperation(self.__directCut,srcPath, targetPath, spanns,settings)
         else:
@@ -1282,17 +1316,18 @@ class VideoControl(QtCore.QObject):
         self.gui.stopProgress()
         worker.quit()
         worker.wait();
+        dx = time()- self.cutTimeStart
+        delta = FFMPEGTools.timedeltaToFFMPEGString(timedelta(seconds=dx))
+        self.gui._widgets.statusMessenger.say("Cutting time: %s"%delta)
         
     def __makeCuts(self,srcPath,targetPath,spanns,settings):
         config = CuttingConfig(srcPath,targetPath)
         config.streamData = self.streamData
-        #TODO: 
-        #config.targetContainer = settings.selectedContainer
         config.reencode = settings.reencoding
         
         config.messenger = self.gui._widgets.statusMessenger
-        cutter = FFMPEGCutter(config)
-        
+        dTime = self.calculateNewVideoTime(spanns)
+        cutter = FFMPEGCutter(config,dTime)
         cutter.ensureAvailableSpace()
         slices = len(spanns)
         for index, cutmark in enumerate(spanns):
@@ -1313,9 +1348,6 @@ class VideoControl(QtCore.QObject):
         config = CuttingConfig(srcPath,targetPath)
         config.streamData = self.streamData
         config.messenger = self.gui._widgets.statusMessenger
-        
-        #TODO
-        #config.targetContainer = settings.selectedContainer
         config.reencode = settings.reencoding
         
         cutter = VCCutter(config)
@@ -1528,7 +1560,38 @@ class StatusDispatcher(QtCore.QObject):
     
     def progress(self,percent):
         self.progressSignal.emit(percent)
+
+class ConfigAccessor():
+    __SECTION="videocut"
+
+    def __init__(self,filePath):
+        self._path=filePath
+        self.parser = configparser.ConfigParser()
+        self.parser.add_section(self.__SECTION)
+        
+    def read(self):
+        self.parser.read(self._path)
+        
+    def set(self,key,value):
+        self.parser.set(self.__SECTION,key,value)
     
+    def get(self,key):
+        if self.parser.has_option(self.__SECTION, key):
+            return self.parser.get(self.__SECTION,key)
+        return None
+
+    def getInt(self,key):
+        if self.parser.has_option(self.__SECTION, key):
+            return self.parser.getint(self.__SECTION,key)
+        return None
+        
+    def store(self):
+        try:
+            with open(self._path, 'w') as aFile:
+                self.parser.write(aFile)
+        except IOError:
+            return False
+        return True     
 
 WIN=None
 
@@ -1544,9 +1607,14 @@ def main():
     try:
         global WIN
         global Log
+        global vc_config
         Log = Logger()
         Log.logInfo('*** START ***')
         OSTools().setCurrentWorkingDirectory()
+        
+        vc_config = ConfigAccessor("data/vc.ini")
+        vc_config.read();
+        
         argv = sys.argv
         app = QApplication(argv)
         app.setWindowIcon(getAppIcon())

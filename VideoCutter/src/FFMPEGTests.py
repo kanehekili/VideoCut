@@ -151,20 +151,43 @@ def testFFmpegVersion():
     print(">>"+val)
 
 def testregex():
-    text = "46648 P:1866.05 D:1866.05 25.70%"
-    m= re.search("([0-9]+) P:([0-9.]+) D:([0-9.]+) ([0-9.]+)%",text)
+    #text = "46648 P:1866.05 D:1866.05 25.70%"
+    text = "49 D:0.96 [00:00.00] 5.05%"
+    #m= re.search("([0-9]+) D:([0-9.]+)([0-9:0-9.0-9]+) ([0-9.]+)%",text)
+    #m= re.search("([0-9]+) D:([0-9.]+) (.+) ([0-9.]+)%",text)
+    regexp = re.compile("([0-9]+) D:([0-9.]+) \[(.+)\] ([0-9.]+)%")
+    m= regexp.search(text)
     print(m.group(0))
     frame = m.group(1)
     dts = m.group(3)
     progress = int(round(float(m.group(4)))) 
     print("F:%s dts: %s  per: %d"%(frame,dts,progress))
 
+def stringToSeconds(string):
+    items = string.split(":")
+    hrs = items[0].split('=')[1]
+    mins= items[1]
+    sec = items[2].split('.')[0]
+    return int(hrs)*3600+int(mins)*60+int(sec)
+
+
 def testCMDffmpegRegex():
     text = "frame= 1637 fps=0.0 q=-1.0 Lsize=   28826kB time=00:01:05.70 bitrate=3593.8kbits/s speed= 144x"
+    text = "frame= 1508 fps=0.0 q=-1.0 size=   26546kB time=00:01:00.52 bitrate=3593.0kbits/s speed= 121x"
+
     m = re.search('frame=[ ]*[0-9]+',text)
     print(m.group(0))
     m = re.search('time=[ ]*[0-9:.]+',text)
     print(m.group(0))
+    x=stringToSeconds(m.group(0))
+    print(x)
+    items = m.group(0).split(":")
+    hrs = str(items[0].split('=')[1])
+    mins= str(items[1])
+    sec = str(items[2].split('.')[0])
+    total = int(hrs)*3600+int(mins)*60+int(sec)
+    perc = (total/100.0)*100
+    print("secs:%d %3.2f"%(total,perc))
     
     
 if __name__ == '__main__':

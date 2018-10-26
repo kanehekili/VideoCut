@@ -723,11 +723,12 @@ class CuttingConfig():
 class FFMPEGCutter():
     MODE_JOIN =1;
     MODE_CUT = 2;
-    def __init__(self,cutConfig):
+    def __init__(self,cutConfig,videoTime):
         self._config = cutConfig
         self._tempDir ='/tmp'
         self._tmpCutList=self._getTempPath()+"cut.txt"
-        self._fragmentCount=1;   
+        self._fragmentCount=1;  
+        self.videoTime=videoTime 
   
     
     '''
@@ -937,24 +938,26 @@ class FFMPEGCutter():
             m = re.search('time=[ ]*[0-9:.]+',text)
             p2 = m.group(0)
             self.say(prefix+" "+p1+" - "+p2)
-            if self.tick:
-                self._config.messenger.progress(100)
-                print("#7")
-            else:
-                self._config.messenger.progress(0)
-                print("#8")
-            self.tick= not self.tick
+            curr = self.stringToSeconds(p2)
+            all = self.videoTime.seconds
+            perc = (curr/all)*100
+            self._config.messenger.progress(perc)
         except:
-            print("fail RE")
             if len(text)>5:
-                print ("<"+text)   
+                print ("<"+text.rstrip())   
         if "failed" in text:
-            print ("?????:",text)
+            print ("ERR:",text)
             self.say(prefix+" !Conversion failed!")
             return False
         else:
             return True 
     
+    def stringToSeconds(self,string):
+        items = string.split(":")
+        hrs = items[0].split('=')[1]
+        mins= items[1]
+        sec = items[2].split('.')[0]
+        return int(hrs)*3600+int(mins)*60+int(sec)
 
     def ensureAvailableSpace(self):
         if not self._hasEnoughAvailableSpace(self._tempDir):
@@ -999,6 +1002,7 @@ class VCCutter():
     def __init__(self,cutConfig):
         self.config = cutConfig
         self.setupBinary()
+        self.regexp = re.compile("([0-9]+) D:([0-9.]+) (.+) ([0-9.]+)%")
 
     def setupBinary(self):
         fv= FFmpegVersion()
@@ -1028,6 +1032,8 @@ class VCCutter():
                     
         timeString = ''.join(timeString)
         cmd=[self.bin,self.config.srcfilePath,self.config.targetPath,"-s",timeString]
+        if self.config.reencode:
+            cmd=cmd+["-r"]
         print(cmd)
         log("cut file:",cmd)
         try:
@@ -1036,7 +1042,7 @@ class VCCutter():
                 now= time.monotonic()
                 elapsed = int(now-start)
                 showProgress=elapsed>=1
-                ok= self.parseAndDispatch("Cutting :",path,showProgress)
+                ok= self.parseAndDispatch("Cutting ",path,showProgress)
                 if ok:
                     start=now
 
@@ -1054,18 +1060,18 @@ class VCCutter():
 
     def parseAndDispatch(self,prefix,text,showProgress): 
         try:        
-            m= re.search("([0-9]+) P:([0-9.]+) D:([0-9.]+) ([0-9.]+)%",text)
+            m = self.regexp.search(text) 
             frame = m.group(1)
             dts = m.group(3)
             progress = int(round(float(m.group(4))))
             if showProgress:
-                self.say(prefix+" Frame: %s DTS: %s"%(frame,dts))
+                self.say(prefix+" Frame: %s Time: %s"%(frame,dts))
                 self.config.messenger.progress(int(progress))
             else:
                 return False
         except:
             if len(text)>5:
-                print ("<"+text)   
+                print ("<"+text.rstrip())   
             return False
         else:
             return True 
