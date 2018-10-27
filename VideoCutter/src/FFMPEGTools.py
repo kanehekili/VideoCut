@@ -723,12 +723,13 @@ class CuttingConfig():
 class FFMPEGCutter():
     MODE_JOIN =1;
     MODE_CUT = 2;
-    def __init__(self,cutConfig,videoTime):
+    def __init__(self,cutConfig,totalTime):
         self._config = cutConfig
         self._tempDir ='/tmp'
         self._tmpCutList=self._getTempPath()+"cut.txt"
         self._fragmentCount=1;  
-        self.videoTime=videoTime 
+        self.videoTime=totalTime
+        self.secsCut=0;
   
     
     '''
@@ -792,8 +793,8 @@ class FFMPEGCutter():
 
     def cutPart(self,startTimedelta,endTimedelta,index=0,nbrOfFragments=1):
         self._fragmentCount = nbrOfFragments
-        self.tick=False;
         prefetchTime = startTimedelta #comp
+        
 
         prefetchString = timedeltaToFFMPEGString(prefetchTime)
         
@@ -828,7 +829,7 @@ class FFMPEGCutter():
             self.say("Cutting part %s failed: %s "%(str(index),error))
             return False
         
-        self.say("Cutting done")
+        self.secsCut = self.secsCut+deltaSeconds;
         return True
 
     
@@ -888,7 +889,7 @@ class FFMPEGCutter():
         return self._config.targetPath
     
     def join(self):
-        
+        #TODO hows the timing? aka video time??? 
         #add all files into a catlist: file '/tmp/vc_tmp0.m2t' ..etc
         #ffmpeg -f concat -i catlist.txt  -c copy concat.mp4
         #reencoding takes place in the cut - NOT here.
@@ -939,8 +940,7 @@ class FFMPEGCutter():
             p2 = m.group(0)
             self.say(prefix+" "+p1+" - "+p2)
             curr = self.stringToSeconds(p2)
-            all = self.videoTime.seconds
-            perc = (curr/all)*100
+            perc = ((self.secsCut+curr)/self.videoTime.seconds)*100
             self._config.messenger.progress(perc)
         except:
             if len(text)>5:

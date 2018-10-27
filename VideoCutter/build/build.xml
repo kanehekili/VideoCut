@@ -16,7 +16,6 @@
 
 		<property name="source" value="../src"/>
 		<property name="srcIcons" value="${source}/icons"/>
-		<property name="srcData" value="${source}/data"/>
 		<property name="srcffmpeg" value="${source}/ffmpeg"/>
 		
 		<copy todir="${rootDir}">
@@ -29,7 +28,7 @@
 			</fileset>
 		</copy>
 		<copy todir="${data}">
-			<fileset dir="${srcData}">
+			<fileset file="vc.ini">
 			</fileset>
 		</copy>
 		
@@ -49,9 +48,12 @@
 		<delete>
 			<fileset dir="." includes="**/*.tar*"/>
 		</delete>	
-		<tar destfile="videocut${version}.tar">
-			<fileset dir="${stage}"/>
-		</tar>
+		<exec executable="tar" output="/dev/null" os="Linux">
+			<arg value="-cp"/>
+			<arg value="--file=videocut${version}.tar"/>
+			<arg value="--directory=${stage}"/>
+			<arg value="videocut"/>
+		</exec>
 		<delete dir="${stage}"/>
 	</target>
 </project>	

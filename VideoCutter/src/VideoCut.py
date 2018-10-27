@@ -673,10 +673,6 @@ class MainFrame(QtWidgets.QMainWindow):
     def isActivated(self):
         return self.__initalMode == self.MODE_ACTIVE
     
-    def eventFilter(self, object,event):
-        print("Evt filter:"+str(event.type()))
-        return super(MainFrame,self).eventFilter(object,event)
-    
     def centerWindow(self):
         frameGm = self.frameGeometry()
         screen = QApplication.desktop().screenNumber(QApplication.desktop().cursor().pos())
@@ -832,7 +828,7 @@ class MainFrame(QtWidgets.QMainWindow):
         return dlg
 
     def getErrorDialog(self,text,infoText,detailedText):
-        dlg = DialogBox(self)
+        dlg = QtWidgets.QMessageBox(self)
         dlg.setIcon(QtWidgets.QMessageBox.Warning)
         dlg.setWindowModality(QtCore.Qt.WindowModal)
         dlg.setWindowTitle("Error")
@@ -840,7 +836,29 @@ class MainFrame(QtWidgets.QMainWindow):
         dlg.setInformativeText(infoText)
         dlg.setDetailedText(detailedText)
         dlg.setStandardButtons(QtWidgets.QMessageBox.Ok)
+        spacer = QtWidgets.QSpacerItem(300,0, QtWidgets.QSizePolicy.Minimum, QtWidgets.QSizePolicy.Expanding)
+        layout = dlg.layout()
+        layout.addItem(spacer,layout.rowCount(),0,1,layout.columnCount())
         return dlg
+    
+    def getMessageDialog(self,text,infoText):
+        #dlg = DialogBox(self)
+        dlg = QtWidgets.QMessageBox(self)
+        dlg.setIcon(QtWidgets.QMessageBox.Information)
+        dlg.setWindowModality(QtCore.Qt.WindowModal)
+        dlg.setWindowTitle("Notice")
+        dlg.setText(text)
+        dlg.setInformativeText(infoText)
+        dlg.setStandardButtons(QtWidgets.QMessageBox.Ok)
+        # Workaround to resize a qt dialog. WTF!
+        spacer = QtWidgets.QSpacerItem(300,0, QtWidgets.QSizePolicy.Minimum, QtWidgets.QSizePolicy.Expanding)
+        layout = dlg.layout()
+        layout.addItem(spacer,layout.rowCount(),0,1,layout.columnCount())
+        
+        #dlg.setMinimumSize(450, 0)
+        return dlg;
+    
+    
 
 class SettingsModel():
     def __init__(self,mainframe):
@@ -881,7 +899,6 @@ class SettingsModel():
         else:
             vc_config.set("recode","False")
         vc_config.store()
-        print("Store!")
 
 class SettingsDialog(QtWidgets.QDialog):
 
@@ -954,28 +971,6 @@ class SettingsDialog(QtWidgets.QDialog):
         self.model.experimental= QtCore.Qt.Checked==isExperimental
         self.model.update()    
         
-class DialogBox(QtWidgets.QMessageBox): #subclassed for reasonable sizing 
-
-    def __init__(self, *args, **kwargs):            
-        super(DialogBox, self).__init__(*args, **kwargs)
-
-    # We only need to extend resizeEvent, not every event.
-    def resizeEvent(self, event):
-
-        result = super(DialogBox, self).resizeEvent(event)
-
-        details_box = self.findChild(QtWidgets.QTextEdit)
-        if details_box is not None:
-            geo = details_box.sizeHint()
-            w= geo.width()*2
-            h = geo.height()
-            details_box.setFixedSize(QtCore.QSize(w,h))
-        else:
-            print("No details")
-        return result
-    
-    def closeEvent(self, event):
-        event.accept() 
         
 '''
 Class may be replaced if the underlying interface is not opencv (e.g qt or ffmpeg or sth)
@@ -1038,7 +1033,7 @@ class VideoPlayerCV():
  
         self.framecount = self.getCurrentFrameNumber()
         Log.logInfo("No more frames @"+str(self.framecount+1));
-        return self.__getLastFrame(self._capture,self.framecount)
+        return self.__getLastFrame(self._capture,self.framecount,0)
 
     #A test to paint on a frame. Has artefacts..
     def __markFrame(self,frame,nbr):
@@ -1046,13 +1041,13 @@ class VideoPlayerCV():
         (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 2)    
 
 
-    def __getLastFrame(self,cap,frameIndex):
-        if frameIndex<1:
+    def __getLastFrame(self,cap,frameIndex,retries):
+        if frameIndex < 1 or retries > 8:
             return None
         OPENCV.setFramePosition(frameIndex-1)
         ret, frame = cap.read()
         if not ret:
-            return self.__getLastFrame(cap,frameIndex-1)
+            return self.__getLastFrame(cap,frameIndex-1,retries+1)
         return frame    
            
 
@@ -1073,9 +1068,12 @@ class VideoPlayerCV():
         OPENCV.setFramePosition(frameNumber)
     
     def getFrameAt(self,frameNumber):
-        self.setFrameAt(frameNumber-1)
-        return self.getNextFrame()
-
+        try:
+            self.setFrameAt(frameNumber-1)
+            return self.getNextFrame()
+        except: 
+            Log.logException("Error Frame")
+            return None
     '''
     seeks a frame based on AV pos (between 0 and 1) -SLOW!!!!!
     '''
@@ -1123,12 +1121,9 @@ class VideoControl(QtCore.QObject):
         self._frameSet=False
         self._initTimer()
         self.videoCuts=[]
-        self.currentPath = OSTools().getHomeDirectory()#//TODO get a Video dir
+        self.currentPath = OSTools().getHomeDirectory()
         self.streamData = None
         self._vPlayer = None
-        mainFrame.signalActive.connect(self.displayWarningMessage)
-        self.lastError=None
-
         mainFrame.signalActive.connect(self.displayWarningMessage)
         self.lastError=None
 
@@ -1287,7 +1282,7 @@ class VideoControl(QtCore.QObject):
         self.cutAsync(src,path,spanns)
     
     #-- Menu handling end ---
-
+    #-- Exec cutting ---
     def calculateNewVideoTime(self,spanns):
         delta =0;
         for index, cutmark in enumerate(spanns):
@@ -1318,7 +1313,8 @@ class VideoControl(QtCore.QObject):
         worker.wait();
         dx = time()- self.cutTimeStart
         delta = FFMPEGTools.timedeltaToFFMPEGString(timedelta(seconds=dx))
-        self.gui._widgets.statusMessenger.say("Cutting time: %s"%delta)
+        #dialog here!
+        self.gui.getMessageDialog("Operation done","Cutting time: %s"%delta,).show()
         
     def __makeCuts(self,srcPath,targetPath,spanns,settings):
         config = CuttingConfig(srcPath,targetPath)
@@ -1326,8 +1322,7 @@ class VideoControl(QtCore.QObject):
         config.reencode = settings.reencoding
         
         config.messenger = self.gui._widgets.statusMessenger
-        dTime = self.calculateNewVideoTime(spanns)
-        cutter = FFMPEGCutter(config,dTime)
+        cutter = FFMPEGCutter(config,self.calculateNewVideoTime(spanns))
         cutter.ensureAvailableSpace()
         slices = len(spanns)
         for index, cutmark in enumerate(spanns):
@@ -1335,7 +1330,6 @@ class VideoControl(QtCore.QObject):
             t2 = cutmark[1].timePos
             hasSucess = cutter.cutPart(t1, t2, index,slices)
             if not hasSucess:
-                print("VC-Cut error") #TODO need a signal for error
                 Log.logError("***Cutting failed***")
                 return
         cutter.join()    
