@@ -31,6 +31,7 @@ Latest opencv version in arch linux is compiled with gstreamer - it is necessary
 * Copy the VideoCut.desktop file to ~/.local/share/applications
 * Change the absolute paths & user name to the location where you've copied the files.
 * python qt5, opencv and ffmpeg are required
+* :heavy_exclamation_mark: Important! remux5 must be set to executable. (chmod +x remux5) 
 
 ### Currently working on:
 * Exact frame cut - see coment below 
