@@ -525,7 +525,7 @@ static int seekHeadGOP(struct StreamInfo *info, int64_t ts,CutData *borders) {
             }
             gop[maxFrames-1]=pkt.dts;
             keyFrameCount++; 
-            if (timeHit)
+            if (timeHit && keyFrameCount>1)
                 break;
         } 
         
