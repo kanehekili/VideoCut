@@ -1002,13 +1002,9 @@ class VideoPlayerCV():
 
 
         #The problem: cv has a problem if it is BEHIND the last frame...
-        #DO NOT USE;;;;; cap.set(cv2.cv.CV_CAP_PROP_POS_AVI_RATIO,1);
-#         test = cap.set(cv2.cv.CV_CAP_PROP_POS_FRAMES,self.framecount-10)
-#         if self.frameHeight< 10.0 or self.frameWidth < 10.0 or self.framecount < 10.0 or self.fps < 10.0:
-#             return cap;
+        #DO NOT USE>> cap.set(cv2.cv.CV_CAP_PROP_POS_AVI_RATIO,1);
         self.totalTimeMilliSeconds = int(self.framecount/self.fps*1000)
         OPENCV.setFramePosition(0)
-        Log.logInfo("STREAM OK")
         return True
 
     def validate(self):
@@ -1273,10 +1269,6 @@ class VideoControl(QtCore.QObject):
                     block=None
                 else:
                    Log.logInfo( "Stop ignored:"+ cutEntry.getTimeString())
-    
-        for cutmarks in spanns:
-            Log.logInfo('cut: %s -%s'%(cutmarks[0].getTimeString(),cutmarks[1].getTimeString()))
-        
         src = self.player._file
         #need that without extension!
         self.cutAsync(src,path,spanns)
@@ -1603,9 +1595,8 @@ def main():
         global Log
         global vc_config
         Log = Logger()
-        Log.logInfo('*** START ***')
         OSTools().setCurrentWorkingDirectory()
-        
+        Log.logInfo('*** start in %s***'%OSTools().getWorkingDirectory())        
         vc_config = ConfigAccessor("data/vc.ini")
         vc_config.read();
         
@@ -1617,7 +1608,6 @@ def main():
         else:
             WIN = MainFrame(argv[1])  
         app.exec_()
-        Log.logInfo('*** STOP ***')
         Log.logClose()
     except:
         Log.logException("Error in main:")      

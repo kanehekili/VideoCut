@@ -468,33 +468,7 @@ static int seekTailGOP(struct StreamInfo *info, int64_t ts,CutData *borders) {
     return 1;
 
 }
-//find offset correction: Take the first I Frame
 
-static int64_t seekPrimaryOffset(struct StreamInfo *info){
-    AVPacket pkt;
-    int64_t first_dts;
-    
-     av_init_packet(&pkt);
-     if(av_seek_frame(context.ifmt_ctx, info->srcIndex,0, AVSEEK_FLAG_BACKWARD) < 0){
-        av_log(NULL, AV_LOG_ERROR,"av_seek_frame failed.\n");
-        return -1;
-    }
-    
-    while (av_read_frame(context.ifmt_ctx, &pkt)>=0) {
-       if (pkt.stream_index != info->srcIndex){
-            av_packet_unref(&pkt); 
-            continue;
-        }    
-        
-        if (pkt.flags == AV_PKT_FLAG_KEY){
-            first_dts = pkt.dts;
-            break;
-        }
-        av_packet_unref(&pkt); 
-    }
-    av_packet_unref(&pkt); 
-    return first_dts;
-}
 //seeking only the video stream
 //TODO: this is only for HEAD valid. The ts for tail is the LAST one, not the first one!
 static int seekHeadGOP(struct StreamInfo *info, int64_t ts,CutData *borders) {
@@ -706,6 +680,47 @@ static int decode(AVCodecContext *dec_ctx,AVPacket *pkt,AVFrame *frame){
     }
     return ret;
     
+}
+
+//find offset correction: Take the first I Frame
+
+static int64_t seekPrimaryOffset(struct StreamInfo *info){
+    AVPacket pkt;
+    int64_t first_dts;
+    AVFrame *frame;
+    int ret;
+    first_dts = 0;
+    frame = av_frame_alloc();  
+    
+     av_init_packet(&pkt);
+     if(av_seek_frame(context.ifmt_ctx, info->srcIndex,0, AVSEEK_FLAG_BACKWARD) < 0){
+        av_log(NULL, AV_LOG_ERROR,"av_seek_frame failed.\n");
+        return -1;
+    }
+    
+    while (av_read_frame(context.ifmt_ctx, &pkt)>=0) {
+       if (pkt.stream_index != info->srcIndex){
+            av_packet_unref(&pkt); 
+            continue;
+        }
+        if ((ret = decode(info->codec_ctx,&pkt,frame)) == 0) {
+            if (first_dts> 0 && (frame->flags != AV_FRAME_FLAG_CORRUPT && frame->flags != AV_FRAME_FLAG_DISCARD))
+                break;
+            else
+               av_log(NULL, AV_LOG_ERROR,"Frame flag? %d \n",frame->flags);
+        }
+        
+        if (pkt.flags == AV_PKT_FLAG_KEY){
+            first_dts = pkt.dts;
+        }
+        av_packet_unref(&pkt); 
+    }
+    av_packet_unref(&pkt); 
+    
+    avcodec_flush_buffers(info->codec_ctx);
+    av_frame_free(&frame);
+    
+    return first_dts;
 }
 
 static int flushFrames(struct StreamInfo *info, AVFrame *frame){
