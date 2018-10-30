@@ -1031,7 +1031,7 @@ class VCCutter():
                 timeString.append(',')    
                     
         timeString = ''.join(timeString)
-        cmd=[self.bin,self.config.srcfilePath,self.config.targetPath,"-s",timeString]
+        cmd=[self.bin,"-i",self.config.srcfilePath,self.config.targetPath,"-s",timeString]
         if self.config.reencode:
             cmd=cmd+["-r"]
         print(cmd)
@@ -1071,7 +1071,9 @@ class VCCutter():
                 return False
         except:
             if len(text)>5:
-                print ("<"+text.rstrip())   
+                print ("<"+text.rstrip())  
+                if "Err:" in text:
+                    log("Muxing error: ",text) 
             return False
         else:
             return True 
