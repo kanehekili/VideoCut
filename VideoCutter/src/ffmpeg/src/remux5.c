@@ -207,7 +207,7 @@ int _initOutputContext(char *out_filename){
     props = (AVCPBProperties*) av_stream_new_side_data(videoStream->outStream, AV_PKT_DATA_CPB_PROPERTIES, sizeof(*props));
     int64_t bit_rate = context.ifmt_ctx->bit_rate;
 
-    props->buffer_size = 1024 *1024;
+    props->buffer_size = 2024 *1024;
     props->max_bitrate = 15*bit_rate;
     props->min_bitrate = (2*bit_rate)/3;
     props->avg_bitrate = bit_rate;
