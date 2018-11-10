@@ -1,16 +1,25 @@
 # VideoCut
-Version 1.1.0
+Version 1.1.1
 
 MP2/MP4 Cutter for Linux on base of OpenCV and ffmpeg. Cutting is lossless, the target file will not be reencoded 
 
 It can be used for cutting out certain parts of the film. Has been written in conjunction with the MDVB Recorder for removing ads. Handles avi, mp2,mp4 (PS or TS). Other formats not tested but possible.
 
 The new version is written in python3 and uses the qt5 widget kit.  
-## Prerequisites
+### Prerequisites
 * python3
 * OpenCV 2.4 or OPENCV 3 (must be build with ffmpeg)
 * ffmpeg > 3.X or 4.0.X
 * python3-pyqt5
+
+#### Install on Linux Mint (Tara) or Ubuntu 18.04 (bionic)
+```
+sudo apt-get install python3-pyqt5 ffmpeg python3-opencv
+```
+#### Install on Arch or Antergos
+```
+sudo pacman -Syu python5-pyqt5 python-numpy ffmpeg opencv
+```
 
 ### Features
 Cuts an mpg file into parts and joins them afterwards. All commands can be reached via the toolbar.
@@ -19,9 +28,11 @@ Cuts an mpg file into parts and joins them afterwards. All commands can be reach
 
 The cutout parts will be joined without beeing recoded - the quality stays the same
 ### Limitations
-Using ffmpeg as cutting/joining tool. Some older versions of ffmpeg seem to have problems with syncing audio on avchd (mp4 TS) streams. 
-Current git version of ffmpeg will yield the best results.
-Latest opencv version in arch linux is compiled with gstreamer - it is necessary to get a version that has been compiled with ffmpeg
+Using ffmpeg as cutting/joining tool. Some older versions of ffmpeg seem to have problems with syncing audio on avchd (mp4 TS) streams.
+
+Only ffmpeg and libavformat versions >=3.1 are supported. 
+
+OpenCV:  it is necessary to get a version that has been compiled with ffmpeg
 
 :boom: Be aware that this tool does not cut exact on frame - except you reencode the whole film.
 
@@ -29,14 +40,15 @@ Latest opencv version in arch linux is compiled with gstreamer - it is necessary
 * Download the videocut*.tar contained in the "build" folder ![here](https://github.com/kanehekili/VideoCut/raw/master/VideoCutter/build/videocut1.1.0.tar)
 * Upack it to a location that suits you.
 * Copy the VideoCut.desktop file to ~/.local/share/applications
-* Change the absolute paths & user name to the location where you've copied the files.
+* Change the absolute paths & user name within that desktop file to the location where you've copied the files.
 * python qt5, opencv and ffmpeg are required
 * :heavy_exclamation_mark: Important! remux5 must be set to executable. (chmod +x remux5) 
 
 ### Currently working on:
 * Exact frame cut - see coment below 
 * Conversion tools - from one container to another, change audio or video codecs...
-* ffmpeg bindings
+* Kicking out opencv using SDL and the libavcodec libraries.
+* Multi threaded transcoding (remux is fast enough ;-)
 
 ### Using remux instead of ffmpeg
 remuxX is based on ffmpeg, but uses an integrated approch to cut and join videos. Currently there is a bug in ffmpeg to concat mp4. Remux handles it correctly. To activate it, use the "coggs" icon and select "Experimental".
@@ -71,6 +83,9 @@ Can't be really implemented with the ffmpeg ABI. The transcoded part will have d
 * Minor changes on the UI
 * Stabilized remux5 (native C ffmpeg lib). Better cut point recognition, transcoding fully implemented
 * Currently transcoding is precise, but far too slow. Remuxing is faster than ffmpeg native 
+
+10.11.2018 
+* Increased the VBV Buffer for mpeg2 remuxing (not yet packaged, copy remux5 file)
 
 In case of problems open an issue. 
  
