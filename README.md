@@ -85,7 +85,7 @@ Can't be really implemented with the ffmpeg ABI. The transcoded part will have d
 * Currently transcoding is precise, but far too slow. Remuxing is faster than ffmpeg native 
 
 10.11.2018 
-* Increased the VBV Buffer for mpeg2 remuxing (not yet packaged, copy remux5 file)
+* Increased the VBV Buffer for mpeg2 remuxing
 
 In case of problems open an issue. 
  
