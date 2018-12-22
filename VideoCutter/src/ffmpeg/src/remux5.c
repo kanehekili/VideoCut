@@ -556,12 +556,12 @@ static int write_packet(struct StreamInfo *info,AVPacket *pkt){
         */ 
 		int64_t	cum =  context.gap+info->first_dts - context.streamOffset ;		
         int64_t offset = av_rescale_q(cum,videoStream->inStream->time_base, in_stream->time_base);
-        int64_t new_DTS = pkt->dts - offset ;
-        int64_t currentDTS = info->outStream->cur_dts;
+        int64_t new_DTS = pkt->dts - offset ; //intime
+        int64_t currentDTS = info->outStream->cur_dts; //out-time
  
         if (currentDTS == AV_NOPTS_VALUE){
             new_DTS = context.streamOffset;
-            currentDTS = new_DTS;
+            currentDTS = av_rescale_q(new_DTS,in_stream->time_base, out_stream->time_base);
         }
         
         /* save original packet dates*/
@@ -576,11 +576,12 @@ static int write_packet(struct StreamInfo *info,AVPacket *pkt){
 		}
         
         //On transcode reduce gap for ignored frames */
-        if (isVideo && new_DTS < currentDTS){
-            int64_t correction = currentDTS - new_DTS;
-            av_log(NULL, AV_LOG_INFO,"Synced DTS from %ld to %ld delta %ld\n",new_DTS,currentDTS,correction);
-            new_DTS = currentDTS;
-            context.gap -= correction;
+        int64_t inCurrDTS = av_rescale_q(currentDTS,out_stream->time_base,in_stream->time_base);
+        if (isVideo && new_DTS < inCurrDTS){
+            int64_t correction = inCurrDTS - new_DTS;
+            av_log(NULL, AV_LOG_INFO,"Synced DTS from %ld to %ld (out-time:%ld) delta %ld\n",new_DTS,inCurrDTS,currentDTS,correction);
+            new_DTS = inCurrDTS;
+            context.gap -= correction; //INTIME
         } 
         
         //double_t testTS = av_q2d(videoStream->inStream->time_base)*(pkt->dts - offset);
