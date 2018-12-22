@@ -36,6 +36,8 @@
 			<fileset dir="${srcffmpeg}">
 			</fileset>
 		</copy>		
+		<chmod file="${ffmpeg}/bin/V3/remux5" perm="ug+rwx"/>
+		<chmod file="${ffmpeg}/bin/V4/remux5" perm="ug+rwx"/>
 		
 		<copy todir="${rootDir}">
 			<fileset dir="${source}" includes="*.py" excludes="*Tests*">
