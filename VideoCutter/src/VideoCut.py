@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# 2014 kanehekili (mat.wegmann@gmail.com)
+# 2014-2019 kanehekili (mat.wegmann@gmail.com)
 #
 
 import sys, traceback, math
@@ -336,10 +336,15 @@ class LayoutWindow(QWidget):
         
         #status bar
         self.statusbar = QtWidgets.QStatusBar(self)
-        self.statusbar.setStyleSheet("QStatusBar { border: 1px solid darkgray; border-radius: 3px; } ");
-        self.statusbar.setSizeGripEnabled(True)
+        self.statusbar.setStyleSheet("QStatusBar { border: 1px inset darkgray; border-radius: 3px;}QStatusBar::item {border-radius: 3px;} ");
+        self.statusbar.setSizeGripEnabled(False)
         self.statusbar.showMessage("Idle")
         self.statusbar.addPermanentWidget(self.__createProgressBar())
+        self.buttonStop = QtWidgets.QToolButton(self)
+        self.buttonStop.setIcon(QtGui.QIcon('./icons/window-close.png'))
+        self.buttonStop.setIconSize(QtCore.QSize(20,20))
+        self.buttonStop.setVisible(False)
+        self.statusbar.addPermanentWidget(self.buttonStop,0)
         self.setLayout(self.makeGridLayout())
         self.adjustSize()
 
@@ -442,8 +447,9 @@ class LayoutWindow(QWidget):
         self.statusMessenger = StatusDispatcher()
         self.statusMessenger.signal.connect(self.showStatusMessage)
         self.statusMessenger.progressSignal.connect(self.updateProgressBar)
-       
+        self.buttonStop.clicked.connect(aVideoController.killSaveProcessing)
         self._hookListActions()
+    
     
     def syncSpinButton(self,frameNbr):
         self.ui_GotoField.blockSignals(True)
@@ -482,17 +488,27 @@ class LayoutWindow(QWidget):
         self.progressBar = QtWidgets.QProgressBar(self)
         self.progressBar.setMinimum(0)
         self.progressBar.setMaximumWidth(200)
-        self.progressBar.setVisible(False)
-        self.progressBar.setValue(0);
+        self.progressBar.setVisible(False) 
+        self.progressBar.setValue(0)
         return self.progressBar
     
-    def showBusy(self):
+    def startProgress(self):
         self.progressBar.setRange(0,100)
         self.progressBar.setVisible(True)
-    
+        self.buttonStop.setVisible(True)
+        
+
     def stopProgress(self):
-        self.progressBar.setVisible(False) 
+        self.progressBar.setVisible(False)   
+        self.buttonStop.setVisible(False)
         self.progressBar.setValue(0);           
+
+    def enableUserActions(self,enable):
+        self.ui_Dial.setEnabled(enable)
+        self.ui_Slider.setEnabled(enable)
+        self.gotoAction.setEnabled(enable)
+        self.ui_GotoField.setEnabled(enable)
+        
 
     def updateProgressBar(self,percent):
         self.progressBar.setValue(percent)
@@ -681,8 +697,6 @@ class MainFrame(QtWidgets.QMainWindow):
         self.move(frameGm.topLeft())
     
     def updateWindowTitle(self,text):
-        #qText = QtCore.QString(text.decode('utf-8'))
-        #qText = text.decode('utf-8')
         self.setWindowTitle("VideoCut - "+text)
      
     def showInfo(self,text):
@@ -709,20 +723,23 @@ class MainFrame(QtWidgets.QMainWindow):
     def addCutMark(self,frame,cutEntry,rowIndex):
         self._widgets.addCutMark(frame,cutEntry,rowIndex)
         
-    def showBusy(self):
-        self._widgets.showBusy()
+    def startProgress(self):
+        self._widgets.startProgress() #only the bar.
+        self.toolbar.setEnabled(False)
+        self._widgets.enableUserActions(False)
         
     def stopProgress(self):
         self._widgets.stopProgress()
+        self.toolbar.setEnabled(True)
+        self._widgets.enableUserActions(True)
 
     def showWarning(self,aMessage):
         pad ='\t'
         QtWidgets.QMessageBox.warning(self,"Warning!",aMessage+pad)
     
     def enableControls(self,enable):
-        self._widgets.ui_Dial.setEnabled(enable)
-        self._widgets.ui_Slider.setEnabled(enable)
-            
+        self._widgets.enableUserActions(enable)
+           
                             
     #-------- ACTIONS ----------
     def loadFile(self):
@@ -736,18 +753,15 @@ class MainFrame(QtWidgets.QMainWindow):
             
     def saveVideo(self):
         initalPath = self._videoController.getTargetFile()
-        #qText = initalPath.decode('utf-8')
         qText = initalPath
         result = QtWidgets.QFileDialog.getSaveFileName(parent=self, directory=qText, caption="Save Video");
         if result[0]:
             fn = self.__encodeQString(result)
-            self._widgets.showBusy()
+            self.startProgress()
             self._videoController.saveVideo(fn)
     
     def __encodeQString(self,stringTuple):
         text = stringTuple[0]
-        #return unicode(qString).encode('utf-8')
-        #return text.encode('utf-8')
         return text
     
     def openMediaSettings(self):
@@ -863,7 +877,7 @@ class MainFrame(QtWidgets.QMainWindow):
 class SettingsModel():
     def __init__(self,mainframe):
         #keep flags- save them later
-        self.experimental= vc_config.get("useRemux")=='True'
+        self.fastRemux= vc_config.get("useRemux")=='True'
 #         self.selectedContainer = vc_config.get("container")
 #         self.containerList = vc_config.get("containerList").split(',')
         self.reencoding = vc_config.get("recode")=='True'
@@ -872,7 +886,7 @@ class SettingsModel():
 #         vc_config.set("containerList","mp4,mpg,mkv,flv,m2t")
 #         vc_config.set("recode","False")
 #         vc_config.store()
-#         self.experimental=False
+#         self.fastRemux=False
 #         self.selectedContainer="mp4" 
 #         self.containerList=["mp4","mpg","mkv","flv","m2t"] 
 #         self.reencoding=False
@@ -881,14 +895,14 @@ class SettingsModel():
     def update(self):
         cutmode="Fast"
         mode="FFMPEG"
-        if self.experimental:
+        if self.fastRemux:
             mode="REMUX"
         if self.reencoding:
             cutmode="Exact"
         self.mainFrame._widgets.ui_CutModeLabel.setText(cutmode)
         self.mainFrame._widgets.ui_BackendLabel.setText(mode)
         
-        if self.experimental:
+        if self.fastRemux:
             vc_config.set("useRemux", "True")
         else:
             vc_config.set("useRemux", "False")
@@ -941,10 +955,10 @@ class SettingsDialog(QtWidgets.QDialog):
 #         self.combo.setCurrentText(self.model.selectedContainer)
 #         self.combo.currentTextChanged.connect(self.on_combobox_selected)
         #we want audio as well?
-        self.exRemux = QtWidgets.QCheckBox("Experimental")
+        self.exRemux = QtWidgets.QCheckBox("Fast remux")
         self.exRemux.setToolTip("Uses the remux code instead of default ffmpeg commandline")
-        self.exRemux.setChecked(self.model.experimental)
-        self.exRemux.stateChanged.connect(self.on_experimentalChanged)
+        self.exRemux.setChecked(self.model.fastRemux)
+        self.exRemux.stateChanged.connect(self.on_fastRemuxChanged)
         
         encodeBox.addWidget(self.check_reencode)
 #         encodeBox.addWidget(self.combo)
@@ -967,8 +981,8 @@ class SettingsDialog(QtWidgets.QDialog):
         #self.combo.setEnabled(self.model.reencoding)
         self.model.update()
         
-    def on_experimentalChanged(self,isExperimental):
-        self.model.experimental= QtCore.Qt.Checked==isExperimental
+    def on_fastRemuxChanged(self,isFastRemux):
+        self.model.fastRemux= QtCore.Qt.Checked==isFastRemux
         self.model.update()    
         
         
@@ -1250,6 +1264,11 @@ class VideoControl(QtCore.QObject):
         cut = self.videoCuts[index]
         self._gotoFrame(cut.frameNumber)
     
+    def killSaveProcessing(self):
+        if self.cutter is None:
+            Log.logInfo("Can't kill process")
+        else:
+           self.cutter.stopCurrentProcess()
 
     def saveVideo(self,path):
         spanns=[]
@@ -1288,9 +1307,7 @@ class VideoControl(QtCore.QObject):
     def cutAsync(self,srcPath,targetPath,spanns):
         self.cutTimeStart = time();
         settings = self.gui.settings
-        #targetContainer = settings.selectedContainer
-        isExperimental =settings.experimental
-        if isExperimental:
+        if settings.fastRemux:
             worker = LongRunningOperation(self.__directCut,srcPath, targetPath, spanns,settings)
         else:
             worker = LongRunningOperation(self.__makeCuts,srcPath, targetPath, spanns,settings)
@@ -1300,31 +1317,38 @@ class VideoControl(QtCore.QObject):
 
     def _cleanupWorker(self,worker):
         #QThread: Destroyed while thread is still running
+         
         self.gui.stopProgress()
         worker.quit()
         worker.wait();
-        dx = time()- self.cutTimeStart
-        delta = FFMPEGTools.timedeltaToFFMPEGString(timedelta(seconds=dx))
-        #dialog here!
-        self.gui.getMessageDialog("Operation done","Cutting time: %s"%delta,).show()
-        
+        if self.cutter.wasAborted():
+            self.gui.getMessageDialog("Operation done","Cut aborted").show()
+        else:
+            dx = time()- self.cutTimeStart
+            delta = FFMPEGTools.timedeltaToFFMPEGString(timedelta(seconds=dx))
+            self.gui.getMessageDialog("Operation done","Cutting time: %s"%delta,).show()
+        self.cutter=None 
+    '''
+    FFMPEG cutting API
+    '''    
     def __makeCuts(self,srcPath,targetPath,spanns,settings):
         config = CuttingConfig(srcPath,targetPath)
         config.streamData = self.streamData
         config.reencode = settings.reencoding
         
         config.messenger = self.gui._widgets.statusMessenger
-        cutter = FFMPEGCutter(config,self.calculateNewVideoTime(spanns))
-        cutter.ensureAvailableSpace()
+        self.cutter = FFMPEGCutter(config,self.calculateNewVideoTime(spanns))
+        self.cutter.ensureAvailableSpace()
         slices = len(spanns)
         for index, cutmark in enumerate(spanns):
             t1=cutmark[0].timePos
             t2 = cutmark[1].timePos
-            hasSucess = cutter.cutPart(t1, t2, index,slices)
+            hasSucess = self.cutter.cutPart(t1, t2, index,slices)
             if not hasSucess:
                 Log.logError("***Cutting failed***")
                 return
-        cutter.join()    
+        self.cutter.join()  
+
         
     '''
     new VCCutter API
@@ -1336,8 +1360,8 @@ class VideoControl(QtCore.QObject):
         config.messenger = self.gui._widgets.statusMessenger
         config.reencode = settings.reencoding
         
-        cutter = VCCutter(config)
-        success = cutter.cut(spanns)
+        self.cutter = VCCutter(config)
+        success = self.cutter.cut(spanns)
         print ("CUT DONE:",success)
     
     def _initSliderThread(self):

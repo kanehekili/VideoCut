@@ -522,7 +522,6 @@ static int seekHeadGOP(struct StreamInfo *info, int64_t ts,CutData *borders) {
     }
     borders->start=gop[idx];
     borders->end=gop[idx+1];
-    //TESTTUNG 
     AVRational time_base = info->in_time_base;
     int64_t vStreamOffset = videoStream->inStream->start_time;
     double_t st = streamTime(time_base,ts-vStreamOffset);
@@ -556,11 +555,10 @@ static int write_packet(struct StreamInfo *info,AVPacket *pkt){
         */ 
 		int64_t	cum =  context.gap+info->first_dts - context.streamOffset ;		
         int64_t offset = av_rescale_q(cum,videoStream->inStream->time_base, in_stream->time_base);
-        int64_t new_DTS = pkt->dts - offset ; //intime
+        int64_t new_DTS = pkt->dts - offset; //intime
         int64_t currentDTS = info->outStream->cur_dts; //out-time
  
         if (currentDTS == AV_NOPTS_VALUE){
-            new_DTS = context.streamOffset;
             currentDTS = av_rescale_q(new_DTS,in_stream->time_base, out_stream->time_base);
         }
         
@@ -584,11 +582,9 @@ static int write_packet(struct StreamInfo *info,AVPacket *pkt){
             context.gap -= correction; //INTIME
         } 
         
-        //double_t testTS = av_q2d(videoStream->inStream->time_base)*(pkt->dts - offset);
-        double_t testTS = av_q2d(videoStream->inStream->time_base)*new_DTS;
-        
-        if (new_DTS<0){
-			av_log(NULL, AV_LOG_INFO,"Drop neg packet: %c: dts:%ld (%ld) time: %.3f\n",frm,new_DTS,pkt->dts,testTS);
+        double_t testTS = av_q2d(in_stream->time_base)*new_DTS;
+        if (new_DTS<=0){
+ 			av_log(NULL, AV_LOG_INFO,"Drop neg packet: %c: dts:%ld (%ld) time: %.3f \n",frm,new_DTS,pkt->dts,testTS);
 			av_packet_unref(pkt);
 			return 1;
 		}
@@ -599,8 +595,10 @@ static int write_packet(struct StreamInfo *info,AVPacket *pkt){
         pkt->duration = av_rescale_q(pkt->duration, in_stream->time_base, out_stream->time_base);
         pkt->pos=-1;//File pos is unknown if cut..
         
-        if(!isVideo && pkt->dts < info->outStream->cur_dts){
-            av_log(NULL, AV_LOG_INFO,"Drop early packet: %c: dts:%ld pts:%ld (%ld) currDTS: %ld\n",frm,pkt->dts,pkt->pts,p1,currentDTS);
+        if(!isVideo && pkt->dts <= info->outStream->cur_dts){
+            double_t dtsCalcTime1 = av_q2d(out_stream->time_base)*(pkt->dts);
+            double_t dtsCalcTime2 = av_q2d(out_stream->time_base)*(pkt->dts-context.streamOffset);
+            av_log(NULL, AV_LOG_INFO,"Drop early packet: %c: dts:%ld pts:%ld (%ld) t1:%.2f t2:%.2f currDTS: %ld\n",frm,pkt->dts,pkt->pts,p1,dtsCalcTime1,dtsCalcTime2,currentDTS);
             av_packet_unref(pkt);
             return 1;
 		}
@@ -612,10 +610,10 @@ static int write_packet(struct StreamInfo *info,AVPacket *pkt){
                 av_log(NULL, AV_LOG_INFO,"Null packet,offset now: %ld\n",context.streamOffset);
             }
         }
-        
-        
-        double_t dtsCalcTime = av_q2d(out_stream->time_base)*(pkt->dts-context.streamOffset);
-        double_t ptsCalcTime = av_q2d(out_stream->time_base)*(pkt->pts-context.streamOffset);
+ 
+        double_t dtsCalcTime = av_q2d(out_stream->time_base)*(pkt->dts);
+        double_t ptsCalcTime = av_q2d(out_stream->time_base)*(pkt->pts);
+ 
         int ts = (int)dtsCalcTime;
         int hr = (ts/3600);
         int min =(ts%3600)/60;
@@ -629,8 +627,6 @@ static int write_packet(struct StreamInfo *info,AVPacket *pkt){
         av_log(NULL, AV_LOG_VERBOSE,"P:%ld (%ld) D:%ld (%ld) Pt:%.3f Dt:%.3f dur %ld (%ld) size: %d flags: %d curr:%ld\n",pkt->pts,p1,pkt->dts,d1,ptsCalcTime,dtsCalcTime,pkt->duration,dur,pkt->size,pkt->flags,currentDTS);
 
         int ret = av_interleaved_write_frame(context.ofmt_ctx, pkt);
-       
-        //int ret = av_write_frame(context.ofmt_ctx, pkt);
         if (ret < 0) {
             av_log(NULL, AV_LOG_ERROR,"Err: Error muxing packet\n");
             return ret;
@@ -952,7 +948,7 @@ static int seekAndMux(double_t timeslots[],int seekCount){
     int64_t mainOffset = (vStreamOffset<aStreamOffset)?aStreamOffset:vStreamOffset;
     double_t streamOffsetTime = av_q2d(time_base)*startOffset;
     double_t vStreamStartTime = av_q2d(time_base)*vStreamOffset;
-    double_t aStreamStartTime = av_q2d(time_base)*aStreamOffset;
+    double_t aStreamStartTime = av_q2d(audioStream->in_time_base)*aStreamOffset;
     double_t mainOffsetTime = av_q2d(time_base)*mainOffset;
     int64_t duration = videoStream->inStream->duration;
     int res =0;
@@ -970,7 +966,7 @@ static int seekAndMux(double_t timeslots[],int seekCount){
 
     av_log(NULL, AV_LOG_INFO,"Mux video: %ld (%.3f) fps: %.3f audio: %ld (%.3f) delta:%ld (%.3f) ",vStreamOffset,vStreamStartTime,fps,aStreamOffset,aStreamStartTime,startOffset,streamOffsetTime);
     av_log(NULL, AV_LOG_INFO,"First IFrame DTS %ld time: %.3f \n",zeroDTS,zeroTime);
-    av_log(NULL, AV_LOG_INFO,"Video tbi: %d tbo; %d audio tbi: %d tbo: %d \n",time_base.den,audioStream->in_time_base.den,videoStream->out_time_base.den,audioStream->out_time_base.den);
+    av_log(NULL, AV_LOG_INFO,"Video tbi: %d tbo: %d ; Audio tbi: %d tbo: %d \n",time_base.den,videoStream->out_time_base.den,audioStream->in_time_base.den,audioStream->out_time_base.den);
     av_log(NULL, AV_LOG_INFO,"Video IN: %s long:%s\n",context.ifmt_ctx->iformat->name,context.ifmt_ctx->iformat->long_name);
     if (context.ofmt_ctx)
         av_log(NULL, AV_LOG_INFO,"Video OUT: %s long:%s\n",context.ofmt_ctx->oformat->name,context.ofmt_ctx->oformat->long_name);

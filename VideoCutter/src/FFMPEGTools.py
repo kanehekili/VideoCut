@@ -129,8 +129,9 @@ def log(*messages):
     Log.logInfo("{0} {1}".format(*messages))
     
     #execs an command, yielding the lines to caller. Throws exception on error
-def executeAsync(cmd):
+def executeAsync(cmd,commander):
     popen = subprocess.Popen(cmd, stdout=subprocess.PIPE,stderr=subprocess.STDOUT, universal_newlines=True)
+    commander.setProcess(popen)
     for stdout_line in iter(popen.stdout.readline, ""):
         yield stdout_line 
     popen.stdout.close()
@@ -730,7 +731,8 @@ class FFMPEGCutter():
         self._fragmentCount=1;  
         self.videoTime=totalTime
         self.secsCut=0;
-  
+        self.runningProcess =None;
+        self.killed=False
     
     '''
     cuts a part of the film, saves it an returns the temp filename for later concatination
@@ -823,13 +825,15 @@ class FFMPEGCutter():
         log("cut:",cmd)
         prefix =  "Cut part "+str(index)+":"  
         try:
-            for path in executeAsync(cmd):
+            for path in executeAsync(cmd,self):
                 self.parseAndDispatch(prefix,path)
         except Exception as error:
             self.say("Cutting part %s failed: %s "%(str(index),error))
+            self.runningProcess =None
             return False
         
         self.secsCut = self.secsCut+deltaSeconds;
+        self.runningProcess =None
         return True
 
     
@@ -916,14 +920,15 @@ class FFMPEGCutter():
 
         prefix =  "Join:"  
         try:
-            for path in executeAsync(cmd):
+            for path in executeAsync(cmd,self):
                 self.parseAndDispatch(prefix,path)
                 #print(path,end="")
         except Exception as error:
             self.say("join failed: %s"%(error))
+            self.runningProcess =None
             return False
 
-              
+        self.runningProcess =None      
         self.say("Films joined")
         self._cleanup()
         return True
@@ -997,13 +1002,31 @@ class FFMPEGCutter():
                 print ("Error creating directory")
                 return
         self._tempDir=path    
+    def setProcess(self,proc):
+        self.runningProcess=proc;   
 
+    def stopCurrentProcess(self):
+        #Stop button has been pressed....
+        self.killed=True
+        if self.runningProcess is None:
+            self.log("Can't kill proc!","-Error")
+        else:
+            print("FFMPEGCutter - stop process")
+            self.runningProcess.kill()    
+    
+    def wasAborted(self):
+        return self.killed
+    
+    
 class VCCutter():
     def __init__(self,cutConfig):
         self.config = cutConfig
         self.setupBinary()
         self.regexp = re.compile("([0-9]+) D:([0-9.]+) (.+) ([0-9.]+)%")
-
+        self.runningProcess=None
+        self.killed=False
+        
+        
     def setupBinary(self):
         fv= FFmpegVersion()
         if fv.version < 3.0:
@@ -1038,7 +1061,7 @@ class VCCutter():
         log("cut file:",cmd)
         try:
             start = time.monotonic()
-            for path in executeAsync(cmd):
+            for path in executeAsync(cmd,self):
                 now= time.monotonic()
                 elapsed = int(now-start)
                 showProgress=elapsed>=1
@@ -1049,9 +1072,11 @@ class VCCutter():
         except Exception as error:
             self.say("Remux failed: %s"%(error))
             log("Remux failed",error)
+            self.runningProcess = None
             return False
         
         self.say("Cutting done")
+        self.runningProcess = None
         return True
 
     def say(self,text):
@@ -1077,6 +1102,21 @@ class VCCutter():
             return False
         else:
             return True 
+    def setProcess(self,proc):
+        self.runningProcess=proc   
+        
+    def stopCurrentProcess(self):
+        #Stop button has been pressed....
+        self.killed=True
+        if self.runningProcess is None:
+            self.log("Can't kill proc!","-Error")
+        else:
+            print("VCCutter - stop process")
+            self.runningProcess.kill()
+ 
+    def wasAborted(self):
+        return self.killed   
+        
 class FFmpegVersion():
     def __init__(self):
         self.version=0.0;
