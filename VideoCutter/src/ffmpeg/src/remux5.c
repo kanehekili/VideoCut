@@ -583,7 +583,7 @@ static int write_packet(struct StreamInfo *info,AVPacket *pkt){
         } 
         
         double_t testTS = av_q2d(in_stream->time_base)*new_DTS;
-        if (new_DTS<=0){
+        if (new_DTS<0){
  			av_log(NULL, AV_LOG_INFO,"Drop neg packet: %c: dts:%ld (%ld) time: %.3f \n",frm,new_DTS,pkt->dts,testTS);
 			av_packet_unref(pkt);
 			return 1;
