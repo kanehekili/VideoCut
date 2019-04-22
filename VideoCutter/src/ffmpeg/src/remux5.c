@@ -664,14 +664,17 @@ static int mux1(CutData head,CutData tail){
             }
         } else if (isAudio ) {
             streamInfo = audioStream;
+            //run audio until it reaches tail.end as well
+            int64_t end = av_rescale_q(tail.end,videoStream->inStream->time_base, audioStream->inStream->time_base);
+            av_log(NULL,AV_LOG_VERBOSE,"TEST %ld\n",end);
+            if (pkt.dts >= end){
+                break;
+		}
         } else {
           av_packet_unref(&pkt);
           continue; //No usable packet.
         }  
-        //run audio until it reaches tail.end as well
-        if (pkt.dts >= tail.end){
-            break;
-		}
+
         write_packet(streamInfo,&pkt);
     }
     av_packet_unref(&pkt);
