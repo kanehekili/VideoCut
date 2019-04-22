@@ -49,7 +49,7 @@
 #if (LIBAVCODEC_VERSION_MAJOR < 57)
 #error "Ffmpeg 3.4 or newer is required"
 #endif 
-
+#define max(a,b) (a>b?a:b)
 #define MODE_FAST 0
 #define MODE_REMUX 1
 #define MODE_DUMP 2
@@ -67,6 +67,8 @@ struct StreamInfo{
 	AVRational out_time_base;
 	int64_t first_dts;
     int64_t deltaDTS;//Time diff from one frame to another. Usually 1800 or 3600
+    int64_t dtsHead; //The first dts of a new slice
+    //int64_t offset; //offset to the video stream....
 };
 
 typedef struct {
@@ -77,6 +79,7 @@ typedef struct {
     int64_t gap; //sync cutting gaps
 	int64_t streamOffset; //the offset between audio and video stream.
     double_t videoLen; //Approx duration in seconds
+    int64_t sceneStart; //First IFrame of cut. Used for sync audio
     int isDebug;
     int muxMode;
     char* sourceFile;
@@ -123,7 +126,6 @@ static int findBestVideoStream(struct StreamInfo *info){//enum AVMediaType type
 static int findBestAudioStream(struct StreamInfo *info){
     info->srcIndex = av_find_best_stream(context.ifmt_ctx,AVMEDIA_TYPE_AUDIO,-1,-1,NULL,0);
     if (AVERROR_STREAM_NOT_FOUND == info->srcIndex){
-        av_log(NULL, AV_LOG_ERROR,"Err: No audio stream found\n");
         return -1;
     }
     if (AVERROR_DECODER_NOT_FOUND == info->srcIndex){
@@ -200,7 +202,7 @@ int _initOutputContext(char *out_filename){
         return -1;
     }
     int64_t bitrate = context.ifmt_ctx->bit_rate;
-    printf("Video bitrate: %ld \n",bitrate);
+    av_log(NULL, AV_LOG_INFO,"Video bitrate: %ld \n",bitrate);
     ofmt_ctx->bit_rate = bitrate;
     /* The VBV Buffer warning is removed: */
     AVCPBProperties *props;
@@ -211,6 +213,10 @@ int _initOutputContext(char *out_filename){
     props->max_bitrate = 15*bit_rate;
     props->min_bitrate = (2*bit_rate)/3;
     props->avg_bitrate = bit_rate;
+    /*props->buffer_size = 2024 *2024;
+    props->max_bitrate = 0; // auto
+    props->min_bitrate = 0; // auto
+    props->avg_bitrate = 0; // auto*/
     props->vbv_delay = UINT64_MAX;
      
     if (audioStream->srcIndex>=0) {
@@ -220,7 +226,7 @@ int _initOutputContext(char *out_filename){
         }
 		int sampleRate = audioStream->inStream->codecpar->sample_rate;   
 		bitrate = audioStream->inStream->codecpar->bit_rate;
-		printf("Audio: sample rate: %d bitrate: %ld\n",sampleRate,bitrate);
+		av_log(NULL, AV_LOG_INFO,"Audio: sample rate: %d bitrate: %ld\n",sampleRate,bitrate);
      }
 
     av_dump_format(ofmt_ctx, 0, out_filename, 1);
@@ -241,7 +247,8 @@ int _initOutputContext(char *out_filename){
     }
 
 	videoStream->out_time_base=videoStream->outStream->time_base;
-	audioStream->out_time_base=audioStream->outStream->time_base;
+    if (audioStream->srcIndex >=0)
+	   audioStream->out_time_base=audioStream->outStream->time_base;
     return 1;
 }
 
@@ -274,16 +281,15 @@ int _setupStreams(SourceContext *sctx ){
         av_log(NULL, AV_LOG_ERROR,"Err: No video stream found \n");
         return -1;        
     }
-    if ((ret = findBestAudioStream(audioStream)) < 0) {
-      av_log(NULL, AV_LOG_ERROR,"Err: No audio stream found \n");
-      return -1;        
-    }
-    
+     
     if ((ret = searchVideoFilters(videoStream))< 0){
         av_log(NULL, AV_LOG_ERROR,"Err: Failed to retrieve video filter\n");
         return -1;        
     }
-    if (audioStream->srcIndex >=0) {
+    
+    if ((ret = findBestAudioStream(audioStream)) < 0) {
+      av_log(NULL, AV_LOG_INFO,"No audio stream found \n");
+    } else if (audioStream->srcIndex >=0) {
         if ((ret = searchAudioFilters(audioStream))< 0){
             av_log(NULL, AV_LOG_ERROR,"Err: Failed to retrieve audio filter\n");
             return -1;        
@@ -387,7 +393,7 @@ static int _initEncoder(struct StreamInfo *info, AVFrame *frame){
         //props->max_bitrate = props->min_bitrate;
         props->avg_bitrate = bit_rate;
         props->vbv_delay = UINT64_MAX;
-        
+      
     }else
         enc_ctx->max_b_frames = 4;//What?
 
@@ -466,13 +472,17 @@ static int seekTailGOP(struct StreamInfo *info, int64_t ts,CutData *borders) {
     }
     borders->start=gop[idx];
     borders->end=gop[idx+1];
-    av_log(NULL, AV_LOG_VERBOSE,"Tail: (keycount %d block: %d) deltas: %d/%d Searchkey:%ld IFrame0:%ld > End search:& last frame: %ld (b-dts:%ld) \n",keyFrameCount,idx,t1,t2,ts,borders->start,borders->end,borders->dts);
+    AVRational time_base = info->in_time_base;
+    int64_t vStreamOffset = info->inStream->start_time;    
+    double_t st = streamTime(time_base,ts-vStreamOffset);
+    double_t g0 = streamTime(time_base,gop[idx]-vStreamOffset);
+    double_t g1 = streamTime(time_base,gop[idx+1]-vStreamOffset);
+    av_log(NULL, AV_LOG_VERBOSE,"Tail: (keycount %d block: %d) deltas: %d/%d Searchkey:%ld (%.3f) Start:%ld (%.3f) > End: %ld (%.3f) (cutpoint-dts:%ld) \n",keyFrameCount,idx,t1,t2,ts,st,borders->start,g0,borders->end,g1,borders->dts);
     return 1;
 
 }
 
-//seeking only the video stream
-//TODO: this is only for HEAD valid. The ts for tail is the LAST one, not the first one!
+//seeking only the video stream head
 static int seekHeadGOP(struct StreamInfo *info, int64_t ts,CutData *borders) {
     AVPacket pkt;
     int64_t lookback=ptsFromTime(1.0,info->in_time_base);
@@ -527,22 +537,26 @@ static int seekHeadGOP(struct StreamInfo *info, int64_t ts,CutData *borders) {
     double_t st = streamTime(time_base,ts-vStreamOffset);
     double_t g0 = streamTime(time_base,gop[idx]-vStreamOffset);
     double_t g1 = streamTime(time_base,gop[idx+1]-vStreamOffset);
-    av_log(NULL, AV_LOG_VERBOSE,"Head:(keycount %d block: %d) deltas: %d/%d Searchkey:%ld (%.3f) IFrame0:%ld (%.3f) > End search:& last frame: %ld (%.3f) (b-dts:%ld) \n",keyFrameCount,idx,t1,t2,ts,st,borders->start,g0,borders->end,g1,borders->dts);
+    av_log(NULL, AV_LOG_VERBOSE,"Head:(keycount %d block: %d) deltas: %d/%d Searchkey:%ld (%.3f) start:%ld (%.3f) > End: %ld (%.3f) (cutpoint-dts:%ld) \n",keyFrameCount,idx,t1,t2,ts,st,borders->start,g0,borders->end,g1,borders->dts);
     return keyFrameCount<4;
 }
 /** Write packet to the out put stream. Here we calculate the PTS/dts. Only Audio and video streams are incoming  **/
 static int write_packet(struct StreamInfo *info,AVPacket *pkt){
         AVStream *in_stream = NULL, *out_stream = NULL;
-         
         char frm='*';
         int isVideo = videoStream->srcIndex==pkt->stream_index;
+        
         if (isVideo) {
             context.frame_number+=1;   
-            if (pkt->flags == AV_PKT_FLAG_KEY)
-                frm='I';      
+            if (pkt->flags == AV_PKT_FLAG_KEY){
+              frm='I';
+              if (context.sceneStart == AV_NOPTS_VALUE){
+                  context.sceneStart = pkt->dts;
+              }
+            }
             else
                 frm='v';      
-        } 
+        }
         in_stream  = info->inStream;
         out_stream  = info->outStream;
 
@@ -553,67 +567,54 @@ static int write_packet(struct StreamInfo *info,AVPacket *pkt){
          * The offset prevents too many negative TS at the start of the stream that lies behind timewise
          * It is the difference between video and the "latest" audio in DTS.
         */ 
-		int64_t	cum =  context.gap+info->first_dts - context.streamOffset ;		
-        int64_t offset = av_rescale_q(cum,videoStream->inStream->time_base, in_stream->time_base);
-        int64_t new_DTS = pkt->dts - offset; //intime
+
         int64_t currentDTS = info->outStream->cur_dts; //out-time
  
+        //control time /audio sync
+            int64_t	cum =  context.gap+info->first_dts - context.streamOffset ;		
+            int64_t offset = av_rescale_q(cum,videoStream->inStream->time_base, in_stream->time_base);
+            int64_t in_DTS = pkt->dts - offset; //intime
+            //dts - headofGOP - delta time AV... 
+            int64_t out_DTS = av_rescale_q(in_DTS,in_stream->time_base, out_stream->time_base);
+ //           double_t dts1time = streamTime( out_stream->time_base,out_DTS);
+ //           double_t cdtsTime = streamTime(out_stream->time_base,currentDTS);
+ //           av_log(NULL,AV_LOG_VERBOSE,"Ref calc dts1 %ld (%.3f) curr:%ld (%.3f) \n",out_DTS,dts1time,currentDTS,cdtsTime);
+ 
         if (currentDTS == AV_NOPTS_VALUE){
-            currentDTS = av_rescale_q(new_DTS,in_stream->time_base, out_stream->time_base);
-        }
+            currentDTS = out_DTS;
+        } 
         
+        //remove early audio packets....
+        if (!isVideo && (currentDTS<0 || currentDTS>out_DTS)){
+            double_t currTS = av_q2d(out_stream->time_base)*currentDTS;
+			av_log(NULL, AV_LOG_VERBOSE,"Drop early packet: %c: dts:%ld (%ld) time: %.3f \n",frm,currentDTS,pkt->dts,currTS);
+			av_packet_unref(pkt);
+			return 1;
+		}
+           
         /* save original packet dates*/
         int64_t p1 = pkt->pts;
         int64_t d1 = pkt->dts;
         int64_t delta = p1-d1;
         int64_t dur = pkt->duration;
-        
+  
+    
         //happens
         if (p1==AV_NOPTS_VALUE){
-			delta = 0;//or dur? bei mp2 auf jeden fall ok
+			delta = av_rescale_q(dur,in_stream->time_base,out_stream->time_base);
 		}
-        
-        //On transcode reduce gap for ignored frames */
-        int64_t inCurrDTS = av_rescale_q(currentDTS,out_stream->time_base,in_stream->time_base);
-        if (isVideo && new_DTS < inCurrDTS){
-            int64_t correction = inCurrDTS - new_DTS;
-            av_log(NULL, AV_LOG_INFO,"Synced DTS from %ld to %ld (out-time:%ld) delta %ld\n",new_DTS,inCurrDTS,currentDTS,correction);
-            new_DTS = inCurrDTS;
-            context.gap -= correction; //INTIME
-        } 
-        
-        double_t testTS = av_q2d(in_stream->time_base)*new_DTS;
-        if (new_DTS<0){
- 			av_log(NULL, AV_LOG_INFO,"Drop neg packet: %c: dts:%ld (%ld) time: %.3f \n",frm,new_DTS,pkt->dts,testTS);
-			av_packet_unref(pkt);
-			return 1;
-		}
-
         pkt->stream_index = info->dstIndex;
-        pkt->pts = av_rescale_q(new_DTS + delta,in_stream->time_base, out_stream->time_base);
-        pkt->dts = av_rescale_q(new_DTS,in_stream->time_base, out_stream->time_base);
+
         pkt->duration = av_rescale_q(pkt->duration, in_stream->time_base, out_stream->time_base);
         pkt->pos=-1;//File pos is unknown if cut..
-        
-        if(!isVideo && pkt->dts <= info->outStream->cur_dts){
-            double_t dtsCalcTime1 = av_q2d(out_stream->time_base)*(pkt->dts);
-            double_t dtsCalcTime2 = av_q2d(out_stream->time_base)*(pkt->dts-context.streamOffset);
-            av_log(NULL, AV_LOG_INFO,"Drop early packet: %c: dts:%ld pts:%ld (%ld) t1:%.2f t2:%.2f currDTS: %ld\n",frm,pkt->dts,pkt->pts,p1,dtsCalcTime1,dtsCalcTime2,currentDTS);
-            av_packet_unref(pkt);
-            return 1;
-		}
-        
-        if (pkt->duration == 0){
-            pkt->duration = info->deltaDTS;
-            if (pkt->size ==0){
-                context.streamOffset+=pkt->duration;
-                av_log(NULL, AV_LOG_INFO,"Null packet,offset now: %ld\n",context.streamOffset);
-            }
-        }
- 
+
+         //increment the DTS instead of calculating it. 
+        pkt->dts = currentDTS+pkt->duration;
+        if (p1!=AV_NOPTS_VALUE)
+            pkt->pts = pkt->dts+delta;
+       
         double_t dtsCalcTime = av_q2d(out_stream->time_base)*(pkt->dts);
         double_t ptsCalcTime = av_q2d(out_stream->time_base)*(pkt->pts);
- 
         int ts = (int)dtsCalcTime;
         int hr = (ts/3600);
         int min =(ts%3600)/60;
@@ -624,7 +625,7 @@ static int write_packet(struct StreamInfo *info,AVPacket *pkt){
             av_log(NULL, AV_LOG_INFO,"%ld D:%.2f %02d:%02d.%02d %.2f%%\n",context.frame_number,dtsCalcTime,hr,min,sec,progress);
         }
         av_log(NULL, AV_LOG_VERBOSE,"%ld,%c:",context.frame_number,frm);
-        av_log(NULL, AV_LOG_VERBOSE,"P:%ld (%ld) D:%ld (%ld) Pt:%.3f Dt:%.3f dur %ld (%ld) size: %d flags: %d curr:%ld\n",pkt->pts,p1,pkt->dts,d1,ptsCalcTime,dtsCalcTime,pkt->duration,dur,pkt->size,pkt->flags,currentDTS);
+        av_log(NULL, AV_LOG_VERBOSE,"P:%ld (%ld) D:%ld (%ld) Pt:%.3f Dt:%.3f dur %ld (%ld) delta: %ld size: %d flags: %d curr:%ld\n",pkt->pts,p1,pkt->dts,d1,ptsCalcTime,dtsCalcTime,pkt->duration,dur,delta,pkt->size,pkt->flags,currentDTS);
 
         int ret = av_interleaved_write_frame(context.ofmt_ctx, pkt);
         if (ret < 0) {
@@ -648,13 +649,17 @@ static int mux1(CutData head,CutData tail){
         int isVideo = streamIdx == videoStream->srcIndex;
         int isAudio = streamIdx == audioStream->srcIndex;
         if (isVideo){
+            char frm='v';
             streamInfo = videoStream;
             dts=pkt.dts;
-            if (pkt.flags == AV_PKT_FLAG_KEY)
-                fcnt++;
-            if (fcnt==0){
+            if (pkt.flags == AV_PKT_FLAG_KEY){
+                fcnt=1;
+                frm='I';
+            }
+            //ignore leading and trailing video packets. 
+            if (fcnt==0 || (dts >=tail.end && audioStream->inStream)){
                 av_packet_unref(&pkt);
-                av_log(NULL,AV_LOG_VERBOSE,"Skipped packet %ld \n",dts);
+                av_log(NULL,AV_LOG_VERBOSE,"Skipped packet %ld [%c]\n",dts,frm);
                 continue;
             }
         } else if (isAudio ) {
@@ -663,7 +668,8 @@ static int mux1(CutData head,CutData tail){
           av_packet_unref(&pkt);
           continue; //No usable packet.
         }  
-        if (dts >= tail.end){
+        //run audio until it reaches tail.end as well
+        if (pkt.dts >= tail.end){
             break;
 		}
         write_packet(streamInfo,&pkt);
@@ -697,7 +703,6 @@ static int decode(AVCodecContext *dec_ctx,AVPacket *pkt,AVFrame *frame){
 static int64_t seekPrimaryOffset(struct StreamInfo *info){
     AVPacket pkt;
     int64_t first_dts = 0;
- 
     
      av_init_packet(&pkt);
      if(av_seek_frame(context.ifmt_ctx, info->srcIndex,0, AVSEEK_FLAG_BACKWARD) < 0){
@@ -710,7 +715,7 @@ static int64_t seekPrimaryOffset(struct StreamInfo *info){
             av_packet_unref(&pkt); 
             continue;
         }
-        if (pkt.flags == AV_PKT_FLAG_KEY){
+        if (pkt.flags == AV_PKT_FLAG_KEY ){
             first_dts = pkt.dts;
             break;
         }
@@ -788,9 +793,7 @@ static int flushPackets(struct StreamInfo *info){
     avcodec_free_context(&info->out_codec_ctx);
     return 1;
 }
-//TODO: non monotonically increasing dts to muxer in stream 0: 839733 >= 839733
-//Test: ./remux5 '/home/matze/Videos/VCR/07_27_20_14-Mission Impossible - Phantom Protokoll.m2t' /home/matze/Videos/VCR/07_27_20_14-Mission Impossible - Phantom Protokoll.m2t', '/home/matze/Videos/VCR/XX.mpg -r -d -s 1757.360,1765.840,2216.080,2223.760 > dump.txt 2>&1
-//currDTS is 839733. So the next step needs to be larger..
+
 static int transcodeAll(struct StreamInfo *info, int64_t start, int64_t stop){
     AVPacket pkt;
     int keyFrameCount=0;
@@ -942,8 +945,12 @@ static int dumpDecodingData(){
 static int seekAndMux(double_t timeslots[],int seekCount){
     AVRational time_base = videoStream->in_time_base;
     AVRational framerate = videoStream->in_codec_ctx->framerate;
-    int64_t vStreamOffset = videoStream->inStream->start_time;
-    int64_t aStreamOffset = audioStream->inStream->start_time;
+    int64_t vStreamOffset = 0;
+    int64_t aStreamOffset = 0;
+    if (audioStream->inStream){
+    	aStreamOffset= audioStream->inStream->start_time;
+        vStreamOffset = videoStream->inStream->start_time;
+    }
     int64_t startOffset = vStreamOffset - aStreamOffset;
     int64_t mainOffset = (vStreamOffset<aStreamOffset)?aStreamOffset:vStreamOffset;
     double_t streamOffsetTime = av_q2d(time_base)*startOffset;
@@ -955,17 +962,17 @@ static int seekAndMux(double_t timeslots[],int seekCount){
 
     double_t fps = framerate.num/framerate.den;
     videoStream->deltaDTS = (int64_t)(videoStream->out_time_base.den/fps);
-
+    
     CutData headBorders;
     CutData tailBorders;
     
     //Correction for seeking
-    int64_t first_dts = seekPrimaryOffset(videoStream);
+    int64_t first_dts = max(seekPrimaryOffset(videoStream),0);
     int64_t zeroDTS = first_dts-vStreamOffset;
     double_t zeroTime= av_q2d(time_base)*zeroDTS;
 
-    av_log(NULL, AV_LOG_INFO,"Mux video: %ld (%.3f) fps: %.3f audio: %ld (%.3f) delta:%ld (%.3f) ",vStreamOffset,vStreamStartTime,fps,aStreamOffset,aStreamStartTime,startOffset,streamOffsetTime);
-    av_log(NULL, AV_LOG_INFO,"First IFrame DTS %ld time: %.3f \n",zeroDTS,zeroTime);
+    av_log(NULL, AV_LOG_INFO,"Mux video - Offset: %ld (%.3f) fps: %.3f audio -offset %ld (%.3f) delta:%ld (%.3f) ",vStreamOffset,vStreamStartTime,fps,aStreamOffset,aStreamStartTime,startOffset,streamOffsetTime);
+    av_log(NULL, AV_LOG_INFO,"First IFrame DTS found: %ld, normalized: %ld (%.3f) mainOffset: %ld (%.3f)\n",first_dts,zeroDTS,zeroTime,mainOffset,mainOffsetTime);
     av_log(NULL, AV_LOG_INFO,"Video tbi: %d tbo: %d ; Audio tbi: %d tbo: %d \n",time_base.den,videoStream->out_time_base.den,audioStream->in_time_base.den,audioStream->out_time_base.den);
     av_log(NULL, AV_LOG_INFO,"Video IN: %s long:%s\n",context.ifmt_ctx->iformat->name,context.ifmt_ctx->iformat->long_name);
     if (context.ofmt_ctx)
@@ -978,8 +985,7 @@ static int seekAndMux(double_t timeslots[],int seekCount){
         return res;
     }
     
-	int startSet=0;
-	int64_t prevTail =0;
+    int64_t prevTail =0;
 	int64_t gap =0;
     int i;
     for (i = 0; i < (seekCount); ++i){
@@ -993,17 +999,17 @@ static int seekAndMux(double_t timeslots[],int seekCount){
         av_log(NULL, AV_LOG_INFO,"************************\nSearch from %.3f to %.3f pts: %ld - %ld \n",startSecs,endSecs,ptsStart,ptsEnd);
         seekHeadGOP(videoStream,ptsStart,&headBorders);//Header GOP
         seekTailGOP(videoStream,ptsEnd,&tailBorders); //TAIL GOP
-        int64_t head = headBorders.start;
-        if (!startSet){
-			videoStream->first_dts =head;
-			audioStream->first_dts =head;
+        int64_t head = (context.muxMode == MODE_REMUX)?headBorders.dts:headBorders.start;
+        context.sceneStart = AV_NOPTS_VALUE;
+        if (i==1){
+ 			videoStream->first_dts =head;
+			audioStream->first_dts =head;//!context is video in-time
 			prevTail=head;
-			startSet=1;
 		}
 		gap += (head-prevTail);
         context.gap = gap;
-        av_log(NULL, AV_LOG_INFO,"Gap calc <tail %ld head: %ld gap: %ld dts-v-offset %ld a-offset %ld gapStep:%ld\n",prevTail,head,context.gap,videoStream->first_dts,audioStream->first_dts,videoStream->deltaDTS);
-        prevTail = tailBorders.end;
+        av_log(NULL, AV_LOG_INFO,"Gap calc <tail %ld head: %ld gap: %ld dts-v-first: %ld gapStep:%ld\n",prevTail,head,context.gap,videoStream->first_dts,videoStream->deltaDTS);
+        prevTail = (context.muxMode == MODE_REMUX)?tailBorders.dts:tailBorders.end;
         
         if (headBorders.start == headBorders.end || tailBorders.start==tailBorders.end){
             av_log(NULL, AV_LOG_ERROR,"Err: Seek times out of range. Aborted");
@@ -1025,7 +1031,7 @@ static int seekAndMux(double_t timeslots[],int seekCount){
             av_log(NULL, AV_LOG_ERROR,"Err: muxing/transcode failed\n");
             return -1;
         }
-        context.streamOffset+=(videoStream->deltaDTS*2);
+        //bad.context.streamOffset+=(videoStream->deltaDTS*2);
     }
     return 1;    
 }
