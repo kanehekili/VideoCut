@@ -641,9 +641,11 @@ static int write_packet(struct StreamInfo *info,AVPacket *pkt){
 static int mux1(CutData head,CutData tail){
     struct StreamInfo *streamInfo;
     AVPacket pkt = { .data = NULL, .size = 0 };
-    int64_t dts=0;
     int fcnt =0;
     av_init_packet(&pkt);
+    int64_t audioTail = audioStream->inStream? av_rescale_q(tail.end,videoStream->inStream->time_base, audioStream->inStream->time_base):0;
+    short audioAtEnd = audioTail==0;
+    short videoAtEnd = 0;
     while (av_read_frame(context.ifmt_ctx, &pkt)>=0) {
         int streamIdx = pkt.stream_index;
         int isVideo = streamIdx == videoStream->srcIndex;
@@ -651,25 +653,41 @@ static int mux1(CutData head,CutData tail){
         if (isVideo){
             char frm='v';
             streamInfo = videoStream;
-            dts=pkt.dts;
             if (pkt.flags == AV_PKT_FLAG_KEY){
                 fcnt=1;
                 frm='I';
             }
             //ignore leading and trailing video packets. 
-            if (fcnt==0 || (dts >=tail.end && audioStream->inStream)){
+            if (fcnt==0 ){
+                av_log(NULL,AV_LOG_VERBOSE,"Skip head packet %ld [%c]\n",pkt.dts,frm);
                 av_packet_unref(&pkt);
-                av_log(NULL,AV_LOG_VERBOSE,"Skipped packet %ld [%c]\n",dts,frm);
                 continue;
             }
+            if (pkt.dts >=tail.end){
+              if (audioAtEnd)
+                 break;
+               else {
+                av_log(NULL,AV_LOG_VERBOSE,"Skip tail packet %ld [%c]\n",pkt.dts,frm);
+                av_packet_unref(&pkt);
+                videoAtEnd=1;
+                continue;
+               }
+            }
+              
         } else if (isAudio ) {
             streamInfo = audioStream;
             //run audio until it reaches tail.end as well
-            int64_t end = av_rescale_q(tail.end,videoStream->inStream->time_base, audioStream->inStream->time_base);
-            av_log(NULL,AV_LOG_VERBOSE,"TEST %ld\n",end);
-            if (pkt.dts >= end){
-                break;
-		}
+            
+            if (pkt.dts >= audioTail){
+                if (videoAtEnd)
+                  break;
+                else {
+                av_packet_unref(&pkt);
+                av_log(NULL,AV_LOG_VERBOSE,"Skip tail packet %ld [*]\n",pkt.dts);
+                audioAtEnd=1;
+                continue;
+              }
+		    }
         } else {
           av_packet_unref(&pkt);
           continue; //No usable packet.
