@@ -17,20 +17,27 @@
 		<property name="source" value="../src"/>
 		<property name="srcIcons" value="${source}/icons"/>
 		<property name="srcffmpeg" value="${source}/ffmpeg"/>
+		<property name="srcdata" value="${source}/data"/>
 		
 		<copy todir="${rootDir}">
 			<fileset file="*.desktop">
 			</fileset>
 		</copy>
-		
+			
 		<copy todir="${icons}">
 			<fileset dir="${srcIcons}">
 			</fileset>
 		</copy>
 		<copy todir="${data}">
-			<fileset file="vc.ini">
-			</fileset>
+			<fileset file="vc.ini"/>
+			  <filterset>
+			    <filter token="xxx" value="${version}"/>
+			  </filterset>
 		</copy>
+
+		<copy todir="${srcdata}">
+			<fileset file="${data}\vc.ini"/>
+		</copy>		
 		
 		<copy todir="${ffmpeg}">
 			<fileset dir="${srcffmpeg}">

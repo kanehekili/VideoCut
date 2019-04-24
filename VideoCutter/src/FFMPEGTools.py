@@ -104,6 +104,33 @@ class OSTools():
 BIN = "ffmpeg"
 Log = Logger()
 
+def parseCVInfos(cvtext):
+    lines = cvtext.splitlines(False)
+    cvDict={}
+    for line in lines:
+        match = re.search("(?<=OpenCV)\s*(\d\S*[a-z]*)+",line)
+        if match: 
+            cvDict["OpenCV"]=match.group(1)
+            continue
+            
+        match = re.search('(?<=Baseline:)\s*([ \w]+)+',line)
+        if match:
+            cvDict["BaseLine"]=match.group(1) 
+            continue
+        match = re.search("(?<=GTK\+:)\s*(\w+[(\w+ ]*[\d.]+[)]*)+",line)
+        if match: 
+            cvDict["GTK+"]=match.group(1)
+            continue
+        match = re.search("(?<=FFMPEG:)\s*(\w+)",line)
+        if match:
+            cvDict["FFMPEG"]=match.group(1) 
+            continue
+        match = re.search("(?<=avcodec:)\s*(\w+[(\w+ ]*[\d.]+[)]*)+",line)
+        if match:
+            cvDict["AVCODEC"]=match.group(1) 
+            continue
+    return cvDict
+
 def timedeltaToFFMPEGString(deltaTime):
     ms=int(deltaTime.microseconds/1000)
     s = deltaTime.seconds

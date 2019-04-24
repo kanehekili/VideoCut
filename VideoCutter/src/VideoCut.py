@@ -11,7 +11,7 @@ from PyQt5.QtWidgets import QApplication,QWidget
 try:
     import cv2 #cv3
     cvmode=3
-    print (cv2.getBuildInformation())
+    #print (cv2.getBuildInformation())
 except ImportError:
     print ("OpenCV 3 not found,, expecting Version 2 now")
     try:
@@ -36,7 +36,6 @@ import xml.etree.cElementTree as CT
 # sizes ..
 SIZE_ICON=80
 ITEM_ROW_COUNT=3
-
 
 def changeBackgroundColor(widget, colorString):
     widget.setAttribute(QtCore.Qt.WA_StyledBackground, True)
@@ -141,9 +140,13 @@ class OpenCV3():
 if cvmode == 3:
     OPENCV=OpenCV3()
     print ("using CV3")
+    cvInfo=FFMPEGTools.parseCVInfos(cv2.getBuildInformation());
+    cvInfo["CV_Version"]='CV3'
 else:
     OPENCV=OpenCV2()
-    print ("using CV2")    
+    print ("using CV2")
+    cvInfo=FFMPEGTools.parseCVInfos(cv2.getBuildInformation());  
+    cvInfo["CV_Version"]='CV2'  
 
 class XMLAccessor():
     def __init__(self,path):
@@ -802,11 +805,24 @@ class MainFrame(QtWidgets.QMainWindow):
                     <tr><td><b>FPS:</b></td><td> %s </td></tr>
                     <tr><td><b>Duration:</b></td><td> %s [sec]</td></tr>
                     <tr><td><b>Audio codec:</b></td><td> %s </td></tr>
-                    </table>"""%(container.formatNames()[0],container.getBitRate(),container.getSizeKB(),streamData.isTransportStream(),videoData.getCodec(),videoData.getWidth(),videoData.getHeight(),videoData.getAspectRatio(),videoData.getFrameRate(),videoData.duration(),audioData.getCodec())                    
+                    </table>"""%(container.formatNames()[0],container.getBitRate(),container.getSizeKB(),streamData.isTransportStream(),videoData.getCodec(),videoData.getWidth(),videoData.getHeight(),videoData.getAspectRatio(),videoData.getFrameRate(),videoData.duration(),audioData.getCodec())
+            entries=[]
+            entries.append("""<br><\br><table border=0 cellspacing="3",cellpadding="2">""")
+            
+            for key, value in cvInfo.items():
+                entries.append("<tr border=1><td><b>")
+                entries.append(key)
+                entries.append(":</b></td><td> ")
+                entries.append(value)
+                entries.append("</td></tr>")
+            entries.append("</table>");
+            text2 = ''.join(entries)
+                    
+                                        
         except:
             Log.logException("Invalid codec format")
             text = "<br><b>No Information</b><br>"    
-        self.__getInfoDialog(text).show()
+        self.__getInfoDialog(text+text2).show()
         
     def playVideo(self):
         isPlaying = self._videoController.toggleVideoPlay()
@@ -930,6 +946,13 @@ class SettingsDialog(QtWidgets.QDialog):
         outBox = QtWidgets.QVBoxLayout()
         #outBox.addStretch(1)
         self.setSizePolicy(QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Expanding)
+        versionBox = QtWidgets.QHBoxLayout()
+        lbl = QtWidgets.QLabel("Version:")
+        ver  = QtWidgets.QLabel(vc_config.get("version"))
+        versionBox.addStretch(1)
+        versionBox.addWidget(lbl)
+        versionBox.addWidget(ver)
+        versionBox.addStretch(1)
 
         frame1 =  QtWidgets.QFrame()
         frame1.setFrameStyle(QtWidgets.QFrame.Box | QtWidgets.QFrame.Sunken)
@@ -966,6 +989,7 @@ class SettingsDialog(QtWidgets.QDialog):
         expoBox = QtWidgets.QVBoxLayout(frame2)
         expoBox.addWidget(self.exRemux)
         
+        outBox.addLayout(versionBox)
         outBox.addWidget(frame1)
         outBox.addWidget(frame2)
         self.setLayout(outBox)
