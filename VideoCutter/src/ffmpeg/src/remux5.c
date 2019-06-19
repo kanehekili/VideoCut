@@ -41,6 +41,7 @@
 #include <libavutil/frame.h>
 #include <libavutil/mathematics.h>
 #include <unistd.h>
+#include <sys/sysinfo.h>
 #include <stdio.h>
 
 #if (LIBAVCODEC_VERSION_MAJOR == 57)
@@ -84,7 +85,7 @@ typedef struct {
     int muxMode;
     char* sourceFile;
     char* targetFile;
- 
+    int nprocs; //Number of (hyper)threads
 } SourceContext;
 
 typedef struct {
@@ -321,6 +322,12 @@ static int _initDecoder(struct StreamInfo *info){
     dec_ctx->framerate = av_guess_frame_rate(context.ifmt_ctx, info->inStream, NULL);
     //dec_ctx->framerate.num is the FPS! -> info->in_codec_ctx->framerate.num
 
+    //configure multi threading
+    dec_ctx->thread_count=context.nprocs;
+    dec_ctx->thread_type = FF_THREAD_FRAME | FF_THREAD_SLICE;
+    av_log(NULL,AV_LOG_INFO,"Registered %d decoding threads \n",dec_ctx->thread_count);
+
+
     if ((ret=avcodec_open2(dec_ctx,dec,&opts))<0){ 
        av_log(NULL, AV_LOG_ERROR,"Err: Failed to open codec context\n");
        return -1;
@@ -397,6 +404,12 @@ static int _initEncoder(struct StreamInfo *info, AVFrame *frame){
     }else
         enc_ctx->max_b_frames = 4;//What?
 
+    //configure multi threading
+    enc_ctx->thread_count=context.nprocs;
+    enc_ctx->thread_type = FF_THREAD_FRAME | FF_THREAD_SLICE;
+    av_log(NULL,AV_LOG_INFO,"Registered %d encding threads \n",enc_ctx->thread_count);
+    
+    
     if ((ret=avcodec_open2(enc_ctx,encoder,&opts))<0){ 
        av_log(NULL, AV_LOG_ERROR,"Err: Failed to open en-codec context\n");
        return -1;
@@ -573,12 +586,9 @@ static int write_packet(struct StreamInfo *info,AVPacket *pkt){
         //control time /audio sync
             int64_t	cum =  context.gap+info->first_dts - context.streamOffset ;		
             int64_t offset = av_rescale_q(cum,videoStream->inStream->time_base, in_stream->time_base);
-            int64_t in_DTS = pkt->dts - offset; //intime
+            int64_t in_DTS = max(pkt->dts - offset,0); //intime - no negative dts on remux
             //dts - headofGOP - delta time AV... 
             int64_t out_DTS = av_rescale_q(in_DTS,in_stream->time_base, out_stream->time_base);
- //           double_t dts1time = streamTime( out_stream->time_base,out_DTS);
- //           double_t cdtsTime = streamTime(out_stream->time_base,currentDTS);
- //           av_log(NULL,AV_LOG_VERBOSE,"Ref calc dts1 %ld (%.3f) curr:%ld (%.3f) \n",out_DTS,dts1time,currentDTS,cdtsTime);
  
         if (currentDTS == AV_NOPTS_VALUE){
             currentDTS = out_DTS;
@@ -603,12 +613,17 @@ static int write_packet(struct StreamInfo *info,AVPacket *pkt){
         if (p1==AV_NOPTS_VALUE){
 			delta = av_rescale_q(dur,in_stream->time_base,out_stream->time_base);
 		}
+        //remux workaround ...
+        if (dur==0){
+           dur=info->deltaDTS;
+        }
         pkt->stream_index = info->dstIndex;
 
-        pkt->duration = av_rescale_q(pkt->duration, in_stream->time_base, out_stream->time_base);
+        pkt->duration = av_rescale_q(dur, in_stream->time_base, out_stream->time_base);
         pkt->pos=-1;//File pos is unknown if cut..
 
          //increment the DTS instead of calculating it. 
+         //TODO DOES NOT WORK IF DUR ==0 (aka Remux)
         pkt->dts = currentDTS+pkt->duration;
         if (p1!=AV_NOPTS_VALUE)
             pkt->pts = pkt->dts+delta;
@@ -1184,6 +1199,8 @@ int main(int argc, char **argv)
         usage(argv[0]);
         return 1;
     }
+
+    context.nprocs = get_nprocs();
 
     //The seeks slots...
     seekCount = parseArgs(argc,argv,timeslots);
