@@ -95,6 +95,6 @@ Can't be really implemented with the ffmpeg ABI. The transcoded part will have d
 * Introduced a stop button while processing. Fixed some audio time calculation issues
 
 27.07.2019
-* Changed remux5 completly. Exact PTS/DTS calculation for video. Rewrote transcoding. Supports multi threading.
+* Changed remux5:. Exact PTS/DTS calculation for video. Rewrote transcoding. Supports multi threading.
 * Allows mkv/VC1 codec, audio sync not good on source that has no PTS when decoding/muxing
  
