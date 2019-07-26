@@ -978,7 +978,7 @@ class SettingsDialog(QtWidgets.QDialog):
 #         self.combo.setCurrentText(self.model.selectedContainer)
 #         self.combo.currentTextChanged.connect(self.on_combobox_selected)
         #we want audio as well?
-        self.exRemux = QtWidgets.QCheckBox("Fast remux")
+        self.exRemux = QtWidgets.QCheckBox("VideoCut Muxer")
         self.exRemux.setToolTip("Uses the remux code instead of default ffmpeg commandline")
         self.exRemux.setChecked(self.model.fastRemux)
         self.exRemux.stateChanged.connect(self.on_fastRemuxChanged)
