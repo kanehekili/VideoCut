@@ -3,16 +3,16 @@ remux5 is a prototype which simply copies packets from a stream and adds it to t
 No reencoding involved. Fast.
 Drawback: Not exact, since I frames need to be used for start/end.
 
-currently the binary is compiled on arch linux against ffmpeg version 4.0.2.
-Works as well on debian buster, propably on other distros with ffmpeg 4.0.2
+currently the binary is compiled on arch linux against ffmpeg version 4.0.2 and 3.5
+Works as well on debian buster, propably on other distros with ffmpeg 4.0.2 and 3.5
 
-Can be activated by setting the "Experimental" switch to on.(Toolbar ->Clogs icon)
+Is activ by setting the "VideoCut Muxer" switch to on.(Toolbar ->Clogs icon)
 
 The source was compiled with: (this is geany syntax)
  gcc -g -Wall -c "%f", where %f is the filename (remux5.c)
  
  build with:
- gcc -g -o "%e" "%f" -g -lavutil -lavformat -lavcodec -lz -lavutil -lswscale -lm -lavresample -lavfilter
+ gcc -g -o "%e" "%f" -g -lavutil -lavformat -lavcodec -lz -lavutil -lm 
  
  %e output file name..
  
@@ -27,3 +27,5 @@ On debian derivates follwing packes are needed to compile_
  
  Still working on a more precise way to cut - but this is the fastest way to cut films.
  Tested with mp2 and mp4 vp8 and more. Mainly used TS streams that have been converted into PS streams.
+ 
+ MKV with VC1 codec do not have any PTS timestamps, which makes syncing with audio difficult...

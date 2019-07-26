@@ -290,6 +290,7 @@ class FFStreamProbe():
         self._convTable["rawvideo"]="swf"
         self._convTable["vp6f"]="flv"
         self._convTable["matroska"]="mkv"
+        self._convTable["vc1"]="mkv" #only decode / remux can't handle the audio sync!
         self._convTable["webm"]="mkv"
         self._convTable["mpeg4"]="mp4" #or mov,m4a,3gp,3g2,mj2 as EXTENSION..
 
