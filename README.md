@@ -1,5 +1,5 @@
 # VideoCut
-Version 1.1.3
+Version 1.2.0
 
 MP2/MP4 Cutter for Linux on base of OpenCV and ffmpeg. Cutting is lossless, the target file will not be reencoded. 
 
@@ -39,7 +39,7 @@ OpenCV:  it is necessary to get a version that has been compiled with ffmpeg
 :boom: Be aware that this tool does not cut exact on frame - except you reencode the whole film.
 
 ### How to install
-* Download the videocut*.tar contained in the "build" folder ![here](https://github.com/kanehekili/VideoCut/raw/master/VideoCutter/build/videocut1.1.3.tar)
+* Download the videocut*.tar contained in the "build" folder ![here](https://github.com/kanehekili/VideoCut/raw/master/VideoCutter/build/videocut1.2.0.tar)
 * Upack it to a location that suits you.
 * Copy the VideoCut.desktop file to ~/.local/share/applications
 * Change the absolute paths & user name within that desktop file to the location where you've copied the files.
@@ -50,10 +50,9 @@ OpenCV:  it is necessary to get a version that has been compiled with ffmpeg
 * Exact frame cut - see coment below 
 * Conversion tools - from one container to another, change audio or video codecs...
 * Kicking out opencv using SDL and the libavcodec libraries.
-* Multi threaded transcoding (remux is fast enough ;-)
 
 ### Using remux instead of ffmpeg
-remuxX is based on ffmpeg, but uses an integrated approach to cut and join videos. Currently there is a bug in ffmpeg to concat mp4. Remux handles it correctly. To activate it, use the "coggs" icon and select "Experimental".
+remuxX is based on ffmpeg, but uses an integrated approach to cut and join videos. Currently there is a bug in ffmpeg to concat mp4. Remux handles it correctly. To activate it, use the "coggs" icon and select "VideoCut muxer".
 
 Please note that excat cut (i.e. transcoding) is available for remux5. Since it runs single threaded, it is far too slow for usage. Will work on a mutlithreaded version.
 
@@ -94,4 +93,8 @@ Can't be really implemented with the ffmpeg ABI. The transcoded part will have d
 
 03.03.2019
 * Introduced a stop button while processing. Fixed some audio time calculation issues
+
+27.07.2019
+* Changed remux5 completly. Exact PTS/DTS calculation for video. Rewrote transcoding. Supports multi threading.
+* Allows mkv/VC1 codec, audio sync not good on source that has no PTS when decoding/muxing
  
