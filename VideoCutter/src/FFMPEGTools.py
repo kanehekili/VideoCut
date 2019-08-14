@@ -896,10 +896,10 @@ class FFMPEGCutter():
     
     def _videoMode(self,mode=None):
         videoStream = self._config.streamData.getVideoStream() 
-        
+        #TODO: wrong: The target defines which codec we are using....
         log("video:",videoStream.getCodec())
         if self._config.reencode:
-            return ["-c:v","libx264","-preset","faster"]  #-preset slow -crf 22
+            return ["-c:v","libx264","-preset","medium"]  #-preset slow -crf 22
         
         if self._config.streamData.needsH264Filter():
             if self._fragmentCount==1:#CUT ONLY -NOT JOIN!
