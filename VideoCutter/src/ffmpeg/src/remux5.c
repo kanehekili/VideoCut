@@ -50,7 +50,7 @@
 #define max(a,b) (a>b?a:b)
 #define min(a,b) (a<b?a:b)
 #define MODE_FAST 0
-#define MODE_REMUX 1
+#define MODE_TRANSCODE 1
 #define MODE_DUMP 2
 #define MODE_DUMPFRAMES 3
 
@@ -83,7 +83,6 @@ typedef struct {
     char* sourceFile;
     char* targetFile;
     int nprocs; //Number of (hyper)threads
-    short newCut;//indicates the first frame of a new cut.
 } SourceContext;
 
 typedef struct {
@@ -131,21 +130,23 @@ static int findBestAudioStream(struct StreamInfo *info){
         av_log(NULL, AV_LOG_ERROR,"Err: No audio decoder found\n");
         return -1;
     }
-    info->inStream=context.ifmt_ctx->streams[info->srcIndex];//TODO function in struct?
+    info->inStream=context.ifmt_ctx->streams[info->srcIndex];
     info->dstIndex=1;//TODO more to come
     info->in_time_base=info->inStream->time_base;
     return info->srcIndex;
 }
 
-static int checkVideoFormat(struct StreamInfo *info){
+static int checkVideoFormat(struct StreamInfo *info,char *out_filename){
    info->ofmt= NULL;
    int codecID = info->inStream->codecpar->codec_id;
    if (codecID == AV_CODEC_ID_MPEG2VIDEO){
-        info->ofmt= av_guess_format("dvd", NULL, NULL);
-        av_log(NULL, AV_LOG_INFO,"MPEG2 set to -f dvd\n");
-    }else if(codecID == AV_CODEC_ID_VC1){//Matroska - we can't encode that
-    	info->ofmt= av_guess_format("mp4", NULL, NULL);
-    	av_log(NULL, AV_LOG_INFO,"Matroska set to h264\n");
+	   info->ofmt= av_guess_format(NULL,out_filename, NULL);
+	   if (info->ofmt->video_codec == AV_CODEC_ID_MPEG1VIDEO)
+		   info->ofmt= av_guess_format("dvd", NULL, NULL);
+        av_log(NULL, AV_LOG_INFO,"MPEG2 set to PS-stream\n");
+    }else if(codecID == AV_CODEC_ID_VC1 && context.muxMode==MODE_TRANSCODE){//VC-1 - we can't encode that
+    	info->ofmt= av_guess_format("mp4", NULL, NULL);//libavcodec dosn't support mkv (vorbis seems to be the problem)
+    	av_log(NULL, AV_LOG_INFO,"Matroska hardcoded set to mp4\n");
     }
     return 1;
 }
@@ -157,11 +158,6 @@ static void setupOutputParamters(struct StreamInfo *info, AVStream *outStream){
 
 	outCodecParm->codec_type=inCodecParm->codec_type;
 	outCodecParm->codec_id = context.ofmt_ctx->oformat->video_codec;
-	//outCodecParm->codec_tag = ?;
-	//outCodecParm->extradata;
-	//outCodecParm->bits_per_coded_sample;
-	//outCodecParm->profile;//z.B FF_PROFILE_H264_MAIN for H264
-	//outCodecParm->level;
 	outCodecParm->width=inCodecParm->width;
 	outCodecParm->height=inCodecParm->height;
 	outCodecParm->field_order = inCodecParm->field_order;
@@ -212,7 +208,7 @@ static int createOutputStream(struct StreamInfo *info){
      * If the video codecs change (VC1 to h264), then parameter copy is NOT allowed/working
      */
     short sameCodec = (info->inStream->codecpar->codec_id == context.ofmt_ctx->oformat->video_codec);
-    if (!sameCodec && pCodecParm->codec_type==AVMEDIA_TYPE_VIDEO && context.muxMode==MODE_REMUX){
+    if (!sameCodec && pCodecParm->codec_type==AVMEDIA_TYPE_VIDEO && context.muxMode==MODE_TRANSCODE){
     	av_log(NULL, AV_LOG_INFO,"Set output params manually\n");
     	setupOutputParamters(info,out_stream);
     }else {
@@ -229,9 +225,24 @@ static int createOutputStream(struct StreamInfo *info){
     out_stream->duration=0;
     out_stream->avg_frame_rate = info->inStream->avg_frame_rate;
     
-    if (pCodecParm->codec_type==AVMEDIA_TYPE_AUDIO)
-        out_stream->codecpar->frame_size = 2048;//TODO AAC: 1024*channels == 2048, mp3 =1152*channels =2304...
-
+    if (pCodecParm->codec_type==AVMEDIA_TYPE_AUDIO){
+    	int channels = pCodecParm->channels;
+    	int br =0;
+    	switch(pCodecParm->codec_id) {
+			case AV_CODEC_ID_MP3:
+				br=1152;
+				break;
+			case AV_CODEC_ID_AAC:
+				br=1024;
+				break;
+			case AV_CODEC_ID_AC3:
+				br=256;
+				break;
+			default:
+				br=1048;
+    	}
+        out_stream->codecpar->frame_size = br*channels;
+    }
     info->outStream=out_stream;
     return 1;
 }
@@ -257,7 +268,7 @@ int _initOutputContext(char *out_filename){
     }
     int64_t bitrate = context.ifmt_ctx->bit_rate;
     av_log(NULL, AV_LOG_INFO,"Video bitrate: %ld \n",bitrate);
-    ofmt_ctx->bit_rate = bitrate;
+    ofmt_ctx->bit_rate = bitrate;//avg bitrate,just an indicator..
 
     /* The VBV Buffer warning is removed: */
     AVCPBProperties *props;
@@ -265,7 +276,7 @@ int _initOutputContext(char *out_filename){
     int64_t bit_rate = context.ifmt_ctx->bit_rate;
 
     props->buffer_size = 2024 *1024;
-    props->max_bitrate = 3*bit_rate;
+    props->max_bitrate = 15*bit_rate;//Lower means buffer underflow & pixelation during cut
     props->min_bitrate = (2*bit_rate)/3;
     props->avg_bitrate = bit_rate;
     props->vbv_delay = UINT64_MAX;
@@ -297,9 +308,12 @@ int _initOutputContext(char *out_filename){
         return -1;
     }
 
+    //breaks: videoStream->outStream->time_base= av_guess_frame_rate(context.ofmt_ctx,videoStream->inStream,NULL);
 	videoStream->out_time_base=videoStream->outStream->time_base;
+
     if (audioStream->srcIndex >=0)
 	   audioStream->out_time_base=audioStream->outStream->time_base;
+    av_dump_format(ofmt_ctx, 0, out_filename, 1);
     return 1;
 }
 
@@ -327,13 +341,14 @@ int _setupStreams(SourceContext *sctx ){
     av_dump_format(ifmt_ctx, 0, in_filename, 0);
    
     context.ifmt_ctx = ifmt_ctx;
+    //context.ifmt_ctx->flags |= AVFMT_FLAG_GENPTS;//BREAKS PTS- crappy ffmpeg!
     //Later we take all audio streams.
     if ((ret = findBestVideoStream(videoStream)) < 0) {
         av_log(NULL, AV_LOG_ERROR,"Err: No video stream found \n");
         return -1;        
     }
     
-    if ((ret = checkVideoFormat(videoStream))< 0){
+    if ((ret = checkVideoFormat(videoStream,out_filename))< 0){
         av_log(NULL, AV_LOG_ERROR,"Err: Failed to retrieve video format\n");
         return -1;        
     }
@@ -376,6 +391,7 @@ static int _initDecoder(struct StreamInfo *info){
        return -1;
     }
     info->in_codec_ctx=dec_ctx;
+    info->out_codec_ctx=NULL;
     return 1;
 }
 
@@ -420,18 +436,15 @@ static int _initEncoder(struct StreamInfo *info, AVFrame *frame){
      */
 
     enc_ctx->time_base = av_inv_q(dec_ctx->framerate);
-    //enc_ctx->time_base = info->outStream->time_base;
-
     enc_ctx->framerate = dec_ctx->framerate;
-
+    enc_ctx->max_b_frames = 4;
 	if (encoder->id == AV_CODEC_ID_H264){
-     	enc_ctx->max_b_frames = dec_ctx->max_b_frames;
      	enc_ctx->ticks_per_frame=dec_ctx->ticks_per_frame;
 		av_opt_set(enc_ctx->priv_data, "crf","23",0);
 		//profile: baseline, main, high, high10, high422, high444
-		av_opt_set(enc_ctx->priv_data, "profile", "main", 0);//more devices..
+		av_opt_set(enc_ctx->priv_data, "profile", "high", 0);//more devices..
 		av_opt_set(enc_ctx->priv_data, "preset", "medium", 0);
-
+		//av_dict_set(&opts, "movflags", "faststart", 0);
 		//Bitrate section h264 -> if max then buffer -< but not reliably working with this codec!
 		//enc_ctx->bit_rate = context.ifmt_ctx->bit_rate; ->copy params
 		enc_ctx->rc_max_rate = context.ifmt_ctx->bit_rate;
@@ -442,15 +455,18 @@ static int _initEncoder(struct StreamInfo *info, AVFrame *frame){
 		 * https://streaminglearningcenter.com/blogs/book-excerpt-vbv-buffer-explained.html
 		 * The VC1 decoder is broken ....
 		 */
-		if (dec_ctx->codec_id != AV_CODEC_ID_VC1)
+		if (dec_ctx->codec_id != AV_CODEC_ID_VC1){
 			enc_ctx->rc_buffer_size= (int)(enc_ctx->rc_max_rate);
-
-		//The lower the more bitrate....
-		enc_ctx->qmin = 1;
-		enc_ctx->qmax = 23;
+			//The lower the more bitrate.... Make it configurable!
+			enc_ctx->qmin = 1;
+			enc_ctx->qmax = 23;
+		}else {
+			enc_ctx->qmin = 18;
+			enc_ctx->qmax = 23;
+		}
 
      } else if (encoder->id == AV_CODEC_ID_MPEG2VIDEO){
-        enc_ctx->max_b_frames = 2;
+        //enc_ctx->max_b_frames = 2;
         enc_ctx->bit_rate = context.ifmt_ctx->bit_rate;
         enc_ctx->ticks_per_frame=2;
 
@@ -467,10 +483,7 @@ static int _initEncoder(struct StreamInfo *info, AVFrame *frame){
         props->avg_bitrate = bit_rate;
         props->vbv_delay = UINT64_MAX;
       
-    }else {
-        enc_ctx->max_b_frames = 4;//What?
     }
-
 
     //configure multi threading
     enc_ctx->thread_count=context.nprocs;
@@ -591,7 +604,7 @@ static int seekHeadGOP(struct StreamInfo *info, int64_t ts,CutData *borders) {
             continue;
         }    
         int i;
-        if (pkt.flags == AV_PKT_FLAG_KEY){
+        if (pkt.flags == AV_PKT_FLAG_KEY && pkt.dts != AV_NOPTS_VALUE){
             for (i =0; i< maxFrames-1; i++){
                 gop[i]=gop[i+1];
             }
@@ -645,24 +658,10 @@ static int write_packet(struct StreamInfo *info,AVPacket *pkt){
 
         /**
          * Cutting data is in video time. Convert it from video time to stream time.
-         * To have a zero based dts without gaps the follwing rule is applied:
-         * dts-(cumulated gaps + dts of the start of first cut - the stream offset between video and audio)
-         * The offset prevents too many negative TS at the start of the stream that lies behind timewise
-         * It is the difference between video and the "latest" audio in DTS.
         */ 
-
         int64_t currentDTS = info->outStream->cur_dts; //out-time
- 
-        //control time /audio sync
-            //int64_t	cum =  context.gap+context.video_first_dts - context.streamOffset;
-            //int64_t offset = av_rescale_q(context.streamOffset,videoStream->inStream->time_base, in_stream->time_base);
-            //int64_t in_DTS = max(pkt->dts - offset,0); //intime - no negative dts on remux
-            //dts - headofGOP - delta time AV... 
-            //int64_t out_DTS = av_rescale_q(in_DTS,in_stream->time_base, out_stream->time_base);
 
         //remove early audio packets.... crucial!
-        //sync -x = sound later/delayed.
-        //x only for TRANSCODE
         if (!isVideo && (pkt->dts < context.audio_sync_dts)){
             double_t currTS = av_q2d(out_stream->time_base)*context.audio_sync_dts;
             double_t audioTS = av_q2d(out_stream->time_base)*pkt->dts;
@@ -675,9 +674,6 @@ static int write_packet(struct StreamInfo *info,AVPacket *pkt){
 
         if (currentDTS == AV_NOPTS_VALUE){
         	currentDTS=0;
-//        	if (!isVideo && context.muxMode==MODE_REMUX)
-//        		currentDTS=+av_rescale_q(2*videoStream->deltaDTS,videoStream->outStream->time_base, out_stream->time_base);
-
         }
 
 
@@ -693,27 +689,17 @@ static int write_packet(struct StreamInfo *info,AVPacket *pkt){
         //remux workaround ... duration may be 0 ->next pts - curr pts... will not work if pts invalid
         if (dur==0  && isVideo){
 		   dur=info->deltaDTS;
-		   //pkt->dts=round(info->deltaDTS*info->frame_nbr);
 		   pkt->dts = currentDTS+(int64_t)dur;
 		   context.video_sync_dts=pkt->dts;//needed by trailing audio
         }else {
-        	pkt->duration = av_rescale_q(dur, in_stream->time_base, out_stream->time_base);
+       		pkt->duration = av_rescale_q(dur, in_stream->time_base, out_stream->time_base);
 			//increment the DTS instead of calculating it.
- 		   if (context.newCut && context.muxMode==MODE_REMUX && !isVideo){//GAP handling! - mp2 incompatible
-// 			  int64_t vdts=videoStream->outStream->cur_dts;
-// 			 int64_t pdts= max(currentDTS,vdts + 2*videoStream->deltaDTS);
-//
-// 			  currentDTS = av_rescale_q(pdts,videoStream->outStream->time_base,out_stream->time_base);
-// 			 av_log(NULL, AV_LOG_VERBOSE,"*GAP* CurrDTS was: %ld, now: %ld v-PTS:%ld\n",out_stream->cur_dts,currentDTS,pdts);
- 			  context.newCut=0;
- 			  //TEST -makes it better. So by default audio is a little behind....
- 			 //currentDTS += 5*pkt->duration;
- 		   }
  		   pkt->dts = currentDTS+pkt->duration;
         }
-
         if (p1!=AV_NOPTS_VALUE)
 		   pkt->pts = pkt->dts+delta;
+//        else
+//        	pkt->pts = pkt->dts;
 
         double_t dtsCalcTime = av_q2d(out_stream->time_base)*(pkt->dts);
         int ts = (int)dtsCalcTime;
@@ -745,7 +731,7 @@ static int write_packet(struct StreamInfo *info,AVPacket *pkt){
         
 }
 
-//Plain muxing, no encoding yet.Expect an Iframe first
+//Plain muxing, no encoding.Expect an Iframe first
 static int mux1(CutData head,CutData tail){
     struct StreamInfo *streamInfo;
     AVPacket pkt = { .data = NULL, .size = 0 };
@@ -765,6 +751,8 @@ static int mux1(CutData head,CutData tail){
                 fcnt=1;
                 frm='I';
             }
+            if (pkt.dts==AV_NOPTS_VALUE)
+            	pkt.dts = pkt.pts-42; //what else ;-)
             //ignore leading and trailing video packets. 
             if (fcnt==0 ){
                 av_log(NULL,AV_LOG_VERBOSE,"Skip head packet %ld [%c]\n",pkt.dts,frm);
@@ -893,7 +881,7 @@ static int flushFrames(struct StreamInfo *info, AVFrame *frame){
     return 1;
 }
 
-static int flushPackets(struct StreamInfo *info){
+static int flushPackets(struct StreamInfo *info,int64_t stop){
     AVPacket pkt;
     int ret;
     if (!info->out_codec_ctx)
@@ -908,6 +896,11 @@ static int flushPackets(struct StreamInfo *info){
             if (ret==0){
                 av_log(NULL, AV_LOG_VERBOSE,"p->");
                 pkt.stream_index=info->inStream->index;//compatibility
+                if (pkt.dts>=stop){
+                 	av_log(NULL,AV_LOG_VERBOSE,"Flush pkt END: %ld\n",pkt.dts);
+                 	av_packet_unref(&pkt);
+                 	break;
+                 }
                 write_packet(info,&pkt);
             }else {
                 av_packet_unref(&pkt);
@@ -950,7 +943,7 @@ static int pushTailAudio(struct StreamInfo *info, int64_t start, int64_t stop){
         }
         double_t outtime= av_q2d(info->outStream->time_base)*(pkt.dts);
         double_t intime= av_q2d(info->inStream->time_base)*(pkt.dts);
-        av_log(NULL,AV_LOG_VERBOSE,"** P/D:%ld in:%.3f out:%.3f cnt:%ld\n",pkt.dts,intime,outtime,counter);
+        av_log(NULL,AV_LOG_VERBOSE,"**Audio Tail P/D:%ld in:%.3f out:%.3f cnt:%ld\n",pkt.dts,intime,outtime,counter);
         write_packet(audioStream,&pkt);//unreffed there
     }
     return 1;
@@ -962,7 +955,10 @@ static int transcode(struct StreamInfo *info, int64_t start, int64_t stop){
     int ret;
     int gopsize=0;
     AVFrame *frame;
-    int64_t check_pts=0;
+    int64_t audioTail = 0;
+    if (audioStream->inStream)
+    		audioTail = av_rescale_q(stop,videoStream->inStream->time_base,audioStream->inStream->time_base);
+    av_log(NULL, AV_LOG_VERBOSE,"Video stop: %ld, Audio cutoff: %ld\n",stop,audioTail);
 
     frame = av_frame_alloc();    
     ret = _initEncoder(info,frame);
@@ -972,15 +968,16 @@ static int transcode(struct StreamInfo *info, int64_t start, int64_t stop){
     av_init_packet(&pkt);
         
     while (av_read_frame(context.ifmt_ctx, &pkt)>=0) {
+    	if (pkt.dts == AV_NOPTS_VALUE)
+    		continue; //Not able
+
         int isVideo = pkt.stream_index == videoStream->srcIndex;
         int isAudio = pkt.stream_index == audioStream->srcIndex;
         
         if (isAudio){
-//        	if (pkt.dts <= audioTail)
-//        		write_packet(audioStream,&pkt);
-//        	else
-//        		av_log(NULL, AV_LOG_VERBOSE,"**Tail: %ld of:%ld\n",pkt.pts,audioTail);
-    		write_packet(audioStream,&pkt);
+        	if (pkt.dts <= audioTail)
+        		write_packet(audioStream,&pkt);
+
         	continue;
 
         } else if (isVideo) {
@@ -1001,21 +998,21 @@ static int transcode(struct StreamInfo *info, int64_t start, int64_t stop){
             av_log(NULL, AV_LOG_VERBOSE,"Buffer pkt: isKey:%d p:%ld d:%ld [%.3f] dur:%ld\n",pkt.flags, pkt.pts,pkt.dts,dtime,pkt.duration);
         }else {
         	//either PTS or DTS ..
-        	if (frame->pts == AV_NOPTS_VALUE)
-        		check_pts = frame->best_effort_timestamp;//works -not on h264 raw/mkv
-        	else
-        		check_pts = frame->pts;
-
+        	if (frame->pts == AV_NOPTS_VALUE){
+        		frame->pts = frame->best_effort_timestamp;//works -not on h264 raw/mkv
+        		av_log(NULL, AV_LOG_VERBOSE,"&");
+        	}
             char ptype = av_get_picture_type_char(frame->pict_type);
             double_t fptime= av_q2d(info->inStream->time_base)*(frame->pts);
             //DTS is always==PTS- since its decoded...
             av_log(NULL, AV_LOG_VERBOSE,"[%d]%d) decode key: %d (%d) type: %c, pts: %ld time: %.3f frm dur %ld, pkt dur:%ld",keyFrameCount,info->in_codec_ctx->frame_number,frame->key_frame,pkt.flags,ptype,frame->pts,fptime,frame->pkt_duration,pkt.duration);
             
-			if (frame->pts != AV_NOPTS_VALUE && frame->pts < start){
+			//if (frame->pts != AV_NOPTS_VALUE && frame->pts < start){
+            if (frame->pts < start){
 				av_log(NULL, AV_LOG_VERBOSE,"- Ignore\n");
 				av_packet_unref(&pkt);
 				continue;
-			}else if (check_pts > stop){
+			}else if (frame->pts > stop){
 				av_log(NULL, AV_LOG_VERBOSE,"- End of GOP: %ld\n",frame->pts);
 				break;
 			}
@@ -1052,7 +1049,7 @@ static int transcode(struct StreamInfo *info, int64_t start, int64_t stop){
     }
     av_packet_unref(&pkt);     
     flushFrames(info,frame);
-    flushPackets(info);
+    flushPackets(info,stop);
     info->out_codec_ctx=NULL;
     avcodec_flush_buffers(info->in_codec_ctx);
     av_frame_free(&frame);
@@ -1149,7 +1146,6 @@ static int seekAndMux(double_t timeslots[],int seekCount){
         av_log(NULL, AV_LOG_INFO,"Video OUT: %s long:%s\n",context.ofmt_ctx->oformat->name,context.ofmt_ctx->oformat->long_name);
 
     context.streamOffset = startOffset; 
-    context.newCut=0;
     audioStream->frame_nbr=0;
     videoStream->frame_nbr=0;
     
@@ -1172,17 +1168,6 @@ static int seekAndMux(double_t timeslots[],int seekCount){
         av_log(NULL, AV_LOG_INFO,"************************\nSearch from %.3f to %.3f pts: %ld - %ld \n",startSecs,endSecs,ptsStart,ptsEnd);
         seekHeadGOP(videoStream,ptsStart,&headBorders);//Header GOP
         seekTailGOP(videoStream,ptsEnd,&tailBorders); //TAIL GOP
-//        int64_t head = (context.muxMode == MODE_REMUX)?headBorders.dts:headBorders.start;
-
-
-//        if (i==1){
-//			prevTail=head;
-//		}
-//        int64_t deltaGap= head-prevTail;
-//		gap += deltaGap;
-//        context.gap = gap;
-//        av_log(NULL, AV_LOG_INFO,"Gap calc <tail %ld head: %ld gap: %ld [%ld] delta calc:%.3f\n",prevTail,head,context.gap,deltaGap,videoStream->deltaDTS);
-//        prevTail = (context.muxMode == MODE_REMUX)?tailBorders.dts:tailBorders.end;
         
         if (headBorders.start == headBorders.end || tailBorders.start==tailBorders.end){
             av_log(NULL, AV_LOG_ERROR,"Err: Seek times out of range. Aborted");
@@ -1196,14 +1181,13 @@ static int seekAndMux(double_t timeslots[],int seekCount){
         avcodec_flush_buffers(videoStream->in_codec_ctx);
         //Start of an I frame we are.
         
-        if (context.muxMode == MODE_REMUX){
+        if (context.muxMode == MODE_TRANSCODE){
         	if (audioStream->inStream){
         		//Guess
         		int64_t gap = (int64_t)videoStream->deltaDTS*2;
         		context.audio_sync_dts= av_rescale_q( headBorders.dts-gap,videoStream->inStream->time_base, audioStream->inStream->time_base);
         	}
             res = transcode(videoStream,headBorders.dts,tailBorders.dts);
-            context.newCut=1;
         }
         else {
         	if (audioStream->inStream)
@@ -1272,7 +1256,7 @@ int parseArgs(int argc, char *argv[],double_t array[]) {
             context.isDebug=1;
             break;
           case 'r':
-            context.muxMode=MODE_REMUX;
+            context.muxMode=MODE_TRANSCODE;
             break;
           case 'l':
             tmp = strtok(optarg,"");
