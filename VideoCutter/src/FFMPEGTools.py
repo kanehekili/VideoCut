@@ -289,9 +289,9 @@ class FFStreamProbe():
         self._convTable["msmpeg4v3"]="avi"
         self._convTable["rawvideo"]="swf"
         self._convTable["vp6f"]="flv"
-        self._convTable["matroska"]="mkv"
         self._convTable["vc1"]="mkv" #only decode / remux can't handle the audio sync!
-        self._convTable["webm"]="mkv"
+        self._convTable["vp8"]="webm"
+        self._convTable["vp9"]="webm"
         self._convTable["mpeg4"]="mp4" #or mov,m4a,3gp,3g2,mj2 as EXTENSION..
 
         #self._convTable["ansi"]="txt"
@@ -761,6 +761,7 @@ class FFMPEGCutter():
         self.secsCut=0;
         self.runningProcess =None;
         self.killed=False
+        self.errors=[]
     
     '''
     cuts a part of the film, saves it an returns the temp filename for later concatination
@@ -837,7 +838,8 @@ class FFMPEGCutter():
         if nbrOfFragments is 1:
             fragment = self.targetPath()
         else:
-            fragment = self._getTempPath()+str(index)+".m2t"
+            ext = self.retrieveTargetExtension()
+            fragment = self._getTempPath()+str(index)+ext
         log("generate file:",fragment)
         self.say("Cutting part:"+str(index))
         
@@ -899,6 +901,7 @@ class FFMPEGCutter():
         #TODO: wrong: The target defines which codec we are using....
         log("video:",videoStream.getCodec())
         if self._config.reencode:
+            #TODO: this must be adapted to the target file! Eg. dvd,webm etc -> ffmepg -formats | grep raw
             return ["-c:v","libx264","-preset","medium"]  #-preset slow -crf 22
         
         if self._config.streamData.needsH264Filter():
@@ -913,6 +916,14 @@ class FFMPEGCutter():
     def _getTempPath(self):
         return self._tempDir+'/vc_'
     
+    def retrieveTargetExtension(self):
+        default = ".m2t"
+        srcExt = os.path.splitext(self.filePath())[1]
+        targetExt = os.path.splitext(self.targetPath())[1]
+        if "mp" in srcExt:
+            return default
+        return targetExt
+        
     
     def filePath(self):
         return self._config.srcfilePath
@@ -932,7 +943,7 @@ class FFMPEGCutter():
         
         with open(self._tmpCutList, 'w') as cutList:
             for index in range(0,self._fragmentCount):
-                tmp = self._getTempPath()+str(index)+".m2t"
+                tmp = self._getTempPath()+str(index)+self.retrieveTargetExtension()
                 cutList.write("file '"+tmp+"'\n")
 
 
@@ -953,6 +964,7 @@ class FFMPEGCutter():
                 #print(path,end="")
         except Exception as error:
             self.say("join failed: %s"%(error))
+            self.warn("join: %s"%(error));
             self.runningProcess =None
             return False
 
@@ -981,6 +993,7 @@ class FFMPEGCutter():
         if "failed" in text:
             print ("ERR:",text)
             self.say(prefix+" !Conversion failed!")
+            self.warn(text);
             return False
         else:
             return True 
@@ -1015,7 +1028,7 @@ class FFMPEGCutter():
     
     def _cleanup(self):
         for index in range(self._fragmentCount):
-            fragment = self._getTempPath()+str(index)+".m2t"
+            fragment = self._getTempPath()+str(index)+self.retrieveTargetExtension()
             os.remove(fragment)   
 
     def ensureDirectory(self,path,tail):
@@ -1027,7 +1040,7 @@ class FFMPEGCutter():
                 os.makedirs(path)
                 os.chmod(path,0o777)
             except OSError:
-                print ("Error creating directory")
+                self.warn("Error creating directory")
                 return
         self._tempDir=path    
     def setProcess(self,proc):
@@ -1038,6 +1051,7 @@ class FFMPEGCutter():
         self.killed=True
         if self.runningProcess is None:
             self.log("Can't kill proc!","-Error")
+            self.warn("Can't kill proc!","-Error")
         else:
             print("FFMPEGCutter - stop process")
             self.runningProcess.kill()    
@@ -1045,6 +1059,14 @@ class FFMPEGCutter():
     def wasAborted(self):
         return self.killed
     
+    def warn(self,text):
+        self.errors.append(text)
+    
+    def hasErrors(self):
+        return len(self.errors)>0
+    
+    def getErrors(self):
+        return self.errors
     
 class VCCutter():
     def __init__(self,cutConfig):
@@ -1053,12 +1075,13 @@ class VCCutter():
         self.regexp = re.compile("([0-9]+) D:([0-9.]+) (.+) ([0-9.]+)%")
         self.runningProcess=None
         self.killed=False
+        self.errors=[]
         
         
     def setupBinary(self):
         fv= FFmpegVersion()
         if fv.version < 3.0:
-           self.say("Invalid FFMPEG Version! Needs to be 3.0 or higher") 
+           self.warn("Invalid FFMPEG Version! Needs to be 3.0 or higher") 
            return
         val=str(fv.version)[:1]
         p= OSTools().getWorkingDirectory();
@@ -1111,6 +1134,9 @@ class VCCutter():
         if self.config.messenger is not None:
             self.config.messenger.say(text) 
 
+    def warn(self,text):
+        self.errors.append(text)
+
     def parseAndDispatch(self,prefix,text,showProgress): 
         try:        
             m = self.regexp.search(text) 
@@ -1126,7 +1152,8 @@ class VCCutter():
             if len(text)>5:
                 print ("<"+text.rstrip())  
                 if "Err:" in text:
-                    log("Muxing error: ",text) 
+                    log(text) 
+                    self.warn(text);
             return False
         else:
             return True 
@@ -1144,6 +1171,12 @@ class VCCutter():
  
     def wasAborted(self):
         return self.killed   
+    
+    def hasErrors(self):
+        return len(self.errors)>0
+    
+    def getErrors(self):
+        return self.errors
         
 class FFmpegVersion():
     def __init__(self):
@@ -1151,13 +1184,16 @@ class FFmpegVersion():
         self.figureItOut()
     
     def figureItOut(self):
-        result = subprocess.Popen(["ffmpeg","-version"], stdout=subprocess.PIPE).communicate()
+        result = subprocess.Popen(["/usr/bin/ffmpeg","-version"], stdout=subprocess.PIPE).communicate()
         if len(result[0])>0:
             text = result[0].decode("utf-8")
             m=re.search("[0-9].[0-9]+",text )
             g1=m.group(0)
             print(g1)
             self.version =float(g1)
+            if self.version > 5.0:
+                self.version=4.1; 
+            
             log("FFmepg Version:",self.version)
  
 ''' 

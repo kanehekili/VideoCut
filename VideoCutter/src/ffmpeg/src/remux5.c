@@ -49,10 +49,12 @@
 #endif 
 #define max(a,b) (a>b?a:b)
 #define min(a,b) (a<b?a:b)
+#define round(x) ((x)>=0?(long)((x)+0.5):(long)((x)-0.5))
 #define MODE_FAST 0
 #define MODE_TRANSCODE 1
 #define MODE_DUMP 2
 #define MODE_DUMPFRAMES 3
+#define MODE_SPLIT 4
 
 struct StreamInfo{
     int srcIndex; //Index of ifmt_ctx stream
@@ -83,12 +85,12 @@ typedef struct {
     char* sourceFile;
     char* targetFile;
     int nprocs; //Number of (hyper)threads
+    int fmtFlags;
 } SourceContext;
 
 typedef struct {
     int64_t start;
     int64_t end;
-    int64_t pts;
     int64_t dts;
 } CutData;
 
@@ -98,11 +100,6 @@ typedef struct {
     SourceContext context;
 
 /*** Basic stuff ***/
-double_t timeFromPTS(int64_t delta, AVRational time_base){
-    double_t res = (double_t)delta*time_base.num/time_base.den;
-    return res;
-}
-
 int64_t ptsFromTime(double_t ts,AVRational time_base){
     int64_t res = (int64_t)(ts*time_base.den/time_base.num);
     return res;
@@ -144,9 +141,14 @@ static int checkVideoFormat(struct StreamInfo *info,char *out_filename){
 	   if (info->ofmt->video_codec == AV_CODEC_ID_MPEG1VIDEO)
 		   info->ofmt= av_guess_format("dvd", NULL, NULL);
         av_log(NULL, AV_LOG_INFO,"MPEG2 set to PS-stream\n");
-    }else if(codecID == AV_CODEC_ID_VC1 && context.muxMode==MODE_TRANSCODE){//VC-1 - we can't encode that
-    	info->ofmt= av_guess_format("mp4", NULL, NULL);//libavcodec dosn't support mkv (vorbis seems to be the problem)
-    	av_log(NULL, AV_LOG_INFO,"Matroska hardcoded set to mp4\n");
+    }else if(codecID == AV_CODEC_ID_VC1){
+    	context.fmtFlags |= AVFMT_NOTIMESTAMPS;
+    	if (context.muxMode==MODE_TRANSCODE){//VC-1 - we can't encode that
+    		info->ofmt= av_guess_format("mp4", NULL, NULL);//libavcodec dosn't support mkv (vorbis seems to be the problem)
+    	    av_log(NULL, AV_LOG_INFO,"Matroska/VC1 set to mp4\n");
+    	}
+    }else if (codecID == AV_CODEC_ID_VP9 && context.muxMode==MODE_TRANSCODE){
+    	info->ofmt->video_codec = AV_CODEC_ID_VP8;
     }
     return 1;
 }
@@ -296,7 +298,7 @@ int _initOutputContext(char *out_filename){
     if (!(ofmt->flags & AVFMT_NOFILE)) {
         ret = avio_open(&ofmt_ctx->pb, out_filename, AVIO_FLAG_WRITE);
         if (ret < 0) {
-            av_log(NULL, AV_LOG_ERROR,"Err: Could not open output file '%s'", out_filename);
+            av_log(NULL, AV_LOG_ERROR,"Err: Could not open output file '%s'\n", out_filename);
             return -1;
         }
      }
@@ -313,7 +315,6 @@ int _initOutputContext(char *out_filename){
 
     if (audioStream->srcIndex >=0)
 	   audioStream->out_time_base=audioStream->outStream->time_base;
-    av_dump_format(ofmt_ctx, 0, out_filename, 1);
     return 1;
 }
 
@@ -329,19 +330,19 @@ int _setupStreams(SourceContext *sctx ){
     #endif
     
     if ((ret = avformat_open_input(&ifmt_ctx, in_filename, 0, 0)) < 0) {
-        av_log(NULL, AV_LOG_ERROR,"Err: Could not open input file '%s'", in_filename);
+        av_log(NULL, AV_LOG_ERROR,"Err: Could not open input file '%s'\n", in_filename);
         return -1;
     }
 
     if ((ret = avformat_find_stream_info(ifmt_ctx,NULL)) < 0) {
-        av_log(NULL, AV_LOG_ERROR,"Err: Failed to retrieve input stream information");
+        av_log(NULL, AV_LOG_ERROR,"Err: Failed to retrieve input stream information\n");
         return -1;
     }
 
     av_dump_format(ifmt_ctx, 0, in_filename, 0);
    
     context.ifmt_ctx = ifmt_ctx;
-    //context.ifmt_ctx->flags |= AVFMT_FLAG_GENPTS;//BREAKS PTS- crappy ffmpeg!
+    //context.ifmt_ctx->flags |= AVFMT_FLAG_GENPTS;//BREAKS PTS
     //Later we take all audio streams.
     if ((ret = findBestVideoStream(videoStream)) < 0) {
         av_log(NULL, AV_LOG_ERROR,"Err: No video stream found \n");
@@ -383,6 +384,7 @@ static int _initDecoder(struct StreamInfo *info){
     //configure multi threading
     dec_ctx->thread_count=context.nprocs;
     dec_ctx->thread_type = FF_THREAD_FRAME | FF_THREAD_SLICE;
+    //dec_ctx->thread_type = FF_THREAD_SLICE;
     av_log(NULL,AV_LOG_INFO,"Registered %d decoding threads \n",dec_ctx->thread_count);
 
 
@@ -439,7 +441,7 @@ static int _initEncoder(struct StreamInfo *info, AVFrame *frame){
     enc_ctx->framerate = dec_ctx->framerate;
     enc_ctx->max_b_frames = 4;
 	if (encoder->id == AV_CODEC_ID_H264){
-     	enc_ctx->ticks_per_frame=dec_ctx->ticks_per_frame;
+     	enc_ctx->ticks_per_frame=dec_ctx->ticks_per_frame;//should be 2!
 		av_opt_set(enc_ctx->priv_data, "crf","23",0);
 		//profile: baseline, main, high, high10, high422, high444
 		av_opt_set(enc_ctx->priv_data, "profile", "high", 0);//more devices..
@@ -461,6 +463,7 @@ static int _initEncoder(struct StreamInfo *info, AVFrame *frame){
 			enc_ctx->qmin = 1;
 			enc_ctx->qmax = 23;
 		}else {
+			enc_ctx->rc_buffer_size= (int)(enc_ctx->rc_max_rate);
 			enc_ctx->qmin = 18;
 			enc_ctx->qmax = 23;
 		}
@@ -495,6 +498,7 @@ static int _initEncoder(struct StreamInfo *info, AVFrame *frame){
        return -1;
     }
 
+    //Despite other examples: flags MUST be set after open2
     ret = avcodec_parameters_from_context(info->outStream->codecpar, enc_ctx);
     if (ret < 0) {
         av_log(NULL, AV_LOG_ERROR,"Err: Failed to copy encoder parameters to output stream \n");
@@ -508,6 +512,7 @@ static int _initEncoder(struct StreamInfo *info, AVFrame *frame){
 
     if (context.ofmt_ctx->oformat->flags & AVFMT_VARIABLE_FPS){
     	av_log(NULL, AV_LOG_INFO,"Detected VAR FPS\n");
+    	enc_ctx->flags |= AVFMT_VARIABLE_FPS;
     }
 
     frame->format = info->in_codec_ctx->pix_fmt;
@@ -525,7 +530,6 @@ static int seekTailGOP(struct StreamInfo *info, int64_t ts,CutData *borders) {
     int timeHit=0;
     int keyFrameCount=0;
     int maxFrames=3;
-    int64_t maxPTS =0;
     int64_t gop[3]={0,0,0};
 
     if (lookback > ts)
@@ -554,10 +558,6 @@ static int seekTailGOP(struct StreamInfo *info, int64_t ts,CutData *borders) {
         if (pkt.dts >= ts && !timeHit){
             timeHit=1;
             borders->dts=pkt.dts;
-            borders->pts=pkt.pts;
-        }
-        if (pkt.dts <= ts && !timeHit){
-        	maxPTS=max(maxPTS,pkt.pts);
         }
         av_packet_unref(&pkt); 
     }
@@ -576,7 +576,7 @@ static int seekTailGOP(struct StreamInfo *info, int64_t ts,CutData *borders) {
     double_t st = av_q2d(time_base)*(ts-vStreamOffset);
     double_t g0 = av_q2d(time_base)*(gop[idx]-vStreamOffset);
     double_t g1 = av_q2d(time_base)*(gop[idx+1]-vStreamOffset);
-    av_log(NULL, AV_LOG_VERBOSE,"Tail: (keycount %d block: %d) deltas: %d/%d Searchkey:%ld (%.3f) Start:%ld (%.3f) > End: %ld (%.3f) (cutpoint pts:%ld dts:%ld, max:%ld) \n",keyFrameCount,idx,t1,t2,ts,st,borders->start,g0,borders->end,g1,borders->pts,borders->dts,maxPTS);
+    av_log(NULL, AV_LOG_VERBOSE,"Tail: (keycount %d block: %d) deltas: %d/%d Searchkey:%ld (%.3f) Start:%ld (%.3f) > End: %ld (%.3f) (cutpoint dts:%ld) \n",keyFrameCount,idx,t1,t2,ts,st,borders->start,g0,borders->end,g1,borders->dts);
     return 1;
 
 }
@@ -587,6 +587,7 @@ static int seekHeadGOP(struct StreamInfo *info, int64_t ts,CutData *borders) {
     int64_t lookback=ptsFromTime(1.0,info->in_time_base);
     int timeHit=0;
     int keyFrameCount=0;
+    int gopIndx=0;
     int maxFrames=3;
     int64_t gop[3]={0,0,0};
 
@@ -603,31 +604,28 @@ static int seekHeadGOP(struct StreamInfo *info, int64_t ts,CutData *borders) {
             av_packet_unref(&pkt); 
             continue;
         }    
-        int i;
         if (pkt.flags == AV_PKT_FLAG_KEY && pkt.dts != AV_NOPTS_VALUE){
-            for (i =0; i< maxFrames-1; i++){
-                gop[i]=gop[i+1];
-            }
-            gop[maxFrames-1]=pkt.dts;
+            if (timeHit)
+            	gopIndx++;
+            gop[gopIndx]=pkt.dts;
             keyFrameCount++; 
-            if (timeHit && keyFrameCount>1)//one gop == 2 frames are needed
+            if (gopIndx==maxFrames-1)//one gop == 2 frames are needed
                 break;
         } 
         
         if (pkt.dts >= ts && !timeHit){
             timeHit=1;
             borders->dts=pkt.dts;
-            borders->pts=pkt.pts;
         }
         av_packet_unref(&pkt); 
     }
 
     av_packet_unref(&pkt); 
     int idx=0;
-    int t1 = abs(ts - gop[0]);
-    int t2 = abs(ts - gop[1]);
-    if (t2 < t1){
-        idx++;
+	int t1 = abs(ts - gop[0]);
+	int t2 = abs(ts - gop[1]);
+    if (context.muxMode != MODE_TRANSCODE && t2 < t1){
+			idx++;
     }
     borders->start=gop[idx];
     borders->end=gop[idx+1];
@@ -687,19 +685,26 @@ static int write_packet(struct StreamInfo *info,AVPacket *pkt){
         pkt->pos=-1;//File pos is unknown if cut..
 
         //remux workaround ... duration may be 0 ->next pts - curr pts... will not work if pts invalid
-        if (dur==0  && isVideo){
-		   dur=info->deltaDTS;
-		   pkt->dts = currentDTS+(int64_t)dur;
+        //dur=0  always on transcoding. isTimeless: On timeless vc1 codec..
+        short isTimeless = context.fmtFlags & AVFMT_NOTIMESTAMPS;
+        if ((dur==0 || isTimeless) && isVideo){
+		   //pkt->dts = (int64_t)(info->frame_nbr*info->deltaDTS);
+		   //pkt->duration = pkt->dts - currentDTS;
+           pkt->dts = currentDTS+(int64_t)info->deltaDTS;
+		   pkt->duration = (int64_t)info->deltaDTS;
+
 		   context.video_sync_dts=pkt->dts;//needed by trailing audio
         }else {
        		pkt->duration = av_rescale_q(dur, in_stream->time_base, out_stream->time_base);
 			//increment the DTS instead of calculating it.
  		   pkt->dts = currentDTS+pkt->duration;
         }
-        if (p1!=AV_NOPTS_VALUE)
+
+        //PTS calculation
+        if (isVideo && isTimeless)
+        	   pkt->pts=pkt->dts;
+        else if (p1 != AV_NOPTS_VALUE)
 		   pkt->pts = pkt->dts+delta;
-//        else
-//        	pkt->pts = pkt->dts;
 
         double_t dtsCalcTime = av_q2d(out_stream->time_base)*(pkt->dts);
         int ts = (int)dtsCalcTime;
@@ -716,9 +721,14 @@ static int write_packet(struct StreamInfo *info,AVPacket *pkt){
             double_t orgDTSTime= av_q2d(in_stream->time_base)*(d1);
             double_t orgPTSTime = av_q2d(in_stream->time_base)*(p1);
             char other=isVideo?'A':'V';
-            int64_t cv = isVideo? av_rescale_q(d1,info->inStream->time_base,videoStream->inStream->time_base):av_rescale_q(d1,info->inStream->time_base,audioStream->inStream->time_base);
-            double_t otherInTime = isVideo?av_q2d(videoStream->inStream->time_base)*cv:av_q2d(audioStream->inStream->time_base)*cv;
-        	av_log(NULL, AV_LOG_VERBOSE,"%ld,%c:P:%ld (%ld-%.3f) D:%ld (%ld %c:%ld T:%.3f %c:%.3f) Pt:%.3f Dt:%.3f dur %ld (%ld) delta: %ld size: %d flags: %d curr:%ld\n",info->frame_nbr,frm,pkt->pts,p1,orgPTSTime,pkt->dts,d1,other,cv,orgDTSTime,other,otherInTime,ptsCalcTime,dtsCalcTime,pkt->duration,dur,delta,pkt->size,pkt->flags,currentDTS);
+            int64_t cv = isVideo? av_rescale_q(d1,info->inStream->time_base,audioStream->inStream->time_base):av_rescale_q(d1,info->inStream->time_base,videoStream->inStream->time_base);
+            if (p1==AV_NOPTS_VALUE){
+            	av_log(NULL, AV_LOG_VERBOSE,"%ld,%c:P:NONE", info->frame_nbr,frm);
+            } else{
+            	av_log(NULL, AV_LOG_VERBOSE,"%ld,%c:P:%ld (%ld-%.3f)",info->frame_nbr,frm,pkt->pts,p1,orgPTSTime);
+            }
+        	    //av_log(NULL, AV_LOG_VERBOSE,"%ld,%c:P:%ld (%ld-%.3f) D:%ld (%ld %c:%ld T:%.3f %c:%.3f) Pt:%.3f Dt:%.3f dur %ld (%ld) delta: %ld size: %d flags: %d curr:%ld\n",info->frame_nbr,frm,pkt->pts,p1,orgPTSTime,pkt->dts,d1,other,cv,orgDTSTime,other,otherInTime,ptsCalcTime,dtsCalcTime,pkt->duration,dur,delta,pkt->size,pkt->flags,currentDTS);
+        	av_log(NULL, AV_LOG_VERBOSE," D:%ld (%ld %c:%ld T:%.3f) Pt:%.3f Dt:%.3f dur %ld (%ld) delta: %ld size: %d curr:%ld\n",pkt->dts,d1,other,cv,orgDTSTime,ptsCalcTime,dtsCalcTime,pkt->duration,dur,delta,pkt->size,currentDTS);
         }
         int ret = av_interleaved_write_frame(context.ofmt_ctx, pkt);
         if (ret < 0) {
@@ -747,7 +757,7 @@ static int mux1(CutData head,CutData tail){
         if (isVideo){
             char frm='v';
             streamInfo = videoStream;
-            if (pkt.flags == AV_PKT_FLAG_KEY){
+            if (pkt.flags == AV_PKT_FLAG_KEY && pkt.dts >=head.start){
                 fcnt=1;
                 frm='I';
             }
@@ -896,7 +906,9 @@ static int flushPackets(struct StreamInfo *info,int64_t stop){
             if (ret==0){
                 av_log(NULL, AV_LOG_VERBOSE,"p->");
                 pkt.stream_index=info->inStream->index;//compatibility
-                if (pkt.dts>=stop){
+                int64_t probe =  pkt.pts==AV_NOPTS_VALUE?pkt.dts:pkt.pts;
+                //int64_t probe = pkt.dts;
+                if (probe >= stop){
                  	av_log(NULL,AV_LOG_VERBOSE,"Flush pkt END: %ld\n",pkt.dts);
                  	av_packet_unref(&pkt);
                  	break;
@@ -916,9 +928,9 @@ static int flushPackets(struct StreamInfo *info,int64_t stop){
     return 1;
 }
 /**
- * After frames have been transcoded we not more autio frames to write
+ * After frames have been transcoded write remaining audio frames - if there are any
  */
-static int pushTailAudio(struct StreamInfo *info, int64_t start, int64_t stop){
+static int pushTailAudio(struct StreamInfo *info){
     AVPacket pkt;
     if (!audioStream->inStream)
     	return 1;
@@ -936,7 +948,7 @@ static int pushTailAudio(struct StreamInfo *info, int64_t start, int64_t stop){
         }
        	//if (pkt.dts > audioTail){
         counter+=av_rescale_q(pkt.duration,info->inStream->time_base,info->outStream->time_base);
-        if (counter > audioTail){
+        if (counter >= audioTail){
       		av_log(NULL,AV_LOG_VERBOSE,"Audio tail (P:%ld) %ld of:%ld\n", pkt.pts,counter,audioTail);
    			av_packet_unref(&pkt);
    			break;
@@ -951,11 +963,10 @@ static int pushTailAudio(struct StreamInfo *info, int64_t start, int64_t stop){
 
 static int transcode(struct StreamInfo *info, int64_t start, int64_t stop){
     AVPacket pkt;
-    int keyFrameCount=0;
     int ret;
-    int gopsize=0;
     AVFrame *frame;
     int64_t audioTail = 0;
+
     if (audioStream->inStream)
     		audioTail = av_rescale_q(stop,videoStream->inStream->time_base,audioStream->inStream->time_base);
     av_log(NULL, AV_LOG_VERBOSE,"Video stop: %ld, Audio cutoff: %ld\n",stop,audioTail);
@@ -968,8 +979,11 @@ static int transcode(struct StreamInfo *info, int64_t start, int64_t stop){
     av_init_packet(&pkt);
         
     while (av_read_frame(context.ifmt_ctx, &pkt)>=0) {
-    	if (pkt.dts == AV_NOPTS_VALUE)
+    	if (pkt.dts == AV_NOPTS_VALUE){
+    		av_log(NULL, AV_LOG_VERBOSE,"Skip frame-invalid DTS\n");
     		continue; //Not able
+    	}
+
 
         int isVideo = pkt.stream_index == videoStream->srcIndex;
         int isAudio = pkt.stream_index == audioStream->srcIndex;
@@ -977,46 +991,39 @@ static int transcode(struct StreamInfo *info, int64_t start, int64_t stop){
         if (isAudio){
         	if (pkt.dts <= audioTail)
         		write_packet(audioStream,&pkt);
-
         	continue;
-
-        } else if (isVideo) {
-            if (pkt.flags == AV_PKT_FLAG_KEY){
-                keyFrameCount++;
-                av_log(NULL, AV_LOG_VERBOSE,"GOP: %d\n",gopsize);
-                gopsize=0;
-            }
-        }else {
+        }else if (!isVideo) {
             //unusable packet
             av_packet_unref(&pkt);
             continue;
         }
             
-        gopsize++;
         double_t dtime= av_q2d(info->inStream->time_base)*(pkt.dts);//Instream time...
         if ((ret = decode(info->in_codec_ctx,&pkt,frame))<0) {
             av_log(NULL, AV_LOG_VERBOSE,"Buffer pkt: isKey:%d p:%ld d:%ld [%.3f] dur:%ld\n",pkt.flags, pkt.pts,pkt.dts,dtime,pkt.duration);
         }else {
         	//either PTS or DTS ..
+        	int64_t pts = frame->pts;
         	if (frame->pts == AV_NOPTS_VALUE){
-        		frame->pts = frame->best_effort_timestamp;//works -not on h264 raw/mkv
-        		av_log(NULL, AV_LOG_VERBOSE,"&");
+        		pts = frame->best_effort_timestamp;//works -not correctly on VC1
+       			frame->pts = pts;
+        		av_log(NULL, AV_LOG_VERBOSE,"?");
         	}
-            char ptype = av_get_picture_type_char(frame->pict_type);
-            double_t fptime= av_q2d(info->inStream->time_base)*(frame->pts);
-            //DTS is always==PTS- since its decoded...
-            av_log(NULL, AV_LOG_VERBOSE,"[%d]%d) decode key: %d (%d) type: %c, pts: %ld time: %.3f frm dur %ld, pkt dur:%ld",keyFrameCount,info->in_codec_ctx->frame_number,frame->key_frame,pkt.flags,ptype,frame->pts,fptime,frame->pkt_duration,pkt.duration);
-            
+        	if (context.isDebug){
+				char ptype = av_get_picture_type_char(frame->pict_type);
+				double_t fptime= av_q2d(info->inStream->time_base)*(pts);
+				//DTS is always==PTS- since its decoded...
+				av_log(NULL, AV_LOG_VERBOSE,"[%d]%d) decode key: %d (%d) type: %c, pts: %ld time: %.3f frm dur %ld",frame->coded_picture_number,info->in_codec_ctx->frame_number,frame->key_frame,pkt.flags,ptype,pts,fptime,frame->pkt_duration);
+        	}
 			//if (frame->pts != AV_NOPTS_VALUE && frame->pts < start){
-            if (frame->pts < start){
+            if (pts < start){
 				av_log(NULL, AV_LOG_VERBOSE,"- Ignore\n");
 				av_packet_unref(&pkt);
 				continue;
-			}else if (frame->pts > stop){
-				av_log(NULL, AV_LOG_VERBOSE,"- End of GOP: %ld\n",frame->pts);
+			}else if (pts > stop){
+				av_log(NULL, AV_LOG_VERBOSE,"- End of GOP: %ld\n",pts);
 				break;
 			}
-
             //try to encode
             ret = av_frame_make_writable(frame);
             if (ret<0){
@@ -1026,6 +1033,8 @@ static int transcode(struct StreamInfo *info, int64_t start, int64_t stop){
             }
             frame->pict_type = AV_PICTURE_TYPE_NONE;                               
             ret=avcodec_send_frame(info->out_codec_ctx,frame);
+            // Make sure Closed Captions will not be duplicated
+            av_frame_remove_side_data(frame, AV_FRAME_DATA_A53_CC);
             if (ret== AVERROR_EOF)
                 av_log(NULL, AV_LOG_VERBOSE,"-Error EOF\n");
             else if (ret==AVERROR(EINVAL))
@@ -1053,10 +1062,74 @@ static int transcode(struct StreamInfo *info, int64_t start, int64_t stop){
     info->out_codec_ctx=NULL;
     avcodec_flush_buffers(info->in_codec_ctx);
     av_frame_free(&frame);
-    pushTailAudio(audioStream,start,stop);
+    pushTailAudio(audioStream);
     return 1;
 }
 
+static int split(int64_t start, int64_t stop){
+	AVPacket pkt;
+	//struct StreamInfo *streamInfo;
+	int64_t check;
+	int64_t zeroVDTS=0;
+	int64_t zeroADTS=0;
+	short flag =0;
+	int64_t cnt=0;
+
+	while (av_read_frame(context.ifmt_ctx, &pkt)>=0) {
+		int isVideo = videoStream->srcIndex==pkt.stream_index;
+		int isAudio = audioStream->srcIndex==pkt.stream_index;
+
+		if (isVideo){
+			 //streamInfo = videoStream;
+			 check = pkt.dts;
+			 if (pkt.flags == AV_PKT_FLAG_KEY && flag==0){
+				 flag=1;
+			 }
+		}else if (isAudio) {
+			 //streamInfo = audioStream;
+			 check = av_rescale_q(pkt.dts,audioStream->inStream->time_base,videoStream->inStream->time_base);
+		}
+		else {
+			av_packet_unref(&pkt);
+			continue;
+		}
+
+		if (check < start || !flag){
+			av_packet_unref(&pkt);
+			continue;
+		}
+		if (check >stop){
+			av_packet_unref(&pkt);
+			break;
+		 }
+		int64_t p1 = pkt.pts;
+        int64_t d1 = pkt.dts;
+        if (isVideo){
+        	//d1=zeroVDTS;
+        	zeroVDTS=(int64_t)(cnt*videoStream->deltaDTS);
+        	cnt++;
+        }else if (isAudio){
+        	//d1=zeroADTS;
+        	zeroADTS+=pkt.duration;
+        	//p1=d1;
+        }
+    	pkt.dts=d1;
+    	pkt.pts=p1;
+	    int64_t delta = p1-d1;
+	    int64_t dur = pkt.duration;
+	    int64_t calcDTS = isVideo?zeroVDTS-pkt.duration:zeroADTS-pkt.duration;
+	    int64_t diff = d1-calcDTS;
+        char type = isVideo?'V':'A';
+		av_log(NULL, AV_LOG_VERBOSE,"%c) P:%ld, D:%ld(%ld),diff:%ld delta: %ld, dur:%ld\n",type,p1,d1,calcDTS,diff,delta,dur);
+       int ret = av_interleaved_write_frame(context.ofmt_ctx, &pkt);
+       if (ret < 0) {
+           av_log(NULL, AV_LOG_ERROR,"Err: Error muxing packet\n");
+          return ret;
+	   }
+
+	}
+	return 1;
+}
 
 /** decode the input stream, display its data **/
 static int dumpDecodingData(){
@@ -1129,6 +1202,8 @@ static int seekAndMux(double_t timeslots[],int seekCount){
 
     double_t fps = (double_t)framerate.num/framerate.den;//same as get_fps
     videoStream->deltaDTS = (videoStream->out_time_base.den/fps);
+    int64_t audioDelta = av_rescale_q(videoStream->deltaDTS, videoStream->outStream->time_base,audioStream->inStream->time_base);
+    int64_t videoDelta = av_rescale_q(videoStream->deltaDTS, videoStream->outStream->time_base,videoStream->inStream->time_base);
     
     CutData headBorders;
     CutData tailBorders;
@@ -1148,14 +1223,20 @@ static int seekAndMux(double_t timeslots[],int seekCount){
     context.streamOffset = startOffset; 
     audioStream->frame_nbr=0;
     videoStream->frame_nbr=0;
+
+    if (context.muxMode == MODE_SPLIT){//Pure testing
+        int64_t ptsStart = ptsFromTime(timeslots[0]+mainOffsetTime+zeroTime,time_base);
+        int64_t ptsEnd = ptsFromTime(timeslots[1]+mainOffsetTime+zeroTime,time_base);
+        res = split(ptsStart,ptsEnd);
+        return res;
+    }
     
     if (context.muxMode >= MODE_DUMP){
         res = dumpDecodingData();
         return res;
     }
-    
-    //int64_t prevTail =0;
-	//int64_t gap =0;
+
+    int64_t lookback = 5*videoDelta;
     int i;
     for (i = 0; i < (seekCount); ++i){
         double_t startSecs = timeslots[i];
@@ -1165,33 +1246,33 @@ static int seekAndMux(double_t timeslots[],int seekCount){
             
         int64_t ptsStart = ptsFromTime(startSecs+mainOffsetTime+zeroTime,time_base);
         int64_t ptsEnd = ptsFromTime(endSecs+mainOffsetTime+zeroTime,time_base);
-        av_log(NULL, AV_LOG_INFO,"************************\nSearch from %.3f to %.3f pts: %ld - %ld \n",startSecs,endSecs,ptsStart,ptsEnd);
+        av_log(NULL, AV_LOG_INFO,"************************\nSearch from %.3f to %.3f pts: %ld - %ld lookback: %ld\n",startSecs,endSecs,ptsStart,ptsEnd,lookback);
         seekHeadGOP(videoStream,ptsStart,&headBorders);//Header GOP
         seekTailGOP(videoStream,ptsEnd,&tailBorders); //TAIL GOP
         
         if (headBorders.start == headBorders.end || tailBorders.start==tailBorders.end){
-            av_log(NULL, AV_LOG_ERROR,"Err: Seek times out of range. Aborted");
+            av_log(NULL, AV_LOG_ERROR,"Err: Seek times out of range. Aborted\n");
             return -1;
         }
-        
-         if(av_seek_frame(context.ifmt_ctx, videoStream->srcIndex, headBorders.start, AVSEEK_FLAG_ANY) < 0){
+        //OR: AVSEEK_FLAG_BACKWARD
+         if(av_seek_frame(context.ifmt_ctx, videoStream->srcIndex, headBorders.start-lookback, AVSEEK_FLAG_ANY) < 0){//TODO TEST
             av_log(NULL, AV_LOG_ERROR,"Err: av_seek_frame failed.\n");
             return -1;
         }
         avcodec_flush_buffers(videoStream->in_codec_ctx);
-        //Start of an I frame we are.
-        
+
         if (context.muxMode == MODE_TRANSCODE){
         	if (audioStream->inStream){
-        		//Guess
-        		int64_t gap = (int64_t)videoStream->deltaDTS*2;
-        		context.audio_sync_dts= av_rescale_q( headBorders.dts-gap,videoStream->inStream->time_base, audioStream->inStream->time_base);
+        		context.audio_sync_dts= av_rescale_q( headBorders.dts-2*audioDelta,videoStream->inStream->time_base, audioStream->inStream->time_base);
+        		av_log(NULL, AV_LOG_VERBOSE,"Audio sync @ %ld\n",context.audio_sync_dts);
         	}
             res = transcode(videoStream,headBorders.dts,tailBorders.dts);
         }
         else {
-        	if (audioStream->inStream)
-        		context.audio_sync_dts= av_rescale_q( headBorders.start,videoStream->inStream->time_base, audioStream->inStream->time_base);
+        	if (audioStream->inStream){//-1xaudio dur)
+        		context.audio_sync_dts= av_rescale_q( headBorders.start-audioDelta,videoStream->inStream->time_base, audioStream->inStream->time_base);
+        		av_log(NULL, AV_LOG_VERBOSE,"Audio sync @ %ld\n",context.audio_sync_dts);
+        	}
             res = mux1(headBorders,tailBorders);
         }
         if ( res < 0){
@@ -1218,20 +1299,23 @@ int calculateVideoLen(double_t timeslots[],int seekCount){
 
 /******************** Main helper *************************/
 void usage(char *arg){
-        printf("usage: %s -i input output -s time,time,time,time.....\n"
+        printf("usage: %s -i input [options] -s time,time,time,time..... output \n"
                "Remux a media file with libavformat and libavcodec.\n"
                "The output format is guessed according to the file extension.\n"
                "\t-s: Set the time in seconds.millis for start & stop of a chunk\n"
-               "\t-r: Transcode the parts. This is really slow currently! Don't use it\n"
+        	   //"\t-a: Set the audiostreams indices you'd like to use (e.g -a 1.3.5)"
+        	   //"\t-v: Set the videostream you'd like to use (usually not necessary - e.g -v 2)"
+        	   //"\t-l: list all streams of the container (use for the -a and -v options)"
+               "\t-r: Transcode the parts. Takes some time but is frame exact (no vc1!)\n"
                "\t-d: debug mode\n"
-               "\t-l: decode & list all packets (no cutting)\n"
-               "\t-lf: decode & list all packets & frames (no cutting)\n"
+               "\t-tp: decode & list all packets (no cutting)\n"
+               "\t-tf: decode & list all packets & frames (no cutting)\n"
                "\n"
                "\tExample:\n"
-               "\t./remux5 /home/xxx/Videos/File.m2t /home/xxx/Videos/Cut.mp4 -s 386.080,415.760,510.460,529.320\n"
+               "\t./remux5 /home/xxx/Videos/File.m2t -s 386.080,415.760,510.460,529.320 /home/xxx/Videos/Cut.mp4\n"
                "\n"
-               "will mux the frames between 386 - 415 and 510 - 529 seconds. So the times describe which parts you want in the target. \n"
-               "\n", arg);
+               "\twill mux the frames between 386 - 415 and 510 - 529 seconds. So the times describe which parts you want in the target. \n"
+               "\t Infos @ https://github.com/kanehekili/VideoCut \n", arg);
 }
 
 int parseArgs(int argc, char *argv[],double_t array[]) {
@@ -1239,7 +1323,7 @@ int parseArgs(int argc, char *argv[],double_t array[]) {
   opterr = 0;
   count=0;
   char *tmp;
-  while ((c = getopt (argc, argv, "?s:drl:i:")) != -1){
+  while ((c = getopt (argc, argv, "s:drt:i:c?")) != -1){
         switch (c){
           case 's':
               i = 0;
@@ -1258,17 +1342,21 @@ int parseArgs(int argc, char *argv[],double_t array[]) {
           case 'r':
             context.muxMode=MODE_TRANSCODE;
             break;
-          case 'l':
+          case 't':
             tmp = strtok(optarg,"");
-            context.muxMode=MODE_DUMP;                
             if (tmp[0]=='f')
                 context.muxMode=MODE_DUMPFRAMES;
+            else if (tmp[0]=='p')
+            	context.muxMode=MODE_DUMP;
             else
                 optind--;    
             break;
           case 'i':
             context.sourceFile=strtok(optarg,"");
-            break;            
+            break;
+          case 'c':
+        	  context.muxMode=MODE_SPLIT;
+        	  break;
           case '?':
             usage(argv[0]);
             return -1;
