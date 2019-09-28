@@ -756,10 +756,13 @@ class MainFrame(QtWidgets.QMainWindow):
             
     def saveVideo(self):
         initalPath = self._videoController.getTargetFile()
-        qText = initalPath
+        qText = self._videoController.getSaveTargetFile()
         result = QtWidgets.QFileDialog.getSaveFileName(parent=self, directory=qText, caption="Save Video");
         if result[0]:
             fn = self.__encodeQString(result)
+            if initalPath == fn:
+                self.showWarning("Can't overwrite source file!")
+                return;
             self.startProgress()
             self._videoController.saveVideo(fn)
     
@@ -1020,8 +1023,9 @@ class VideoPlayerCV():
         self._streamProbe=streamProbe
         self._capture = None
         self._file=str(path)
+        self._zero = 0.0
         self._isValid = self._captureFromFile()
-        
+
         
     def _captureFromFile(self):
         if self._streamProbe is None or not self._streamProbe.isKnownVideoFormat():
@@ -1042,8 +1046,13 @@ class VideoPlayerCV():
         #The problem: cv has a problem if it is BEHIND the last frame...
         #DO NOT USE>> cap.set(cv2.cv.CV_CAP_PROP_POS_AVI_RATIO,1);
         self.totalTimeMilliSeconds = int(self.framecount/self.fps*1000)
-        OPENCV.setFramePosition(0)
+        self.calcZero()
         return True
+
+    def calcZero(self):
+        self._capture.read()
+        self._zero=OPENCV.getTimePosition()
+        OPENCV.setFramePosition(0) 
 
     def validate(self):
         if not self.isValid():
@@ -1126,7 +1135,8 @@ class VideoPlayerCV():
         if not self.isValid():
             timeSlot=0
         else:
-            timeSlot = OPENCV.getTimePosition()    
+            #timeSlot = OPENCV.getTimePosition()-self._zero    
+            timeSlot = self.getCurrentTimeMS()
 
         try:    
             td = timedelta(milliseconds=timeSlot)
@@ -1135,7 +1145,7 @@ class VideoPlayerCV():
         return td
     
     def getCurrentTimeMS(self):
-        return OPENCV.getTimePosition()
+        return OPENCV.getTimePosition()-self._zero
      
     def getCurrentFrameNumber(self):
         return OPENCV.getFramePosition()
@@ -1171,6 +1181,13 @@ class VideoControl(QtCore.QObject):
             return self.currentPath+"."+self.streamData.getTargetExtension()
 
         return self.currentPath
+
+    def getSaveTargetFile(self):
+        if self.streamData is not None:
+            return self.currentPath+"."+self.streamData.getTargetExtension()
+
+        return self.currentPath+"Cut.mp4"
+
      
     def displayWarningMessage(self):
         if self.lastError is None:
@@ -1288,6 +1305,7 @@ class VideoControl(QtCore.QObject):
         cut = self.videoCuts[index]
         self._gotoFrame(cut.frameNumber)
     
+    #callback from stop button
     def killSaveProcessing(self):
         if self.cutter is None:
             Log.logInfo("Can't kill process")
@@ -1347,6 +1365,9 @@ class VideoControl(QtCore.QObject):
         worker.wait();
         if self.cutter.wasAborted():
             self.gui.getMessageDialog("Operation done","Cut aborted").show()
+        elif self.cutter.hasErrors():
+            self.lastError="Remux failed ".join(self.cutter.getErrors())
+            self.displayWarningMessage()
         else:
             dx = time()- self.cutTimeStart
             delta = FFMPEGTools.timedeltaToFFMPEGString(timedelta(seconds=dx))
