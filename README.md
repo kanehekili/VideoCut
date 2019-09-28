@@ -1,5 +1,5 @@
 # VideoCut
-Version 1.2.1
+Version 1.2.2
 
 MP2/MP4 Cutter for Linux on base of OpenCV and ffmpeg. Cutting is lossless, the target file will not be reencoded. 
 
@@ -39,7 +39,7 @@ OpenCV:  it is necessary to get a version that has been compiled with ffmpeg
 :boom: Be aware that this tool does not cut exact on frame - except you reencode the whole film.
 
 ### How to install
-* Download the videocut*.tar contained in the "build" folder ![here](https://github.com/kanehekili/VideoCut/raw/master/VideoCutter/build/videocut1.2.1.tar)
+* Download the videocut*.tar contained in the "build" folder ![here](https://github.com/kanehekili/VideoCut/raw/master/VideoCutter/build/videocut1.2.2.tar)
 * Upack it to a location that suits you.
 * Copy the VideoCut.desktop file to ~/.local/share/applications
 * Change the absolute paths & user name within that desktop file to the location where you've copied the files.
@@ -97,7 +97,11 @@ Can't be really implemented with the ffmpeg ABI. The transcoded part will have d
 27.07.2019
 * Changed remux5:. Exact PTS/DTS calculation for video. Rewrote transcoding. Supports multi threading.
 * Allows mkv/VC1 codec, audio sync not good on source that has no PTS when decoding/muxing
- 
+
 15.08.2019
 * refined remux5 - exact cut now possible on most codecs.
 * no transcoding/remuxing with remux5 on mkv -> use ffmpeg switch
+
+29.09.2019
+* Changed remux5: Fine tuning for exact cut. Works now for webm, VC1/mkv and the standard mpeg sources (mp2 and mp4)
+* Next steps: Select audio streams -  support ffmpeg cmd for transcoding/remuxing into other formats. Joining files
