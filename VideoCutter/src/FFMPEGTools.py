@@ -357,6 +357,9 @@ class FFStreamProbe():
     def getFormatNames(self):
         return self.formatInfo.formatNames()
     
+    def getRotation(self):
+        return self.getVideoStream().getRotation()
+    
     def hasFormat(self,formatName):
         return formatName in self.getFormatNames() 
     
@@ -519,7 +522,10 @@ class VideoStreamInfo():
                 return div/100.0
         return 1.0
 
-
+    def getRotation(self):
+        if 'TAG:rotate' in self.dataDict:
+            return int(self.dataDict['TAG:rotate'])
+        return 0;
 
     def getFrameRate(self):
         if 'avg_frame_rate' in self.dataDict:
@@ -763,57 +769,6 @@ class FFMPEGCutter():
         self.killed=False
         self.errors=[]
     
-    '''
-    cuts a part of the film, saves it an returns the temp filename for later concatination
-    index = if more than one part of the film is cut
-    * Basically that does not work - or makes the audio go async.*
-    '''
-#     def cutPart(self,startTimedelta,endTimedelta,index=0,nbrOfFragments=1):
-#         self._fragmentCount = nbrOfFragments
-#         scanTime = timedelta(seconds=20)
-#         prefetchTime = (startTimedelta - scanTime)
-#         if prefetchTime < scanTime:
-#             prefetchTime = timedelta(0)
-#             scanTime = startTimedelta
-# 
-#         prefetchString = timedeltaToFFMPEGString(prefetchTime)
-#         seekString = timedeltaToFFMPEGString(scanTime)
-#         
-#         deltaMillis = (endTimedelta - startTimedelta).microseconds
-#         deltaSeconds = (endTimedelta - startTimedelta).seconds 
-#         durString=timedeltaToFFMPEGString(timedelta(seconds=deltaSeconds,microseconds=deltaMillis))
-# 
-#         #fast search - then slow search
-#         log(prefetchString,"+",seekString,">>",durString)
-#         if nbrOfFragments is 1:
-#             fragment = self.targetPath()
-#         else:
-#             fragment = self._getTempPath()+str(index)+".m2t"
-#         log("generate file:",fragment)
-#         self.say("Cutting part:"+str(index))
-#         
-#         cmdExt = self._videoMode(self.MODE_CUT)
-#         audioMode = self._audioMode(self.MODE_CUT)
-#         
-#         #the prefetch time finds a keyframe closest. The seek time is the cut. TODO-encode that as Iframes only
-#         
-#         cmd =[BIN,"-hide_banner","-y","-ss",prefetchString,"-i",self.filePath(),"-ss",seekString,"-t",durString]
-#         cmdExt.extend(audioMode)
-#         cmdExt.extend(["-avoid_negative_ts","1",fragment])
-#         cmd.extend(cmdExt)
-#         log("cut:",cmd)
-#         #reencode:         pFFmpeg = subprocess.Popen([BIN,"-hide_banner","-y","-ss",prefetchString,"-i",self.filePath,"-ss",seekString,"-t",durString,"-vcodec",encodeMode,"-acodec","copy",fragment], stdout=subprocess.PIPE,stderr=subprocess.STDOUT)
-#         pFFmpeg = subprocess.Popen(cmd , stdout=subprocess.PIPE,stderr=subprocess.STDOUT)
-#          
-#         while pFFmpeg.poll() is None:
-#             #?sleep(0.2)   
-#             if not self.non_block_read("Cut part "+str(index)+":",pFFmpeg.stdout):
-#                 self.say("Cutting part %s failed"%(str(index)))
-#                 return False
-#         
-#         self.say("Cutting done")
-#         return True
-
     '''
     current limitation:
     Basically, if you specify "second 157" and there is no key frame until 
@@ -1105,7 +1060,7 @@ class VCCutter():
                 timeString.append(',')    
                     
         timeString = ''.join(timeString)
-        cmd=[self.bin,"-i",self.config.srcfilePath,self.config.targetPath,"-s",timeString]
+        cmd=[self.bin,"-i",self.config.srcfilePath,"-s",timeString,self.config.targetPath]
         if self.config.reencode:
             cmd=cmd+["-r"]
         print(cmd)
@@ -1121,7 +1076,7 @@ class VCCutter():
                     start=now
 
         except Exception as error:
-            self.say("Remux failed: %s"%(error))
+            self.warn("Remux failed: %s"%(error))
             log("Remux failed",error)
             self.runningProcess = None
             return False

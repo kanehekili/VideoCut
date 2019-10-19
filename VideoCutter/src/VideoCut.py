@@ -7,6 +7,8 @@ import configparser
 from PyQt5.QtCore import pyqtSignal
 from PyQt5 import QtCore, QtGui, QtWidgets
 from PyQt5.QtWidgets import QApplication,QWidget
+import test
+import numpy
 
 try:
     import cv2 #cv3
@@ -160,7 +162,6 @@ class XMLAccessor():
             entry.attrib["mode"]=str(cut.modeString)
         
         with open(self._path, 'wb') as aFile:
-            #rootElement.write(aFile)
             CT.ElementTree(rootElement).write(aFile)
 
     def readXML(self):
@@ -181,15 +182,52 @@ class XMLAccessor():
 
     def clear(self):
         OSTools().removeFile(self._path)
-            
+
+# class ImageGeometry():
+#     def __init__(self,rotation,numpyArray):
+#        self.height, self.width, bytesPerComponent = numpyArray.shape 
+#        self.cvrotate = self.getRotation(rotation)
+#        if self.cvrotate > 0:
+#             center = (width / 2, height / 2) 
+#             dst= cv2.rotate(numpyArray,self.cvrotate)
+#             self.height, self.width, bytesPerComponent = dst.shape
+#        
+#        self.bytesPerLine = bytesPerComponent * self.width 
+#        
+#     def getRotation(self,rotation):
+#         if rotation > 0 and rotation < 180:
+#             return cv2.ROTATE_90_CLOCKWISE
+#         if rotation > 180:
+#             return cv2.ROTATE_90_COUNTERCLOCKWISE
+#         if rotation == 180:
+#             return cv2.ROTATE_180;
+#         return 0;
 
 class CVImage(QtGui.QImage):
+    ROTATION=0
     def __init__(self,numpyArray):
         height, width, bytesPerComponent = numpyArray.shape
-        bytesPerLine = bytesPerComponent * width;
-        OPENCV.setColor(numpyArray)
-        super(CVImage,self).__init__(numpyArray.data,width,height,bytesPerLine, QtGui.QImage.Format_RGB888)
-
+        cvrotate = self.getRotation()
+        if cvrotate < 1:
+            dst = numpyArray
+        else:
+            center = (width / 2, height / 2) 
+            dst= cv2.rotate(numpyArray,cvrotate)
+            height, width, bytesPerComponent = dst.shape
+         
+        bytesPerLine = bytesPerComponent * width
+            
+        OPENCV.setColor(dst)
+        super(CVImage,self).__init__(dst.data,width,height,bytesPerLine, QtGui.QImage.Format_RGB888)
+    
+    def getRotation(self):
+        return self.ROTATION;
+#         if self.ROTATION > 0 and self.ROTATION < 180:
+#             return cv2.ROTATE_90_CLOCKWISE
+#         
+#         if self.ROTATION > 180:
+#             return cv2.ROTATE_90_COUNTERCLOCKWISE
+#         return -1
 
 class VideoWidget(QtWidgets.QFrame):
     """ A class for rendering video coming from OpenCV """
@@ -246,8 +284,12 @@ class VideoWidget(QtWidgets.QFrame):
             self._image = CVImage(aFrame)
         self.update()
         
-    def setVideoRatio(self,ratio):
-        self.imageRatio = float(ratio)
+    def setVideoGeometry(self,ratio,rotation):
+        if rotation > 0:
+            self.imageRatio = 1.0/float(ratio)
+        else:
+            self.imageRatio = float(ratio)
+        
 
 
 class VideoCutEntry():
@@ -1017,17 +1059,17 @@ class SettingsDialog(QtWidgets.QDialog):
 Class may be replaced if the underlying interface is not opencv (e.g qt or ffmpeg or sth)
 '''        
 class VideoPlayerCV():
-    def __init__(self,path,streamProbe):
+    def __init__(self,path,streamProbe,rotation):
         self.framecount = 0
         self.totalTimeMilliSeconds = 0.0 
         self._streamProbe=streamProbe
         self._capture = None
         self._file=str(path)
         self._zero = 0.0
-        self._isValid = self._captureFromFile()
+        self._isValid = self._captureFromFile(rotation)
 
         
-    def _captureFromFile(self):
+    def _captureFromFile(self,rotation):
         if self._streamProbe is None or not self._streamProbe.isKnownVideoFormat():
             print ("STREAM NOT KNOWN")
             Log.logInfo("STREAM NOT KNOWN")
@@ -1046,14 +1088,27 @@ class VideoPlayerCV():
         #The problem: cv has a problem if it is BEHIND the last frame...
         #DO NOT USE>> cap.set(cv2.cv.CV_CAP_PROP_POS_AVI_RATIO,1);
         self.totalTimeMilliSeconds = int(self.framecount/self.fps*1000)
-        self.calcZero()
+        self.calcZero(rotation)
         return True
 
-    def calcZero(self):
-        self._capture.read()
-        self._zero=OPENCV.getTimePosition()
+    def calcZero(self,rotation):
+        ret, frame = self._capture.read()
+        if ret:
+            CVImage.ROTATION = self.__getRotation(rotation)
+            self._zero=OPENCV.getTimePosition()
+        
         OPENCV.setFramePosition(0) 
-
+    
+    def __getRotation(self,rotation):
+        if rotation > 0 and rotation < 180:
+            return cv2.ROTATE_90_CLOCKWISE
+        if rotation > 180:
+            return cv2.ROTATE_90_COUNTERCLOCKWISE
+        if rotation == 180:
+            return cv2.ROTATE_180;
+        return 0;
+    
+    
     def validate(self):
         if not self.isValid():
             raise Exception('Invalid file')
@@ -1064,7 +1119,6 @@ class VideoPlayerCV():
     """Milliseconds per frame."""
     def mspf(self):
         return int(1000 // (self.fps or 25))
-
             
     def getNextFrame(self):
         if not self.isValid():
@@ -1135,7 +1189,6 @@ class VideoPlayerCV():
         if not self.isValid():
             timeSlot=0
         else:
-            #timeSlot = OPENCV.getTimePosition()-self._zero    
             timeSlot = self.getCurrentTimeMS()
 
         try:    
@@ -1145,7 +1198,7 @@ class VideoPlayerCV():
         return td
     
     def getCurrentTimeMS(self):
-        return OPENCV.getTimePosition()-self._zero
+        return max(OPENCV.getTimePosition()-self._zero,0.0)
      
     def getCurrentFrameNumber(self):
         return OPENCV.getFramePosition()
@@ -1208,13 +1261,17 @@ class VideoControl(QtCore.QObject):
             self.streamData = None  
             self.currentPath = OSTools().getHomeDirectory()    
         try:            
-            self.player = VideoPlayerCV(filePath,self.streamData)
+            rot = self.streamData.getRotation()
+            self.player = VideoPlayerCV(filePath,self.streamData,rot)
             self._initSliderThread()
             self.player.validate()
             
             self.__initSliderTicks()
             self.gui.enableControls(True)
-            self.gui.getVideoWidget().setVideoRatio(self.streamData.getAspectRatio())
+            ratio = self.streamData.getAspectRatio()
+            
+            #TODO: make a final setup to speed up 
+            self.gui.getVideoWidget().setVideoGeometry(ratio,rot)
             self.gui.updateWindowTitle(OSTools().getFileNameOnly(filePath))
             self._asyncInitVideoViews()
            
@@ -1532,6 +1589,11 @@ class VideoControl(QtCore.QObject):
             frameNumber = self.player.getCurrentFrameNumber()
             sliderPos= int(frameNumber*LayoutWindow.SLIDER_RESOLUTION/self.player.framecount)
             self._showCurrentFrameInfo(frameNumber)
+            
+            if self.player.framecount == frameNumber:
+                self.__stopVideo()
+                self.gui.setVideoPlayerControls(False)
+            
             self.gui.syncSliderPos(sliderPos)
         else:
             self.gui.setVideoPlayerControls(False)
