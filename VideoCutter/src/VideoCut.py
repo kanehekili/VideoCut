@@ -1096,8 +1096,7 @@ class VideoPlayerCV():
         if ret:
             CVImage.ROTATION = self.__getRotation(rotation)
             self._zero=OPENCV.getTimePosition()
-        
-        OPENCV.setFramePosition(0) 
+        OPENCV.setFramePosition(0)#position of the NEXT read 
     
     def __getRotation(self,rotation):
         if rotation > 0 and rotation < 180:
@@ -1130,7 +1129,7 @@ class VideoPlayerCV():
  
         self.framecount = self.getCurrentFrameNumber()
         Log.logInfo("No more frames @"+str(self.framecount+1));
-        return self.__getLastFrame(self._capture,self.framecount,0)
+        return self.__getLastFrame(framecount,0)
 
     #A test to paint on a frame. Has artefacts..
     def __markFrame(self,frame,nbr):
@@ -1138,13 +1137,13 @@ class VideoPlayerCV():
         (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 2)    
 
 
-    def __getLastFrame(self,cap,frameIndex,retries):
+    def __getLastFrame(self,frameIndex,retries):
         if frameIndex < 1 or retries > 8:
             return None
         OPENCV.setFramePosition(frameIndex-1)
-        ret, frame = cap.read()
+        ret, frame = self._capture.read()
         if not ret:
-            return self.__getLastFrame(cap,frameIndex-1,retries+1)
+            return self.__getLastFrame(frameIndex-1,retries+1)
         return frame    
            
 
@@ -1160,10 +1159,13 @@ class VideoPlayerCV():
         if framepos > 0:
             framepos -=1
         return self.getFrameAt(framepos)
-    
+
+    '''
+    0-based index of the frame to be decoded/captured next.
+    '''     
     def setFrameAt(self,frameNumber):
         OPENCV.setFramePosition(frameNumber)
-    
+   
     def getFrameAt(self,frameNumber):
         try:
             self.setFrameAt(frameNumber-1)
@@ -1171,6 +1173,10 @@ class VideoPlayerCV():
         except: 
             Log.logException("Error Frame")
             return None
+    
+    def getCurrentFrameNumber(self):
+        return OPENCV.getFramePosition()
+
     '''
     seeks a frame based on AV pos (between 0 and 1) -SLOW!!!!!
     '''
@@ -1196,12 +1202,10 @@ class VideoPlayerCV():
         except:
             td = timedelta.max
         return td
-    
+    #Current position of the video file in milliseconds. 
     def getCurrentTimeMS(self):
         return max(OPENCV.getTimePosition()-self._zero,0.0)
-     
-    def getCurrentFrameNumber(self):
-        return OPENCV.getFramePosition()
+
 
     def close(self):
         if self._capture is not None:
@@ -1223,6 +1227,7 @@ class VideoControl(QtCore.QObject):
         self._vPlayer = None
         mainFrame.signalActive.connect(self.displayWarningMessage)
         self.lastError=None
+        self.sliderThread=None
 
     def _initTimer(self):
         self._timer = QtCore.QTimer(self.gui)
@@ -1300,7 +1305,10 @@ class VideoControl(QtCore.QObject):
 
     def _createVideoCutEntry(self,mode,updateXML=True):
         self.sliderThread.wait()
-        frame = self.player.getCurrentFrame()
+        if updateXML:
+            frame = self.player.getCurrentFrame()
+        else:
+            frame = self.player.getNextFrame()
         framePos = self.player.getCurrentFrameNumber()
         timePos = self.player.getCurrentFrameTime()
         cutEntry = VideoCutEntry(framePos,timePos,mode)
@@ -1335,7 +1343,7 @@ class VideoControl(QtCore.QObject):
             return  
         for cut in cutList:
             fbnr = cut.frameNumber
-            self.player.setFrameAt(fbnr)
+            self.player.setFrameAt(fbnr-1)
             mode = VideoCutEntry.MODE_STOP
             if cut.isStartMode():
                 mode = VideoCutEntry.MODE_START
@@ -1464,10 +1472,12 @@ class VideoControl(QtCore.QObject):
         
         self.cutter = VCCutter(config)
         success = self.cutter.cut(spanns)
-        print ("CUT DONE:",success)
     
     def _initSliderThread(self):
-        
+        if self.sliderThread is not None:
+            Worker.stop;
+            self.sliderThread.exit()
+            sleep(0.1)
         self.sliderThread = Worker(self.player.getFrameAt)
         self.sliderThread.signal.connect(self._processFrame)
     
@@ -1605,6 +1615,7 @@ class VideoControl(QtCore.QObject):
 class Worker(QtCore.QThread):
     signal = pyqtSignal()
     result=None
+    stop=False
     def __init__(self, func):
         super(Worker, self).__init__()
         self.func = func
@@ -1622,7 +1633,9 @@ class Worker(QtCore.QThread):
 
     def showFrame(self,frameNumber):
         self.fbnr=frameNumber
-        self.start()
+        if not self.stop:
+             self.start()
+
     
 class SignalOnEvent(QtCore.QObject):
     clicked = pyqtSignal()
