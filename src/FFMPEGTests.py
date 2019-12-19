@@ -3,15 +3,15 @@ Created on Nov 26, 2016
 
 @author: matze
 '''
-from FFMPEGTools import FFStreamProbe,FFPacketProbe,OSTools,FFmpegVersion,FormatMapGenerator
+from FFMPEGTools import FFStreamProbe, FFPacketProbe, OSTools, FFmpegVersion, FormatMapGenerator
 import os
 import subprocess
-#from subprocess import Popen
-#from datetime import timedelta
+# from subprocess import Popen
+# from datetime import timedelta
 import re
-#import fcntl
-#from time import sleep
-#from numpy import block
+# import fcntl
+# from time import sleep
+# from numpy import block
 
 '''
 Slow way to get the i frames in json:
@@ -29,9 +29,9 @@ if __name__ == "__main__":
 '''
                            
 
-#WORKS!
+# WORKS!
 def execute(cmd):
-    popen = subprocess.Popen(cmd, stdout=subprocess.PIPE,stderr=subprocess.STDOUT, universal_newlines=True)
+    popen = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, universal_newlines=True)
     for stdout_line in iter(popen.stdout.readline, ""):
         yield stdout_line 
     popen.stdout.close()
@@ -39,36 +39,39 @@ def execute(cmd):
     if return_code:
         raise subprocess.CalledProcessError(return_code, cmd)
 
+
 def testParse():
    
-    text="35903,*:P:129201120 (2627310857) D:129201120 (2627310857) Pt:1435.568 Dt:1435.568 idx: (1) dur 2880 (2880) size: 1536 flags: 1"
+    text = "35903,*:P:129201120 (2627310857) D:129201120 (2627310857) Pt:1435.568 Dt:1435.568 idx: (1) dur 2880 (2880) size: 1536 flags: 1"
    
-    m = re.search('[0-9]+',text)
+    m = re.search('[0-9]+', text)
     frame = m.group(0)
-    m = re.search('Dt:[0-9]+.[0-9]',text)
+    m = re.search('Dt:[0-9]+.[0-9]', text)
     p1 = m.group(0)
     dts = p1[3:]
 
-    print('Frame: %s DTS %s'%(frame,dts))
+    print('Frame: %s DTS %s' % (frame, dts))
+
 
 def testPath():
-    p= OSTools().getWorkingDirectory();
+    p = OSTools().getWorkingDirectory();
     print (p)
-    tail="ffmpeg/bin/remux5"
-    fn = os.path.join(p,tail)
-    ok= os.path.isfile(fn)
-    print(fn," ok:",ok)
+    tail = "ffmpeg/bin/remux5"
+    fn = os.path.join(p, tail)
+    ok = os.path.isfile(fn)
+    print(fn, " ok:", ok)
+
 
 def testNonblockingRead():
-    #cmd=["/usr/bin/ffmpeg","-i","/home/matze/Videos/pur/purX.m2t","-y","/home/matze/Videos/pur/xx.mpg"]
-    cmd=["/usr/bin/pfmpeg","-i","/home/matze/Videos/pur/purX.m2t","-y","/home/matze/Videos/pur/xx.mpg"]
-    #pFFmpeg = subprocess.Popen(cmd , stdout=subprocess.PIPE,stderr=subprocess.STDOUT,universal_newlines=True)
-    #pFFmpeg = subprocess.Popen(cmd , stdout=subprocess.PIPE,stderr=subprocess.PIPE)
+    # cmd=["/usr/bin/ffmpeg","-i","/home/matze/Videos/pur/purX.m2t","-y","/home/matze/Videos/pur/xx.mpg"]
+    cmd = ["/usr/bin/pfmpeg", "-i", "/home/matze/Videos/pur/purX.m2t", "-y", "/home/matze/Videos/pur/xx.mpg"]
+    # pFFmpeg = subprocess.Popen(cmd , stdout=subprocess.PIPE,stderr=subprocess.STDOUT,universal_newlines=True)
+    # pFFmpeg = subprocess.Popen(cmd , stdout=subprocess.PIPE,stderr=subprocess.PIPE)
     try:
         for path in execute(cmd):
-            print(path,end="")
+            print(path, end="")
     except Exception as error:
-        print("Error : %s"%(error))
+        print("Error : %s" % (error))
 
 #     while pFFmpeg.poll() is None:
 #         #?sleep(0.2)   
@@ -78,150 +81,157 @@ def testNonblockingRead():
 
   
 def testFrameProbe():
-    #m=FFStreamProbe("/home/matze/Videos/Handy-M4-Test/MOV_0296.MP4")
-    #m=FFStreamProbe("/media/matze/Datastore/Videos/VCR/KiKA/11_13_19_25-pur+.m2t")
-    #m=FFStreamProbe("/media/matze/Datastore/Videos/VCR/3sat_HD/11_24_07_00-nano.m2t")
-    #m=FFStreamProbe("/media/matze/Datastore/Videos/6.Folge Craftattack.mp4")
-    #m=FFStreamProbe("/home/matze/Videos/20051210-w50s.flv")
-    #m=FFStreamProbe("/home/matze/Videos/recme/sample.3gp")
-    #m=FFStreamProbe("/home/matze/Videos/handbrake.txt")
-    #m=FFStreamProbe("/home/matze/Videos/CT.m2t")
-    m=FFStreamProbe("/media/disk1/makemkv/title_t00.mkv")
+    # m=FFStreamProbe("/home/matze/Videos/Handy-M4-Test/MOV_0296.MP4")
+    # m=FFStreamProbe("/media/matze/Datastore/Videos/VCR/KiKA/11_13_19_25-pur+.m2t")
+    # m=FFStreamProbe("/media/matze/Datastore/Videos/VCR/3sat_HD/11_24_07_00-nano.m2t")
+    # m=FFStreamProbe("/media/matze/Datastore/Videos/6.Folge Craftattack.mp4")
+    # m=FFStreamProbe("/home/matze/Videos/20051210-w50s.flv")
+    # m=FFStreamProbe("/home/matze/Videos/recme/sample.3gp")
+    # m=FFStreamProbe("/home/matze/Videos/handbrake.txt")
+    # m=FFStreamProbe("/home/matze/Videos/CT.m2t")
+    m = FFStreamProbe("/media/disk1/makemkv/title_t00.mkv")
 
     m.printCodecInfo()
     m.formatInfo._print()
-    print ("getAspect2 ",m.getAspectRatio())
+    print ("getAspect2 ", m.getAspectRatio())
     
     container = m.formatInfo
     print ("-------- container: -------------")
-    print ("formats:",container.formatNames())
-    print ("bit-rate kb:",container.getBitRate())
-    print ("duration:",container.getDuration())
-    print ("size kb:",container.getSizeKB())
-    print ("is TS:",m.isTransportStream())
+    print ("formats:", container.formatNames())
+    print ("bit-rate kb:", container.getBitRate())
+    print ("duration:", container.getDuration())
+    print ("size kb:", container.getSizeKB())
+    print ("is TS:", m.isTransportStream())
     
     print ("-------- langMApping: -------------")
     langmap = m.getLanguageMapping()
-    for key,index in langmap.items():
-        print("lang:%s @ %d"%(key,index))
+    for key, index in langmap.items():
+        print("lang:%s @ %d" % (key, index))
     
-    
-    print ("-------- all streams -------------"  )  
+    print ("-------- all streams -------------")  
     for s in m.streams:
         print ("##########################")
-        print ("Index:",s.getStreamIndex())
-        print ("getCodec:",s.getCodec())
-        print ("getLanguage:",s.getLanguage())
-        print ("getCodecTimeBase: ",s.getCodecTimeBase())
-        print ("getTimeBase: ",s.getTimeBase())
-        print ("getAspect ",s.getAspectRatio())
-        print ("getFrameRate: ",s.getFrameRate())
-        print ("getDuration: ",s.duration())
-        print ("getWidth: ",s.getWidth())
-        print ("getHeight: ",s.getHeight())
-        print ("isAudio: ",s.isAudio())
-        print ("isVideo: ",s.isVideo())
+        print ("Index:", s.getStreamIndex())
+        print ("getCodec:", s.getCodec())
+        print ("getLanguage:", s.getLanguage())
+        print ("getCodecTimeBase: ", s.getCodecTimeBase())
+        print ("getTimeBase: ", s.getTimeBase())
+        print ("getAspect ", s.getAspectRatio())
+        print ("getFrameRate: ", s.getFrameRate())
+        print ("getDuration: ", s.duration())
+        print ("getWidth: ", s.getWidth())
+        print ("getHeight: ", s.getHeight())
+        print ("isAudio: ", s.isAudio())
+        print ("isVideo: ", s.isVideo())
+
 
 def testPacketProbe(filename):    
-    #p = FFPacketProbe(filename,0,None)
-    FFPacketProbe(filename,"00:00:32.00",20)
+    # p = FFPacketProbe(filename,0,None)
+    FFPacketProbe(filename, "00:00:32.00", 20)
+
 
 def testFFmpegVersion():
-    fv= FFmpegVersion()
-    val=str(fv.version)[:1]
-    print(">>"+val)
+    fv = FFmpegVersion()
+    val = str(fv.version)[:1]
+    print(">>" + val)
+
 
 def testregex():
-    #text = "46648 P:1866.05 D:1866.05 25.70%"
+    # text = "46648 P:1866.05 D:1866.05 25.70%"
     text = "49 D:0.96 [00:00.00] 5.05%"
-    #m= re.search("([0-9]+) D:([0-9.]+)([0-9:0-9.0-9]+) ([0-9.]+)%",text)
-    #m= re.search("([0-9]+) D:([0-9.]+) (.+) ([0-9.]+)%",text)
+    # m= re.search("([0-9]+) D:([0-9.]+)([0-9:0-9.0-9]+) ([0-9.]+)%",text)
+    # m= re.search("([0-9]+) D:([0-9.]+) (.+) ([0-9.]+)%",text)
     regexp = re.compile("([0-9]+) D:([0-9.]+) \[(.+)\] ([0-9.]+)%")
-    m= regexp.search(text)
+    m = regexp.search(text)
     print(m.group(0))
     frame = m.group(1)
     dts = m.group(3)
     progress = int(round(float(m.group(4)))) 
-    print("F:%s dts: %s  per: %d"%(frame,dts,progress))
+    print("F:%s dts: %s  per: %d" % (frame, dts, progress))
+
 
 def stringToSeconds(string):
     items = string.split(":")
     hrs = items[0].split('=')[1]
-    mins= items[1]
+    mins = items[1]
     sec = items[2].split('.')[0]
-    return int(hrs)*3600+int(mins)*60+int(sec)
+    return int(hrs) * 3600 + int(mins) * 60 + int(sec)
 
 
 def testCMDffmpegRegex():
-    #ext = "frame= 1637 fps=0.0 q=-1.0 Lsize=   28826kB time=00:01:05.70 bitrate=3593.8kbits/s speed= 144x"
+    # ext = "frame= 1637 fps=0.0 q=-1.0 Lsize=   28826kB time=00:01:05.70 bitrate=3593.8kbits/s speed= 144x"
     text = "frame= 1508 fps=0.0 q=-1.0 size=   26546kB time=00:01:00.52 bitrate=3593.0kbits/s speed= 121x"
 
-    m = re.search('frame=[ ]*[0-9]+',text)
+    m = re.search('frame=[ ]*[0-9]+', text)
     print(m.group(0))
-    m = re.search('time=[ ]*[0-9:.]+',text)
+    m = re.search('time=[ ]*[0-9:.]+', text)
     print(m.group(0))
-    x=stringToSeconds(m.group(0))
+    x = stringToSeconds(m.group(0))
     print(x)
     items = m.group(0).split(":")
     hrs = str(items[0].split('=')[1])
-    mins= str(items[1])
+    mins = str(items[1])
     sec = str(items[2].split('.')[0])
-    total = int(hrs)*3600+int(mins)*60+int(sec)
-    perc = (total/100.0)*100
-    print("secs:%d %3.2f"%(total,perc))
+    total = int(hrs) * 3600 + int(mins) * 60 + int(sec)
+    perc = (total / 100.0) * 100
+    print("secs:%d %3.2f" % (total, perc))
+
 
 import json
+
+
 def createunidueISO692Map():
-    #read the iso file
+    # read the iso file
     HomeDir = os.path.dirname(__file__)
-    DataDir=os.path.join(HomeDir,"data")
-    path = os.path.join(DataDir,"unidueIso692.json")
-    outpath = os.path.join(DataDir,"countryIso692.json")
-    result=[]
-    alphaToLang={}
-    langToAlpha={}    
+    DataDir = os.path.join(HomeDir, "data")
+    path = os.path.join(DataDir, "unidueIso692.json")
+    outpath = os.path.join(DataDir, "countryIso692.json")
+    result = []
+    alphaToLang = {}
+    langToAlpha = {}    
     result.append(alphaToLang)
     result.append(langToAlpha)
-    with open(path,'r')as f:
-        block1 = json.load(f) #Array 2
+    with open(path, 'r')as f:
+        block1 = json.load(f)  # Array 2
     
     map1 = block1[1]
-    mapLang= map1["items"]
-    for lang,langMap in mapLang.items():
-        txt=langMap['en']
-        full=txt.split('(')[0]
-        code=langMap["iso3"].lower()
-        print("lang %s = full: %s iso: %s"%(lang,full,code))
-        alphaToLang[code]=full
-        langToAlpha[full]=code
+    mapLang = map1["items"]
+    for lang, langMap in mapLang.items():
+        txt = langMap['en']
+        full = txt.split('(')[0]
+        code = langMap["iso3"].lower()
+        print("lang %s = full: %s iso: %s" % (lang, full, code))
+        alphaToLang[code] = full
+        langToAlpha[full] = code
     
-    with open(outpath,'w')as outfile:
-        json.dump(result,outfile)
+    with open(outpath, 'w')as outfile:
+        json.dump(result, outfile)
+
 
 def convertIso639():
-    #read the iso file
+    # read the iso file
     HomeDir = os.path.dirname(__file__)
-    DataDir=os.path.join(HomeDir,"data")
-    path = os.path.join(DataDir,"iso639-2.json")
-    outpath = os.path.join(DataDir,"countryIso639.json")
-    result=[]
-    alphaToLang={}
-    langToAlpha={}    
+    DataDir = os.path.join(HomeDir, "data")
+    path = os.path.join(DataDir, "iso639-2.json")
+    outpath = os.path.join(DataDir, "countryIso639.json")
+    result = []
+    alphaToLang = {}
+    langToAlpha = {}    
     result.append(alphaToLang)
     result.append(langToAlpha)
-    with open(path,'r')as f:
-        block1 = json.load(f) #dict with 2/3 lettercodes
+    with open(path, 'r')as f:
+        block1 = json.load(f)  # dict with 2/3 lettercodes
     
-    for code,dict1 in block1.items():
-        if len(code)==3:
+    for code, dict1 in block1.items():
+        if len(code) == 3:
             engName = dict1["int"][0]
             nativeName = dict1["native"][0]
-            alphaToLang[code]=engName
-            langToAlpha[engName]=code
-        print("lang %s = eng: %s navtive: %s"%(code,engName,nativeName))
+            alphaToLang[code] = engName
+            langToAlpha[engName] = code
+        print("lang %s = eng: %s navtive: %s" % (code, engName, nativeName))
 
-    with open(outpath,'w')as outfile:
-        json.dump(result,outfile)    
+    with open(outpath, 'w')as outfile:
+        json.dump(result, outfile)    
 
 #########################################################
     '''
@@ -243,26 +253,27 @@ def convertIso639():
     flv ->Common extensions:flv (flv1,mp3)
     ogg ->Common extensions:ogg (theora,vorbis)
     '''
-    def _setupConversionTable(self):
-        ##todo NEED FORMAT CONTAINER, NOT CODEC -c    
-        self._convTable={} #codec vs extension? should be container!
-        self._convTable["mpeg2video"]="mpg"
-        self._convTable["mpeg1video"]="mpg"
-        self._convTable["h264"]="mp4"
-        self._convTable["hevc"]="mp4"
-        self._convTable["msmpeg4v1"]="avi"
-        self._convTable["msmpeg4v2"]="avi"
-        self._convTable["msmpeg4v3"]="avi"
-        self._convTable["rawvideo"]="swf"
-        self._convTable["vp6f"]="flv"
-        self._convTable["vc1"]="mkv" #only decode / remux can't handle the audio sync!
-        self._convTable["vp8"]="webm"
-        self._convTable["vp9"]="webm"
-        self._convTable["mpeg4"]="mp4" #or mov,m4a,3gp,3g2,mj2 as EXTENSION..
 
-        #self._convTable["ansi"]="txt"
-        #TODO the conversion MUST be a combination of audio and video
-        #e.g Opus can't be put into mp4 
+    def _setupConversionTable(self):
+        # #todo NEED FORMAT CONTAINER, NOT CODEC -c    
+        self._convTable = {}  # codec vs extension? should be container!
+        self._convTable["mpeg2video"] = "mpg"
+        self._convTable["mpeg1video"] = "mpg"
+        self._convTable["h264"] = "mp4"
+        self._convTable["hevc"] = "mp4"
+        self._convTable["msmpeg4v1"] = "avi"
+        self._convTable["msmpeg4v2"] = "avi"
+        self._convTable["msmpeg4v3"] = "avi"
+        self._convTable["rawvideo"] = "swf"
+        self._convTable["vp6f"] = "flv"
+        self._convTable["vc1"] = "mkv"  # only decode / remux can't handle the audio sync!
+        self._convTable["vp8"] = "webm"
+        self._convTable["vp9"] = "webm"
+        self._convTable["mpeg4"] = "mp4"  # or mov,m4a,3gp,3g2,mj2 as EXTENSION..
+
+        # self._convTable["ansi"]="txt"
+        # TODO the conversion MUST be a combination of audio and video
+        # e.g Opus can't be put into mp4 
         '''
         Container  Audio formats supported
         MKV/MKA    Vorbis, MP2, MP3, LC-AAC, HE-AAC, WMAv1, WMAv2, AC3, eAC3, Opus
@@ -277,6 +288,7 @@ def convertIso639():
         WebM       Vorbis, Opus
         OGG        Vorbis, Opus 
         '''
+
     '''
     describes which audio codecs are alowwed in which container (ffmpeg-codecs)
     D..... = Decoding supported
@@ -300,20 +312,21 @@ def convertIso639():
 
     
     '''
+
     def audioCodecMapping(self):
-        codecTable={} #format -> audio codec
-        codecTable["3gp"]=["aac"]
-        codecTable["avi"]=["mp1","mp2","mp3","aac","ac3"]
-        codecTable["matroska"]=["mp1","mp2","mp3","aac","ac3","vorbis","opus","flac"]
-        codecTable["mpegts"]=["mp1","mp2","mp3"]
-        codecTable["mpeg"]=["mp1","mp2","mp3"]
-        codecTable["vob"]=["mp2"]
-        codecTable["dvd"]=["mp1","mp2","mp3"]
-        codecTable["mp4"]=["mp1","mp2","mp3","aac","ac3","dts","opus","alac"]
-        codecTable["mov"]=["mp1","mp2","mp3","aac","ac3","dts","opus","alac"]
-        codecTable["webm"]=["opus","flac"]
-        codecTable["flv"]=["mp3","aac"]
-        codecTable["ogg"]=["opus","vorbis","flac"]
+        codecTable = {}  # format -> audio codec
+        codecTable["3gp"] = ["aac"]
+        codecTable["avi"] = ["mp1", "mp2", "mp3", "aac", "ac3"]
+        codecTable["matroska"] = ["mp1", "mp2", "mp3", "aac", "ac3", "vorbis", "opus", "flac"]
+        codecTable["mpegts"] = ["mp1", "mp2", "mp3"]
+        codecTable["mpeg"] = ["mp1", "mp2", "mp3"]
+        codecTable["vob"] = ["mp2"]
+        codecTable["dvd"] = ["mp1", "mp2", "mp3"]
+        codecTable["mp4"] = ["mp1", "mp2", "mp3", "aac", "ac3", "dts", "opus", "alac"]
+        codecTable["mov"] = ["mp1", "mp2", "mp3", "aac", "ac3", "dts", "opus", "alac"]
+        codecTable["webm"] = ["opus", "flac"]
+        codecTable["flv"] = ["mp3", "aac"]
+        codecTable["ogg"] = ["opus", "vorbis", "flac"]
         return codecTable;
     
     '''
@@ -340,50 +353,51 @@ def convertIso639():
 
     Lists the video codecs for each container ->wikipeadia...
     '''
+
     def videoCodecMapping(self):   
-        codecTable={} #format -> video codec
-        codecTable["3gp"]=["mp4","h263","vc1"]
-        codecTable["avi"]=["mpeg1video","mpeg2video","wmv?","vc1","theora","mp4","h264","h265","vp8","vp9"]
-        codecTable["matroska"]=["mpeg1video","mpeg2video","wmv?","vc1","theora","mp4","h264","h265","vp8","vp9"]
-        codecTable["mpegts"]=["mpeg1video","mpeg2video","mp4","h264"]
-        codecTable["mpeg"]=["mpeg1video","mpeg2video","mp4","h264"]
-        codecTable["vob"]=["mpeg1video","mpeg2video"]
-        codecTable["dvd"]=["mpeg1video","mpeg2video"]
-        codecTable["mp4"]=["mpeg1video","mpeg2video","wmv?","vc1","theora","mp4","h264","h265","vp8","vp9"]
-        codecTable["mov"]=["mpeg1video","mpeg2video","wmv?","vc1","theora","mp4","h264","h265","vp8","vp9"]
-        codecTable["webm"]=["vp8","vp9"]
-        codecTable["flv"]=["mp4","h264","vp6"]
-        codecTable["ogg"]=["theora"] 
+        codecTable = {}  # format -> video codec
+        codecTable["3gp"] = ["mp4", "h263", "vc1"]
+        codecTable["avi"] = ["mpeg1video", "mpeg2video", "wmv?", "vc1", "theora", "mp4", "h264", "h265", "vp8", "vp9"]
+        codecTable["matroska"] = ["mpeg1video", "mpeg2video", "wmv?", "vc1", "theora", "mp4", "h264", "h265", "vp8", "vp9"]
+        codecTable["mpegts"] = ["mpeg1video", "mpeg2video", "mp4", "h264"]
+        codecTable["mpeg"] = ["mpeg1video", "mpeg2video", "mp4", "h264"]
+        codecTable["vob"] = ["mpeg1video", "mpeg2video"]
+        codecTable["dvd"] = ["mpeg1video", "mpeg2video"]
+        codecTable["mp4"] = ["mpeg1video", "mpeg2video", "wmv?", "vc1", "theora", "mp4", "h264", "h265", "vp8", "vp9"]
+        codecTable["mov"] = ["mpeg1video", "mpeg2video", "wmv?", "vc1", "theora", "mp4", "h264", "h265", "vp8", "vp9"]
+        codecTable["webm"] = ["vp8", "vp9"]
+        codecTable["flv"] = ["mp4", "h264", "vp6"]
+        codecTable["ogg"] = ["theora"] 
         return codecTable;
     
 
 #########################################################
 def testFormatMapping():
     gen = FormatMapGenerator()
-    fmtmp4= gen.table["mp4"];
+    fmtmp4 = gen.table["mp4"];
     print(fmtmp4.audioCodecs)
     print(fmtmp4.videoCodecs)
     print(fmtmp4.extensions)
-    print("Test codecs mp3 and h264 %s"%fmtmp4.containsCodecs("h264","mp3"))
-    print("Test codecs vorbis and h264 %s"%fmtmp4.containsCodecs("h264","vorbis"))
-    ext= gen.extensionsFor("h264","aac")
-    print("Extension for:(h264,aac)%s"%ext)
+    print("Test codecs mp3 and h264 %s" % fmtmp4.containsCodecs("h264", "mp3"))
+    print("Test codecs vorbis and h264 %s" % fmtmp4.containsCodecs("h264", "vorbis"))
+    ext = gen.extensionsFor("h264", "aac")
+    print("Extension for:(h264,aac)%s" % ext)
     
-    dlg = gen.getDialogFileExtensionsFor("h264","aac")
-    print("DLG Extension for:(h264,aac)%s"%dlg)
+    dlg = gen.getDialogFileExtensionsFor("h264", "aac")
+    print("DLG Extension for:(h264,aac)%s" % dlg)
     
         
 if __name__ == '__main__':
-    #testCMDffmpegRegex()
-    #testregex()
-    #testFFmpegVersion()
-    #testPath()
-    #testParse()
-    #testNonblockingRead()
-    #testFrameProbe()
-    #testPacketProbe("/home/matze/Videos/pur/purX.m2t")
-    #createIso692Map()
-    #convertIso639()
+    # testCMDffmpegRegex()
+    # testregex()
+    # testFFmpegVersion()
+    # testPath()
+    # testParse()
+    # testNonblockingRead()
+    # testFrameProbe()
+    # testPacketProbe("/home/matze/Videos/pur/purX.m2t")
+    # createIso692Map()
+    # convertIso639()
     testFormatMapping()
     ''' 
         #Very slow!!!

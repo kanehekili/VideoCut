@@ -1,5 +1,5 @@
 # VideoCut
-Version 1.2.2
+Version 1.2.3
 
 MP2/MP4 Cutter for Linux on base of OpenCV and ffmpeg. Cutting is lossless, the target file will not be reencoded. 
 
@@ -18,7 +18,7 @@ The new version is written in python3 and uses the qt5 widget kit.
 ```
 sudo apt-get install python3-pyqt5 ffmpeg python3-opencv
 ```
-#### Install on Arch or Antergos
+#### Install on Arch or Manjaro
 ```
 sudo pacman -Syu python-pyqt5 python-numpy ffmpeg opencv
 ```
@@ -39,12 +39,11 @@ OpenCV:  it is necessary to get a version that has been compiled with ffmpeg
 :boom: Be aware that this tool does not cut exact on frame - except you reencode the whole film.
 
 ### How to install
-* Download the videocut*.tar contained in the "build" folder ![here](https://github.com/kanehekili/VideoCut/raw/master/VideoCutter/build/videocut1.2.2.tar)
+* Download the videocut*.tar contained in the "build" folder ![here](https://github.com/kanehekili/VideoCut/raw/master/build/videocut1.2.3.tar)
 * Upack it to a location that suits you.
 * Copy the VideoCut.desktop file to ~/.local/share/applications
 * Change the absolute paths & user name within that desktop file to the location where you've copied the files.
 * python qt5, opencv and ffmpeg are required
-* :heavy_exclamation_mark: Important! remux5 must be set to executable. (chmod +x remux5).Should be fixed now. 
 
 ### Currently working on:
 * Exact frame cut - see coment below 
@@ -54,7 +53,8 @@ OpenCV:  it is necessary to get a version that has been compiled with ffmpeg
 ### Using remux instead of ffmpeg
 remuxX is based on ffmpeg, but uses an integrated approach to cut and join videos. Currently there is a bug in ffmpeg to concat mp4. Remux handles it correctly. To activate it, use the "coggs" icon and select "VideoCut muxer".
 
-Please note that excat cut (i.e. transcoding) is available for remux5. Since it runs single threaded, it is far too slow for usage. Will work on a mutlithreaded version.
+Please note that excat cut (i.e. transcoding) is available for remux5. Its an optimized library based on libav.
+In most cases this lib is faster than native ffmpeg, the cuts are exact when using the "Exact cut" option. Runs on all threads available. 
 
 ### Exact frame cut for one GOP only?
 Can't be really implemented with the ffmpeg ABI. The transcoded part will have different coding parameters than the rest of the stream. A decoder cannot handle that change. On the other hand there is no way to transcode the GOP with the exact parameters of the original stream, since only a subset of h264 paramenters are accepted by the ffmpeg ABI. 
@@ -105,3 +105,7 @@ Can't be really implemented with the ffmpeg ABI. The transcoded part will have d
 29.09.2019
 * Changed remux5: Fine tuning for exact cut. Works now for webm, VC1/mkv and the standard mpeg sources (mp2 and mp4)
 * Next steps: Select audio streams -  support ffmpeg cmd for transcoding/remuxing into other formats. Joining files
+
+19.12.2019
+* Added multi audio tracks. Support for vc1,vp8 and vp9 codecs. Handles AOMediaVideo (av1) on fast cut, but not on transcode. 
+* Finalized cutting mpeg2 and h246 codecs.
