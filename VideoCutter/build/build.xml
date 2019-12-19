@@ -29,6 +29,7 @@
 			</fileset>
 		</copy>
 		<copy todir="${data}">
+			<fileset file="${srcdata}\countryIso639.json"/>
 			<fileset file="vc.ini"/>
 			  <filterset>
 			    <filter token="xxx" value="${version}"/>

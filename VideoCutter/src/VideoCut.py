@@ -7,8 +7,8 @@ import configparser
 from PyQt5.QtCore import pyqtSignal
 from PyQt5 import QtCore, QtGui, QtWidgets
 from PyQt5.QtWidgets import QApplication,QWidget
-import test
-import numpy
+import json
+from PyQt5.Qt import Qt
 
 try:
     import cv2 #cv3
@@ -29,9 +29,8 @@ except ImportError:
 
 from datetime import timedelta
 
-from FFMPEGTools import FFMPEGCutter, FFStreamProbe, CuttingConfig,OSTools,Logger,VCCutter
+from FFMPEGTools import FFMPEGCutter, FFStreamProbe, CuttingConfig,OSTools,Logger,VCCutter,FORMATS
 import FFMPEGTools 
-import os
 from time import sleep,time
 import xml.etree.cElementTree as CT
 
@@ -211,7 +210,6 @@ class CVImage(QtGui.QImage):
         if cvrotate < 1:
             dst = numpyArray
         else:
-            center = (width / 2, height / 2) 
             dst= cv2.rotate(numpyArray,cvrotate)
             height, width, bytesPerComponent = dst.shape
          
@@ -389,6 +387,7 @@ class LayoutWindow(QWidget):
         self.buttonStop.setIcon(QtGui.QIcon('./icons/window-close.png'))
         self.buttonStop.setIconSize(QtCore.QSize(20,20))
         self.buttonStop.setVisible(False)
+        self.buttonStop.setToolTip("Stop processing")
         self.statusbar.addPermanentWidget(self.buttonStop,0)
         self.setLayout(self.makeGridLayout())
         self.adjustSize()
@@ -396,7 +395,7 @@ class LayoutWindow(QWidget):
     def makeGridLayout(self):
         gridLayout = QtWidgets.QGridLayout()
         self.ui_List.setSizePolicy(QtWidgets.QSizePolicy.Preferred,QtWidgets.QSizePolicy.Expanding)
-        self.ui_List.setMaximumWidth(SIZE_ICON*2.6)
+        self.ui_List.setMaximumWidth(round(SIZE_ICON*2.6))
         gridLayout.addWidget(self.ui_List,0,0,5,1)
         #from row,from col, rowSpan, columnSpan
         gridLayout.addWidget(self.ui_VideoFrame,0,1,4,-1);
@@ -439,8 +438,8 @@ class LayoutWindow(QWidget):
         self.statusbar.showMessage(text)
     
     def setDialResolution(self,resolution):
-        self.ui_Dial.setMinimum(-resolution/2)
-        self.ui_Dial.setMaximum(resolution/2)
+        self.ui_Dial.setMinimum(round(-resolution/2))
+        self.ui_Dial.setMaximum(round(resolution/2))
 
 
     def syncSliderPos(self,pos):
@@ -461,7 +460,7 @@ class LayoutWindow(QWidget):
         
         item = QtWidgets.QListWidgetItem()
         item.setSizeHint(QtCore.QSize(SIZE_ICON,self.ITEM_HEIGHT))
-        img = CVImage(frame).scaled(self.ui_VideoFrame.imageRatio*SIZE_ICON, SIZE_ICON)
+        img = CVImage(frame).scaled(int(self.ui_VideoFrame.imageRatio*SIZE_ICON), SIZE_ICON)
         pix = QtGui.QPixmap.fromImage(img)
         item.setIcon(QtGui.QIcon(pix))
         if cutEntry.isStartMode():
@@ -498,7 +497,7 @@ class LayoutWindow(QWidget):
     
     def syncSpinButton(self,frameNbr):
         self.ui_GotoField.blockSignals(True)
-        self.ui_GotoField.setValue(frameNbr)
+        self.ui_GotoField.setValue(int(frameNbr))
         self.ui_GotoField.blockSignals(False)
     
     def keyReleaseEvent(self,event):
@@ -658,17 +657,24 @@ class MainFrame(QtWidgets.QMainWindow):
         self.playAction.triggered.connect(self.playVideo)
         
         '''
-        the conversion menues
+        the settings menues
         '''
-        #self.convertToMP4 = QtWidgets.QAction(QtGui.QIcon('./icons/stop-red-icon.png'),"Convert to mp4",self)
-        self.convertToMP4 = QtWidgets.QAction("Convert to mp4",self)
-        self.convertToMP4.setCheckable(True)
+#         self.convertToMP4 = QtWidgets.QAction(QtGui.QIcon('./icons/stop-red-icon.png'),"Convert to mp4",self)
+#         self.convertToMP4 = QtWidgets.QAction("Convert to mp4",self)
+#         self.convertToMP4.setCheckable(True)
 #         self.selectContainer = QtWidgets.QAction(QtGui.QIcon('./icons/stop-red-icon.png'),"change to a different container",self)
 #         self.extractMP3 = QtWidgets.QAction(QtGui.QIcon('./icons/stop-red-icon.png'),"Extract MP3",self)
 #         self.switchAudio = QtWidgets.QAction(QtGui.QIcon('./icons/stop-red-icon.png'),"Swtich audio",self)
         self.mediaSettings= QtWidgets.QAction(QtGui.QIcon('./icons/settings.png'),"Output settings",self)
         self.mediaSettings.setShortcut('Ctrl+T')
         self.mediaSettings.triggered.connect(self.openMediaSettings)
+
+        '''
+        audio language selection
+        '''
+        self.langSettings = QtWidgets.QAction(QtGui.QIcon('./icons/langflags.png'),"Language settings",self)
+        self.langSettings.setShortcut('Ctrl+L')
+        self.langSettings.triggered.connect(self.openLanguageSettings)
 
         '''
         toolbar defs
@@ -683,6 +689,7 @@ class MainFrame(QtWidgets.QMainWindow):
         self.toolbar.addAction(self.infoAction)
         self.toolbar.addAction(self.playAction)
         self.toolbar.addAction(self.mediaSettings)
+        self.toolbar.addAction(self.langSettings)
                                
         menubar = self.menuBar()
         fileMenu = menubar.addMenu('&File')
@@ -743,6 +750,17 @@ class MainFrame(QtWidgets.QMainWindow):
     
     def updateWindowTitle(self,text):
         self.setWindowTitle("VideoCut - "+text)
+    
+    def openLanguageSettings(self):
+        #TODO use the settings model!
+        if self._videoController.streamData is None:
+            return
+        langMap = FFMPEGTools.createIso639Map()
+        lang = self.settings.getPreferedLanguageCodes()
+        dlg = LanguageSettingsDialog(self,lang,langMap,self._videoController.getLanguages())
+        if dlg.exec_():
+            print(dlg.getLanguages())
+            self.settings.setPreferedLanguageCodes(dlg.getLanguages())
      
     def showInfo(self,text):
         self._widgets.showInfo(text)
@@ -799,7 +817,9 @@ class MainFrame(QtWidgets.QMainWindow):
     def saveVideo(self):
         initalPath = self._videoController.getTargetFile()
         qText = self._videoController.getSaveTargetFile()
-        result = QtWidgets.QFileDialog.getSaveFileName(parent=self, directory=qText, caption="Save Video");
+        extn = self._videoController.getAllowedExtensions()
+        fileFilter = "Video Files (%s)"%extn
+        result = QtWidgets.QFileDialog.getSaveFileName(parent=self, directory=qText, filter=fileFilter,caption="Save Video");
         if result[0]:
             fn = self.__encodeQString(result)
             if initalPath == fn:
@@ -932,15 +952,41 @@ class MainFrame(QtWidgets.QMainWindow):
         
         #dlg.setMinimumSize(450, 0)
         return dlg;
-    
-    
+'''    
+class LanguageModel():
+    def __init__(self,mainframe):
+        lang = self.getAvailableLanguage(mainframe._videoController)
+        self.parseIso692(lang)
+        
+        
+    def parseIso692(self,langArray):
+        #read the iso file
+        HomeDir = os.path.dirname(__file__)
+        DataDir=os.path.join(HomeDir,"data")
+        path = os.path.join(DataDir,"unidueIso692.json")
+        with open(path,'r')as f:
+            self.langDict = json.load(f)
+        #ned the items of arr 1
+        data = self.langDict['items']
+        for item in data.items():
+            print(item)    
+#         for lang in data:
+#             if lang['ISO3']upper() in langArray:
+#                 print("long:%s abbr:%s"%(lang['English'],lang['alpha3-b']))   
+            
+    def getAvailableLanguage(self,controller):
+        lang= controller.getLanguages()
+        print("avail:")
+        for country in lang:
+            print("   -%s"%(country))
+        #this is alpha-3b code
+        return lang    
+'''
 
 class SettingsModel():
     def __init__(self,mainframe):
         #keep flags- save them later
         self.fastRemux= vc_config.get("useRemux")=='True'
-#         self.selectedContainer = vc_config.get("container")
-#         self.containerList = vc_config.get("containerList").split(',')
         self.reencoding = vc_config.get("recode")=='True'
 #        vc_config.set("useRemux", "False")
 #         vc_config.set("container","mp4")
@@ -974,7 +1020,21 @@ class SettingsModel():
         else:
             vc_config.set("recode","False")
         vc_config.store()
+        
+        
+    def getPreferedLanguageCodes(self):
+        lang = vc_config.get("LANG")
+        if lang is None:
+            lang=["deu","eng","fra"] #default
+        else:
+            lang= json.loads(lang)
+        return lang
 
+    def setPreferedLanguageCodes(self,langList):
+        vc_config.set("LANG", json.dumps(langList))
+        vc_config.store()
+       
+        
 class SettingsDialog(QtWidgets.QDialog):
 
     def __init__(self,parent,model):
@@ -1013,24 +1073,13 @@ class SettingsDialog(QtWidgets.QDialog):
         self.check_reencode.setChecked(self.model.reencoding)
         #connect
         self.check_reencode.stateChanged.connect(self.on_reencodeChanged)
-        
-#         self.combo = QtWidgets.QComboBox()
-#         for item in self.model.containerList:
-#             self.combo.addItem(item, None)
-#         
-#         self.combo.setEnabled(self.model.reencoding)
-#         
-#         self.combo.setCurrentText(self.model.selectedContainer)
-#         self.combo.currentTextChanged.connect(self.on_combobox_selected)
-        #we want audio as well?
         self.exRemux = QtWidgets.QCheckBox("VideoCut Muxer")
         self.exRemux.setToolTip("Uses the remux code instead of default ffmpeg commandline")
         self.exRemux.setChecked(self.model.fastRemux)
         self.exRemux.stateChanged.connect(self.on_fastRemuxChanged)
         
         encodeBox.addWidget(self.check_reencode)
-#         encodeBox.addWidget(self.combo)
-        
+       
         expoBox = QtWidgets.QVBoxLayout(frame2)
         expoBox.addWidget(self.exRemux)
         
@@ -1054,6 +1103,183 @@ class SettingsDialog(QtWidgets.QDialog):
         self.model.fastRemux= QtCore.Qt.Checked==isFastRemux
         self.model.update()    
         
+class LanguageSettingsDialog(QtWidgets.QDialog):
+    def __init__(self,parent,defCodes,langData,available3LetterCodes):
+        """Init UI."""
+        super(LanguageSettingsDialog, self).__init__(parent)
+        self.defaultCodes=defCodes
+        self.model=langData
+        self.avail=available3LetterCodes
+        self.init_ui()
+    
+    def init_ui(self):
+        self.setWindowModality(QtCore.Qt.WindowModal)
+        self.setWindowTitle("Language")
+        frame1 =  QtWidgets.QFrame()
+        frame1.setFrameStyle(QtWidgets.QFrame.Box | QtWidgets.QFrame.Sunken)
+        frame1.setLineWidth(1)
+        
+        vBox = QtWidgets.QVBoxLayout()
+        hBox = QtWidgets.QHBoxLayout(frame1)
+        dlgBox = QtWidgets.QVBoxLayout() 
+        self.btnup = QtWidgets.QPushButton()
+        self.btnup.clicked.connect(self.onButtonUp)
+        self.btnup.setIcon(QtGui.QIcon.fromTheme("up"))
+        self.btndown = QtWidgets.QPushButton()
+        self.btndown.setIcon(QtGui.QIcon.fromTheme("down"))
+        self.btndown.clicked.connect(self.onButtonDown)
+        vBox.addStretch(1)
+        vBox.addWidget(self.btnup,0)
+        vBox.addWidget(self.btndown,0)
+        vBox.addStretch(1)
+        
+        
+        self.listWidget =QtWidgets.QListWidget()
+        self.listWidget.setAlternatingRowColors(True)
+        self.listWidget.itemSelectionChanged.connect(self.onItemSelectionChanged)
+        self.listWidget.itemChanged.connect(self.onChange)
+        hBox.addWidget(self.listWidget)
+        hBox.addLayout(vBox,0)
+        
+        btnHBox= QtWidgets.QHBoxLayout()
+        self.lbl = QtWidgets.QLabel("3 Languages max")
+        pix = QtGui.QPixmap()
+        pix.load("icons/info.png")
+        pix=pix.scaledToWidth(32,mode=Qt.SmoothTransformation)
+        info = QtWidgets.QLabel("")
+        info.setPixmap(pix)
+        btnHBox.addWidget(info)
+        btnHBox.addWidget(self.lbl)
+        self.button_box = QtWidgets.QDialogButtonBox(self)
+        self.button_box.setStandardButtons(QtWidgets.QDialogButtonBox.Cancel | QtWidgets.QDialogButtonBox.Save)
+        self.button_box.accepted.connect(self.accept)
+        self.button_box.rejected.connect(self.reject)
+        btnHBox.addWidget(self.button_box)
+        
+        dlgBox.addWidget(frame1)
+        dlgBox.addLayout(btnHBox)
+        
+        self.setLayout(dlgBox)
+        self.setSizePolicy(QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Expanding)
+        self.setMinimumSize(400, 0)   
+        self.setModelData()
+        item = self.listWidget.item(0)
+        item.setSelected(True)
+    
+    def onChange(self,widget):
+        state= widget.checkState()
+        if state == Qt.Checked:
+            self._limitCheckedItems()
+    
+    def _limitCheckedItems(self):
+        selected=[]
+        for index in range(self.listWidget.count()):
+            item = self.listWidget.item(index)
+            if item.checkState()==Qt.Checked:
+                selected.append(item)
+                
+        if len(selected)>3:
+            test = selected.pop()
+            test.setCheckState(Qt.Unchecked)
+            
+        
+    @QtCore.pyqtSlot()
+    def onItemSelectionChanged(self):
+        sel = len(self.listWidget.selectedIndexes())
+        count = self.listWidget.count()
+        if count>1 and sel==1:
+            self.btnup.setDisabled(False)
+            self.btndown.setDisabled(False) 
+        else:
+            self.btnup.setDisabled(True)
+            self.btndown.setDisabled(True) 
+                   
+          
+        
+    @QtCore.pyqtSlot()        
+    def onButtonDown(self):
+        currItem = self._getSelectedItem()
+        if currItem is None:
+            return
+        currSel = self.listWidget.currentRow()
+        count = self.listWidget.count()
+        nextSel=currSel+1
+        if nextSel==count:
+            nextSel=count-1
+        if nextSel==currSel:
+            return
+        self.listWidget.takeItem(currSel) 
+        self.listWidget.insertItem(nextSel, currItem)
+        self.listWidget.setCurrentRow(nextSel)
+     
+    @QtCore.pyqtSlot()        
+    def onButtonUp(self):
+        currItem = self._getSelectedItem()
+        if currItem is None:
+            return
+        currSel = self.listWidget.currentRow()        
+        nextSel=currSel-1
+        if nextSel<0:
+            nextSel=0
+        if nextSel==currSel:
+            return
+        self.listWidget.takeItem(currSel) 
+        self.listWidget.insertItem(nextSel, currItem)
+        self.listWidget.setCurrentRow(nextSel)
+    
+    def _getSelectedItem(self):
+        sellist = self.listWidget.selectedItems()
+        if len(sellist)==0:
+            return None
+        return sellist[0]
+        
+                 
+    def setModelData(self):
+        if len(self.avail)==0:
+            item = QtWidgets.QListWidgetItem()                
+            item.setText("No language data available")
+            self.listWidget.addItem(item)
+            return 0
+        codeToLang = self.model[0]
+        primMix=[None,None,None]
+        for lang in self.avail:
+            if lang in self.defaultCodes:
+                idx=self.defaultCodes.index(lang)
+                primMix[idx]=lang
+            else:
+                primMix.append(lang)
+            
+        cnt=0    
+        for lang in primMix:
+            if lang is None:
+                continue
+            if lang in codeToLang:
+                txt = codeToLang[lang]
+            else:
+                txt=lang
+
+            item = QtWidgets.QListWidgetItem()                
+            item.setText(txt)
+            item.setFlags(item.flags() | QtCore.Qt.ItemIsUserCheckable)
+            if lang in self.defaultCodes:
+                item.setCheckState(QtCore.Qt.Checked)
+            else:
+                item.setCheckState(QtCore.Qt.Unchecked)
+            self.listWidget.addItem(item)
+            cnt+=1
+        
+        return self.listWidget.count() 
+    
+    def getLanguages(self):
+        lang=[]
+        langToCode = self.model[1]
+        for index in range(self.listWidget.count()):
+            item = self.listWidget.item(index)
+            if item.checkState()==Qt.Checked:
+                code= langToCode[item.text()]
+                lang.append(code)
+        
+        return lang
         
 '''
 Class may be replaced if the underlying interface is not opencv (e.g qt or ffmpeg or sth)
@@ -1129,7 +1355,7 @@ class VideoPlayerCV():
  
         self.framecount = self.getCurrentFrameNumber()
         Log.logInfo("No more frames @"+str(self.framecount+1));
-        return self.__getLastFrame(framecount,0)
+        return self.__getLastFrame(self.framecount,0)
 
     #A test to paint on a frame. Has artefacts..
     def __markFrame(self,frame,nbr):
@@ -1242,10 +1468,18 @@ class VideoControl(QtCore.QObject):
 
     def getSaveTargetFile(self):
         if self.streamData is not None:
-            return self.currentPath+"."+self.streamData.getTargetExtension()
+            return self.currentPath+"-vc."+self.streamData.getTargetExtension()
 
-        return self.currentPath+"Cut.mp4"
+        return self.currentPath+"-vc.mp4"
 
+    def getAllowedExtensions(self):
+        if self.streamData is not None:
+            return self.streamData.getDialogFileExtensions()
+        else:
+            return "*.*"
+    
+    def getLanguages(self):
+        return self.streamData.getLanguages()
      
     def displayWarningMessage(self):
         if self.lastError is None:
@@ -1274,18 +1508,14 @@ class VideoControl(QtCore.QObject):
             self.__initSliderTicks()
             self.gui.enableControls(True)
             ratio = self.streamData.getAspectRatio()
-            
-            #TODO: make a final setup to speed up 
-            self.gui.getVideoWidget().setVideoGeometry(ratio,rot)
+
             self.gui.updateWindowTitle(OSTools().getFileNameOnly(filePath))
+            self.gui.getVideoWidget().setVideoGeometry(ratio,rot)
             self._asyncInitVideoViews()
            
         except:
             print ("Error -see log")
             Log.logException("Error 2")
-            self.gui.updateWindowTitle(OSTools().getFileNameOnly(filePath))
-            self._gotoFrame(0)
-            self._showCurrentFrameInfo(0)
             if not OSTools().fileExists(filePath):
                 self.lastError = "File not found"
             else:
@@ -1375,7 +1605,7 @@ class VideoControl(QtCore.QObject):
         if self.cutter is None:
             Log.logInfo("Can't kill process")
         else:
-           self.cutter.stopCurrentProcess()
+            self.cutter.stopCurrentProcess()
 
     def saveVideo(self,path):
         spanns=[]
@@ -1394,7 +1624,7 @@ class VideoControl(QtCore.QObject):
                     spanns.append(block)
                     block=None
                 else:
-                   Log.logInfo( "Stop ignored:"+ cutEntry.getTimeString())
+                    Log.logInfo( "Stop ignored:"+ cutEntry.getTimeString())
         src = self.player._file
         #need that without extension!
         self.cutAsync(src,path,spanns)
@@ -1408,8 +1638,6 @@ class VideoControl(QtCore.QObject):
             t2 = cutmark[1].timePos
             delta = delta +(t2-t1).seconds
         return timedelta(seconds=delta)
-        
-            
 
     def cutAsync(self,srcPath,targetPath,spanns):
         self.cutTimeStart = time();
@@ -1428,10 +1656,10 @@ class VideoControl(QtCore.QObject):
         self.gui.stopProgress()
         worker.quit()
         worker.wait();
-        if self.cutter.wasAborted():
-            self.gui.getMessageDialog("Operation done","Cut aborted").show()
+        if self.cutter is None or self.cutter.wasAborted():
+            self.gui.getMessageDialog("Operation failed","Cut aborted").show()
         elif self.cutter.hasErrors():
-            self.lastError="Remux failed ".join(self.cutter.getErrors())
+            self.lastError="Remux failed: %s "%(self.cutter.getErrors()[0])
             self.displayWarningMessage()
         else:
             dx = time()- self.cutTimeStart
@@ -1442,7 +1670,8 @@ class VideoControl(QtCore.QObject):
     FFMPEG cutting API
     '''    
     def __makeCuts(self,srcPath,targetPath,spanns,settings):
-        config = CuttingConfig(srcPath,targetPath)
+        #TODO pass settings
+        config = CuttingConfig(srcPath,targetPath,settings.getPreferedLanguageCodes())
         config.streamData = self.streamData
         config.reencode = settings.reencoding
         
@@ -1464,14 +1693,14 @@ class VideoControl(QtCore.QObject):
     new VCCutter API
     '''
     def __directCut(self,srcPath,targetPath,spanns,settings):
-   
-        config = CuttingConfig(srcPath,targetPath)
+        #TODO pass settings
+        config = CuttingConfig(srcPath,targetPath,settings.getPreferedLanguageCodes())
         config.streamData = self.streamData
         config.messenger = self.gui._widgets.statusMessenger
         config.reencode = settings.reencoding
         
         self.cutter = VCCutter(config)
-        success = self.cutter.cut(spanns)
+        self.cutter.cut(spanns)
     
     def _initSliderThread(self):
         if self.sliderThread is not None:
@@ -1487,9 +1716,9 @@ class VideoControl(QtCore.QObject):
         fps = videoInfo.getFrameRate()
         if self.player.framecount > 0:
             ratio = round(LayoutWindow.SLIDER_RESOLUTION*60*fps/self.player.framecount,1)
-            self.gui.setSliderTicks(ratio)
+            self.gui.setSliderTicks(round(ratio))
             self.gui.setDialResolution(fps)
-            self.gui.setGotoMaximum(self.player.framecount)
+            self.gui.setGotoMaximum(int(self.player.framecount))
         self._frameSet=False 
          
         
@@ -1634,7 +1863,7 @@ class Worker(QtCore.QThread):
     def showFrame(self,frameNumber):
         self.fbnr=frameNumber
         if not self.stop:
-             self.start()
+            self.start()
 
     
 class SignalOnEvent(QtCore.QObject):
@@ -1645,14 +1874,14 @@ class SignalOnEvent(QtCore.QObject):
         self.widget = widget
         widget.installEventFilter(self)
 
-    def eventFilter(self, object,event):
-        if object == self.widget:
-            if event.type() == QtCore.QEvent.MouseButtonRelease and object.rect().contains(event.pos()):
+    def eventFilter(self, anyObject,event):
+        if anyObject == self.widget:
+            if event.type() == QtCore.QEvent.MouseButtonRelease and anyObject.rect().contains(event.pos()):
                     self.clicked.emit()
                     return True
             return False
         else:
-            return super(SignalOnEvent,self).eventFilter(object,event)
+            return super(SignalOnEvent,self).eventFilter(anyObject,event)
              
    
     def doit(self):

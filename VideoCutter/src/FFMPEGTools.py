@@ -10,9 +10,8 @@ from subprocess import Popen
 from datetime import timedelta
 import time
 import re
-import fcntl
-from time import sleep
 import logging
+import json
 
 class Logger():
     HomeDir = os.path.dirname(__file__)
@@ -43,7 +42,7 @@ class Logger():
         logging.shutdown() 
 
     def logException(self,text):
-         logging.exception(text)
+        logging.exception(text)
   
 
 
@@ -93,7 +92,7 @@ class OSTools():
     
     def ensureFile(self,path,tail):
         fn = os.path.join(path,tail)
-        ensureDirectory(path, None)
+        self.ensureDirectory(path, None)
         with open(fn, 'a'):
             os.utime(fn, None)
         return fn
@@ -103,7 +102,6 @@ class OSTools():
 
 BIN = "ffmpeg"
 Log = Logger()
-
 def parseCVInfos(cvtext):
     lines = cvtext.splitlines(False)
     cvDict={}
@@ -168,6 +166,20 @@ def executeAsync(cmd,commander):
 
 def executeCmd(cmd):
     return subprocess.Popen(cmd, stdout=subprocess.PIPE,stderr=subprocess.STDOUT).communicate()    
+'''
+Return array wit htwo dicts:
+dict 0= code->language
+dict 1 = language->code
+'''
+def createIso639Map():
+    #read the iso file
+    HomeDir = os.path.dirname(__file__)
+    DataDir=os.path.join(HomeDir,"data")
+    path = os.path.join(DataDir,"countryIso639.json")
+    with open(path,'r')as f:
+        result = json.load(f) 
+        
+    return result
     
 '''
 Probes packets.
@@ -220,9 +232,9 @@ class FFPacketProbe():
                 pack.isKeyFrame=('K' in raw[5])
                 self.packetList.append(pack)
         
-        self.printP(lines)
+        self.printP()
         
-    def printP(self,lines):
+    def printP(self):
         for pack in self.packetList:
             print (">>",pack.asString())   
 
@@ -238,14 +250,112 @@ class PacketInfo():
     def asString(self):
         return str(self.index)+") P:"+self.pts+" D:"+self.dts+" pt:"+self.pts_time+" dt:"+self.dts_time+" k:"+str(self.isKeyFrame)
     
+class FormatMap():
+    def __init__(self,fmt,vcList,acList,extensions):
+        self.format=fmt
+        self.videoCodecs=vcList
+        self.audioCodecs=acList;
+        self.extensions=extensions
+    '''
+    @return if vCodec and aCodec are contained in this format
+    '''
+    def containsCodecs(self,vCodec,aCodec):
+        return vCodec in self.videoCodecs and aCodec in self.audioCodecs
     
+    '''
+    returns the most common extension
+    '''
+    def getPrimaryExtension(self):
+        return self.extensions[0]
+
+    def getPrimaryVideoCodec(self):
+        return self.videoCodecs[0]
+    
+    def getPrimaryAudioCodec(self):
+        return self.audioCodecs[0]
+
+class FormatMapGenerator():
+    containers=["mpegts","mpeg","vob","dvd","mp4","mov","matroska","webm","3gp","avi","flv","ogg"]
+    videoCodecs={}
+    audioCodecs={}
+    extensions={}
+    videoCodecs["mpegts"]=["mpeg1video","mpeg2video","mp4","h264"]
+    videoCodecs["mpeg"]=["mpeg1video","mpeg2video","mp4","h264"]
+    videoCodecs["vob"]=["mpeg1video","mpeg2video"]
+    videoCodecs["dvd"]=["mpeg1video","mpeg2video"]
+    videoCodecs["mp4"]=["mpeg1video","mpeg2video","wmv?","vc1","theora","mp4","h264","h265","vp8","vp9"]
+    videoCodecs["mov"]=["mpeg1video","mpeg2video","wmv?","vc1","theora","mp4","h264","h265","vp8","vp9"]
+    videoCodecs["matroska"]=["mpeg1video","mpeg2video","wmv?","vc1","theora","mp4","h264","h265","vp8","vp9","av1"]
+    videoCodecs["webm"]=["vp8","vp9"]
+    videoCodecs["3gp"]=["mp4","h263","vc1"]
+    videoCodecs["avi"]=["mpeg1video","mpeg2video","wmv?","vc1","theora","mp4","h264","h265","vp8","vp9"]
+    videoCodecs["flv"]=["mp4","h264","vp6"]
+    videoCodecs["ogg"]=["theora"] 
+    
+    audioCodecs["mpegts"]=["mp1","mp2","mp3"]
+    audioCodecs["mpeg"]=["mp1","mp2","mp3"]
+    audioCodecs["vob"]=["mp2"]
+    audioCodecs["dvd"]=["mp1","mp2","mp3"]
+    #opus in MP4 support is experimental, add '-strict -2' if you want to use it.
+    audioCodecs["mp4"]=["mp1","mp2","mp3","aac","ac3","dts","alac","vorbis"]
+    audioCodecs["mov"]=["mp1","mp2","mp3","aac","ac3","dts","alac","vorbis"]
+    audioCodecs["matroska"]=["mp1","mp2","mp3","aac","ac3","vorbis","opus","flac"]
+    audioCodecs["webm"]=["opus","vorbis"]
+    audioCodecs["3gp"]=["aac"]
+    audioCodecs["avi"]=["mp1","mp2","mp3","aac","ac3"]
+    audioCodecs["flv"]=["mp3","aac"]
+    audioCodecs["ogg"]=["vorbis","opus","flac"]
+
+    #the ffmpeg view of extensions
+    extensions["mpegts"]=["m2t","ts","m2ts","mts"]
+    extensions["mpeg"]=["mpg","mpeg"]
+    extensions["vob"]=["vob"]
+    extensions["dvd"]=["dvd"]
+    extensions["mp4"]=["mp4","m4p","m4v"]
+    extensions["mov"]=["mov","mp4","m4a","3gp","3g2","mj2"]
+    extensions["matroska"]=["mkv","mk3d","mka","mks"]
+    extensions["webm"]=["webm"]
+    extensions["3gp"]=["3gp"]
+    extensions["avi"]=["avi"]
+    extensions["flv"]=["flv"]
+    extensions["ogg"]=["ogg"]    
+    
+    def __init__(self):
+        self.setup()
+    
+    def setup(self):
+        self.table={}
+        for fi in self.containers:
+            fmt=FormatMap(fi,self.videoCodecs[fi],self.audioCodecs[fi],self.extensions[fi])
+            self.table[fi]=fmt
+
+#     def extensionsFor(self,vCodec,aCodec):
+#         ext=set()
+#         for fi, fmtMap in self.table.items():
+#             if fmtMap.containsCodecs(vCodec,aCodec):
+#                 ext.update(fmtMap.extensions)
+#         return list(ext)
+
+    def getDialogFileExtensionsFor(self,vCodec,aCodec):
+        extList=[]
+        for formInfo,fmtMap in self.table.items():
+            if fmtMap.containsCodecs(vCodec,aCodec):
+                for ext in fmtMap.extensions:
+                    wc = "*."+ext
+                    if not wc in extList:
+                        extList.append(wc)
+        
+        return " ".join(extList)
+    
+
+FORMATS = FormatMapGenerator()
         
 class FFStreamProbe():
     def __init__(self,video_file):
-        self._setupConversionTable()
+        #self._setupConversionTable()
         self.path=video_file
         self._readData()
-        
+         
     def _readData(self):
         result = Popen(["ffprobe","-show_format","-show_streams",self.path,"-v","quiet"],stdout=subprocess.PIPE,stderr=subprocess.PIPE).communicate()
         if len(result[0])==0:
@@ -277,41 +387,7 @@ class FFStreamProbe():
                 self.audio.append(a)
             if a.isVideo():
                 self.video.append(a)
-    
-    def _setupConversionTable(self):
-        self._convTable={}
-        self._convTable["mpeg2video"]="mpg"
-        self._convTable["mpeg1video"]="mpg"
-        self._convTable["h264"]="mp4"
-        self._convTable["hevc"]="mp4"
-        self._convTable["msmpeg4v1"]="avi"
-        self._convTable["msmpeg4v2"]="avi"
-        self._convTable["msmpeg4v3"]="avi"
-        self._convTable["rawvideo"]="swf"
-        self._convTable["vp6f"]="flv"
-        self._convTable["vc1"]="mkv" #only decode / remux can't handle the audio sync!
-        self._convTable["vp8"]="webm"
-        self._convTable["vp9"]="webm"
-        self._convTable["mpeg4"]="mp4" #or mov,m4a,3gp,3g2,mj2 as EXTENSION..
-
-        #self._convTable["ansi"]="txt"
-        #--more to come
-        '''
-        Container  Audio formats supported
-        MKV/MKA    Vorbis, MP2, MP3, LC-AAC, HE-AAC, WMAv1, WMAv2, AC3, eAC3, Opus
-        MP4/M4A    MP2, MP3, LC-AAC, HE-AAC, AC3
-        FLV/F4V    MP3, LC-AAC, HE-AAC
-        3GP/3G2    LC-AAC, HE-AAC
-        MPG        MP2, MP3
-        PS/TS Stream    MP2, MP3, LC-AAC, HE-AAC, AC3
-        M2TS       AC3, eAC3
-        VOB        MP2, AC3
-        RMVB       Vorbis, HE-AAC
-        WebM       Vorbis, Opus
-        OGG        Vorbis, Opus 
-        '''
-
-                
+             
     def getVideoStream(self):
         if len(self.video)==0:
             return None
@@ -319,15 +395,23 @@ class FFStreamProbe():
     
     def getAudioStream(self):
         for stream in self.audio:
-            if stream.getBitRate()>0:
+            #if stream.getBitRate()>0:
+            if stream.getCodec() != VideoStreamInfo.NA:
                 return stream     
         return None
     
+    def allAudioStreams(self):
+        return self.audio
+    
+    def getDialogFileExtensions(self):
+        vcodec = self.getVideoStream().getCodec()
+        acodec= self.getAudioStream().getCodec()
+        return FORMATS.getDialogFileExtensionsFor(vcodec,acodec)
+    
     def getTargetExtension(self):
-        codec = self.getVideoStream().getCodec()
-        if codec in self._convTable:
-            return self._convTable[codec]
-        return ""
+        fmt= self.getFormatNames()[0]
+        fmtMap=FORMATS.table[fmt];
+        return fmtMap.extensions[0]
     
     def getAspectRatio(self):
         ratio = self.getVideoStream().getAspectRatio()
@@ -360,12 +444,32 @@ class FFStreamProbe():
     def getRotation(self):
         return self.getVideoStream().getRotation()
     
+    def getLanguages(self):
+        lang=[]
+        for audio in self.audio:
+            res = audio.getLanguage()
+            if res != VideoFormatInfo.NA and res not in lang:
+                lang.append(res)
+        return lang 
+    
+    #tuple with stream index and the language -for FFmpegCutter
+    def getLanguageMapping(self):
+        lang={} #key ISo code, value the stream index
+        for audio in self.audio:
+            res = audio.getLanguage()
+            if res != VideoFormatInfo.NA and res not in lang:
+                lang[res]=audio.getStreamIndex()
+        return lang 
+   
     def hasFormat(self,formatName):
         return formatName in self.getFormatNames() 
     
     def isKnownVideoFormat(self):
-        codec = self.getVideoStream().getCodec()
-        return codec in self._convTable
+        fmt = self.getFormatNames()
+        for container in fmt:
+            if container in FORMATS.table:
+                return True
+        return False 
     
     def isTransportStream(self):
         return self.hasFormat("mpegts")
@@ -465,7 +569,6 @@ class VideoFormatInfo():
         for key,value in self.tagDict.items():
             print (key,"->",value)
     
-    
     def getDuration(self):
         if "duration" in self.dataDict:
             return float(self.dataDict['duration'])
@@ -493,12 +596,14 @@ class VideoFormatInfo():
 class VideoStreamInfo():
     #int values
     NA="N/A"
+    TAG="TAG:"
 #     keys = ["index","width", "height","avg_frame_rate","duration","sample_rate"]
 #     stringKeys =["codec_type","codec_name"]
 #     divKeys =["display_aspect_ratio"]        
     
     def __init__(self,dataArray):
         self.dataDict={}
+        self.tagDict={}
         self._parse(dataArray)
     
     def _parse(self,dataArray):
@@ -507,8 +612,13 @@ class VideoStreamInfo():
                 (key,val)=entry.strip().split('=')
             except:
                 log("Error in entry:",entry)
+
             if self.NA!=val:
-                self.dataDict[key]=val
+                if self.TAG in key:
+                    key=key.split(':')[1]
+                    self.tagDict[key]=val
+                else:
+                    self.dataDict[key]=val
         
     def getStreamIndex(self):
         if 'index' in self.dataDict:
@@ -597,7 +707,13 @@ class VideoStreamInfo():
             return float(self.dataDict["duration"])
         return 0.0 
    
-
+    def getLanguage(self):
+        if "language" in self.tagDict:
+            val = self.tagDict['language']
+            if "und" in val:
+                return self.NA
+            return val
+        return self.NA
     
     def isAudio(self):
         #Is this stream labeled as an audio stream?
@@ -745,21 +861,21 @@ class VideoFrameInfo():
             return int(self.dataDict["coded_picture_number"])
         
 class CuttingConfig():
-    def __init__(self,srcfilePath,targetPath):
+    def __init__(self,srcfilePath,targetPath,audioTracks):
         ''' Sets an object that understands say(aText)'''
         self.messenger = None
         self.reencode = False
         self.streamData = None
         self.srcfilePath=srcfilePath
         self.targetPath=targetPath
-        
-    
+        self.languages= audioTracks
 
 class FFMPEGCutter():
     MODE_JOIN =1;
     MODE_CUT = 2;
     def __init__(self,cutConfig,totalTime):
         self._config = cutConfig
+        ##TODO respect languages from config
         self._tempDir ='/tmp'
         self._tmpCutList=self._getTempPath()+"cut.txt"
         self._fragmentCount=1;  
@@ -768,6 +884,7 @@ class FFMPEGCutter():
         self.runningProcess =None;
         self.killed=False
         self.errors=[]
+        self.langMappings=self._buildMapping()
     
     '''
     current limitation:
@@ -790,7 +907,7 @@ class FFMPEGCutter():
 
         #fast search - which is key search
         log('Prefetch seek/dur: ',prefetchString,">>",durString)
-        if nbrOfFragments is 1:
+        if nbrOfFragments == 1:
             fragment = self.targetPath()
         else:
             ext = self.retrieveTargetExtension()
@@ -805,6 +922,8 @@ class FFMPEGCutter():
         
         cmd =[BIN,"-hide_banner","-y","-ss",prefetchString,"-i",self.filePath(),"-t",durString]
         cmdExt.extend(audioMode)
+        if len(self.langMappings)>0:
+            cmd.extend(self.langMappings)
         cmdExt.extend(["-avoid_negative_ts","1","-shortest",fragment])
         cmd.extend(cmdExt)
         log("cut:",cmd)
@@ -856,7 +975,7 @@ class FFMPEGCutter():
         #TODO: wrong: The target defines which codec we are using....
         log("video:",videoStream.getCodec())
         if self._config.reencode:
-            #TODO: this must be adapted to the target file! Eg. dvd,webm etc -> ffmepg -formats | grep raw
+            #TODO: this must be adapted to the target file! Eg. dvd,webm etc -> ffmepg -formats | grep raw (av1 is experimental and won't work)
             return ["-c:v","libx264","-preset","medium"]  #-preset slow -crf 22
         
         if self._config.streamData.needsH264Filter():
@@ -870,6 +989,25 @@ class FFMPEGCutter():
     
     def _getTempPath(self):
         return self._tempDir+'/vc_'
+    
+    def _buildMapping(self):
+        #check if there needs to be a mapping for audio. Makes sense if there are more than one,
+        #and the prefered mappings should fit
+        #-map 0:0 -map 0:4 -map 0:1
+        vs= self._config.streamData.getVideoStream()
+        videoMap = "0:"+str(vs.getStreamIndex())
+        mapList=["-map",videoMap]#this is video
+        
+        langMap = self._config.streamData.getLanguageMapping()
+        prefLangs = self._config.languages
+        for lang in prefLangs:
+            if lang in langMap:
+                entry = "0:"+str(langMap[lang])
+                mapList.append("-map")
+                mapList.append(entry)
+        if len(mapList)>2:
+            return mapList
+        return []
     
     def retrieveTargetExtension(self):
         default = ".m2t"
@@ -891,7 +1029,7 @@ class FFMPEGCutter():
         #add all files into a catlist: file '/tmp/vc_tmp0.m2t' ..etc
         #ffmpeg -f concat -i catlist.txt  -c copy concat.mp4
         #reencoding takes place in the cut - NOT here.
-        if self._fragmentCount is 1:
+        if self._fragmentCount == 1:
             return
 
         self.say("Joining files...")
@@ -903,15 +1041,11 @@ class FFMPEGCutter():
 
 
         base = [BIN,"-hide_banner","-y","-f","concat","-safe","0","-i",self._tmpCutList,"-c:v","copy"]
-        cmd=base+self._audioMode(self.MODE_JOIN)+[self.targetPath()]
+        cmd=base+self._audioMode(self.MODE_JOIN)
+        if len(self.langMappings)>0:
+            cmd.extend(["-map","0"])
+        cmd.append(self.targetPath())
         log("join:",cmd)
-#         pFFmpeg = subprocess.Popen(cmd,stdout=subprocess.PIPE,stderr=subprocess.STDOUT)
-#        
-#         while pFFmpeg.poll() is None:
-#             sleep(0.2)
-#             if not self.non_block_read("Join:",pFFmpeg.stdout):
-#                 return False
-
         prefix =  "Join:"  
         try:
             for path in executeAsync(cmd,self):
@@ -1036,8 +1170,8 @@ class VCCutter():
     def setupBinary(self):
         fv= FFmpegVersion()
         if fv.version < 3.0:
-           self.warn("Invalid FFMPEG Version! Needs to be 3.0 or higher") 
-           return
+            self.warn("Invalid FFMPEG Version! Needs to be 3.0 or higher") 
+            return
         val=str(fv.version)[:1]
         p= OSTools().getWorkingDirectory();
         tail="ffmpeg/bin/V"+val+"/remux5"
@@ -1060,9 +1194,14 @@ class VCCutter():
                 timeString.append(',')    
                     
         timeString = ''.join(timeString)
-        cmd=[self.bin,"-i",self.config.srcfilePath,"-s",timeString,self.config.targetPath]
+        cmd=[self.bin,"-i",self.config.srcfilePath,"-s",timeString]
         if self.config.reencode:
             cmd=cmd+["-r"]
+        lang= self._buildLanguageMapping()
+        if len(lang)>0:
+            codes = ",".join(lang) 
+            cmd=cmd+["-l",codes]
+        cmd=cmd+[self.config.targetPath]            
         print(cmd)
         log("cut file:",cmd)
         try:
@@ -1084,6 +1223,23 @@ class VCCutter():
         self.say("Cutting done")
         self.runningProcess = None
         return True
+    
+    def _buildLanguageMapping(self):
+        #check if there needs to be a mapping for audio. Makes sense if there are more than one,
+        #and the prefered mappings should fit
+        
+        codes =[]
+        
+        langlist = self.config.streamData.getLanguages()
+        prefLangs = self.config.languages
+        for lang in prefLangs:
+            if lang in langlist:
+                codes.append(lang)
+                
+        if len(codes)>0:
+            return codes
+        return []
+
 
     def say(self,text):
         if self.config.messenger is not None:
@@ -1107,7 +1263,7 @@ class VCCutter():
             if len(text)>5:
                 print ("<"+text.rstrip())  
                 if "Err:" in text:
-                    log(text) 
+                    log(">",text) 
                     self.warn(text);
             return False
         else:
@@ -1150,6 +1306,25 @@ class FFmpegVersion():
                 self.version=4.1; 
             
             log("FFmepg Version:",self.version)
+
+class FFmpegPicture():
+    def __init__(self,timestamp,somedata):
+        self.ts = timestamp
+    
+    def getPicture(self):
+        #big todo - der test stimmt frame genau
+        #ffmpeg -ss 00:26:31.131 -i Guardians.of.the.Galaxy.Vol.2UHD.m4v -vframes 1 -filter:v scale=3840:1604 -y gog.png
+        return True 
+
+'''
+joins a list of files. if they are NOT mts files the audio needs to be filtered. All files need to have the same codecs
+'''
+class FFmpegJoiner():
+    def __init__(self):
+        self.x=1
+        
+    def join(self,listofFiles):
+        print("todo")        
  
 ''' 
     def non_block_read(self,prefix,output):
