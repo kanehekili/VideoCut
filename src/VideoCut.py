@@ -803,7 +803,7 @@ class MainFrame(QtWidgets.QMainWindow):
                             
     #-------- ACTIONS ----------
     def loadFile(self):
-        initalPath = self._videoController.getTargetFile()
+        initalPath = self._videoController.getSourceFile()
         result = QtWidgets.QFileDialog.getOpenFileName(parent=self, directory=initalPath, caption="Load Video");
         if result[0]:
             fn = self.__encodeQString(result)
@@ -812,11 +812,11 @@ class MainFrame(QtWidgets.QMainWindow):
             self._videoController.setFile(fn)  # encode error: str(result)
             
     def saveVideo(self):
-        initalPath = self._videoController.getTargetFile()
-        qText = self._videoController.getSaveTargetFile()
+        initalPath = self._videoController.getSourceFile()
+        targetPath = self._videoController.getTargetFile()
         extn = self._videoController.getAllowedExtensions()
         fileFilter = "Video Files (%s)" % extn
-        result = QtWidgets.QFileDialog.getSaveFileName(parent=self, directory=qText, filter=fileFilter, caption="Save Video");
+        result = QtWidgets.QFileDialog.getSaveFileName(parent=self, directory=targetPath, filter=fileFilter, caption="Save Video");
         if result[0]:
             fn = self.__encodeQString(result)
             if initalPath == fn:
@@ -1456,16 +1456,19 @@ class VideoControl(QtCore.QObject):
     def _initTimer(self):
         self._timer = QtCore.QTimer(self.gui)
         self._timer.timeout.connect(self._displayAutoFrame)
-    
-    def getTargetFile(self):
+#TODO: crap. targetFile and SaveTargetFile is stupid.
+#Need an origin Filename and a targetFilename.... - vc only if extensions are same...
+#targetFilename must have the allowed extension FIRST.    
+    def getSourceFile(self):
         if self.streamData is not None:
-            return self.currentPath + "." + self.streamData.getTargetExtension()
+            return self.currentPath + "." + self.streamData.getSourceExtension()
 
         return self.currentPath
 
-    def getSaveTargetFile(self):
+    def getTargetFile(self):
         if self.streamData is not None:
-            return self.currentPath + "-vc." + self.streamData.getTargetExtension()
+            target= self.currentPath + "." + self.streamData.getTargetExtension()
+            return target 
 
         return self.currentPath + "-vc.mp4"
 
@@ -1753,7 +1756,7 @@ class VideoControl(QtCore.QObject):
             self._timer.stop()
             return
         self._dialStep = math.copysign(1, pos) * round(math.exp(abs(pos / 3.0) - 1))
-        ts = (1 / self.player.fps) * 2500
+        ts = int((1 / self.player.fps) * 2500)
         self._timer.start(ts)
  
     # called by timer on dial change...    
@@ -1974,7 +1977,7 @@ def main():
         global vc_config
         Log = Logger()
         OSTools().setCurrentWorkingDirectory()
-        Log.logInfo('*** start in %s***' % OSTools().getWorkingDirectory())        
+        #Log.logInfo('*** start in %s***' % OSTools().getWorkingDirectory())        
         vc_config = ConfigAccessor("data/vc.ini")
         vc_config.read();
         
