@@ -1,5 +1,7 @@
 # VideoCut
-Version 1.2.3
+Version 1.2.4
+
+![Download](https://github.com/kanehekili/VideoCut/blob/master/build/videocut1.2.4.tar)
 
 MP2/MP4 Cutter for Linux on base of OpenCV and ffmpeg. Cutting is lossless, the target file will not be reencoded. 
 
@@ -39,7 +41,7 @@ OpenCV:  it is necessary to get a version that has been compiled with ffmpeg
 :boom: Be aware that this tool does not cut exact on frame - except you reencode the whole film.
 
 ### How to install
-* Download the videocut*.tar contained in the "build" folder ![here](https://github.com/kanehekili/VideoCut/raw/master/build/videocut1.2.3.tar)
+* Download the videocut*.tar contained in the "build" folder ![here](https://github.com/kanehekili/VideoCut/raw/master/build/videocut1.2.4.tar)
 * Upack it to a location that suits you.
 * Copy the VideoCut.desktop file to ~/.local/share/applications
 * Change the absolute paths & user name within that desktop file to the location where you've copied the files.
