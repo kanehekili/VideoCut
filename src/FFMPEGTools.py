@@ -262,11 +262,12 @@ class PacketInfo():
     
 class FormatMap():
 
-    def __init__(self, fmt, vcList, acList, extensions):
+    def __init__(self, fmt, vcList, acList, extensions,targetExt):
         self.format = fmt
         self.videoCodecs = vcList
         self.audioCodecs = acList;
         self.extensions = extensions
+        self.targetExt=targetExt
 
     '''
     @return if vCodec and aCodec are contained in this format
@@ -275,25 +276,14 @@ class FormatMap():
     def containsCodecs(self, vCodec, aCodec):
         return vCodec in self.videoCodecs and aCodec in self.audioCodecs
     
-    '''
-    returns the most common extension
-    '''
-
-    def getPrimaryExtension(self):
-        return self.extensions[0]
-
-    def getPrimaryVideoCodec(self):
-        return self.videoCodecs[0]
-    
-    def getPrimaryAudioCodec(self):
-        return self.audioCodecs[0]
-
 
 class FormatMapGenerator():
     containers = ["mpegts", "mpeg", "vob", "dvd", "mp4", "mov", "matroska", "webm", "3gp", "avi", "flv", "ogg"]
     videoCodecs = {}
     audioCodecs = {}
     extensions = {}
+    targetExt ={}
+    
     videoCodecs["mpegts"] = ["mpeg1video", "mpeg2video", "mp4", "h264"]
     videoCodecs["mpeg"] = ["mpeg1video", "mpeg2video", "mp4", "h264"]
     videoCodecs["vob"] = ["mpeg1video", "mpeg2video"]
@@ -334,6 +324,21 @@ class FormatMapGenerator():
     extensions["avi"] = ["avi"]
     extensions["flv"] = ["flv"]
     extensions["ogg"] = ["ogg"]    
+
+    targetExt["mpegts"] = "mpg"
+    targetExt["mpeg"] = "mpg"
+    targetExt["vob"] = "mpg"
+    targetExt["dvd"] = "mpg"
+    targetExt["mp4"] = "mp4"
+    targetExt["mov"] = "mov"
+    targetExt["matroska"] = "mkv"
+    targetExt["webm"] = "webm"
+    targetExt["3gp"] = "3gp"
+    targetExt["avi"] = "avi"
+    targetExt["flv"] = "flv"
+    targetExt["ogg"] = "ogg"    
+    
+
     
     def __init__(self):
         self.setup()
@@ -341,27 +346,33 @@ class FormatMapGenerator():
     def setup(self):
         self.table = {}
         for fi in self.containers:
-            fmt = FormatMap(fi, self.videoCodecs[fi], self.audioCodecs[fi], self.extensions[fi])
+            fmt = FormatMap(fi, self.videoCodecs[fi], self.audioCodecs[fi], self.extensions[fi],self.targetExt[fi])
             self.table[fi] = fmt
 
-#     def extensionsFor(self,vCodec,aCodec):
-#         ext=set()
-#         for fi, fmtMap in self.table.items():
-#             if fmtMap.containsCodecs(vCodec,aCodec):
-#                 ext.update(fmtMap.extensions)
-#         return list(ext)
+    #need to reflect our internal changes, such as m2t to mpg or mp4
+    def getPreferredTargetExtension(self,vCodec,aCodec):
+        fmap = self._findFmtMap(vCodec, aCodec)
+        if fmap:
+            return fmap.targetExt
+        return "mp4" #or what?
+
 
     def getDialogFileExtensionsFor(self, vCodec, aCodec):
         extList = []
-        for formInfo, fmtMap in self.table.items():
-            if fmtMap.containsCodecs(vCodec, aCodec):
-                for ext in fmtMap.extensions:
-                    wc = "*." + ext
-                    if not wc in extList:
-                        extList.append(wc)
-        
+        fmap = self._findFmtMap(vCodec, aCodec)
+        if fmap:
+            extList.append("*." + fmap.targetExt)
+            for ext in fmap.extensions:
+                wc = "*." + ext
+                if not wc in extList:
+                    extList.append(wc)
         return " ".join(extList)
     
+    def _findFmtMap(self,vCodec, aCodec):
+        for fi, fmtMap in self.table.items():
+            if fmtMap.containsCodecs(vCodec, aCodec):
+                return fmtMap
+        return None
 
 FORMATS = FormatMapGenerator()
 
@@ -423,11 +434,17 @@ class FFStreamProbe():
         vcodec = self.getVideoStream().getCodec()
         acodec = self.getAudioStream().getCodec()
         return FORMATS.getDialogFileExtensionsFor(vcodec, acodec)
-    
-    def getTargetExtension(self):
+
+    def getSourceExtension(self):
         fmt = self.getFormatNames()[0]
         fmtMap = FORMATS.table[fmt];
         return fmtMap.extensions[0]
+    
+    def getTargetExtension(self):
+        vcodec = self.getVideoStream().getCodec()
+        acodec = self.getAudioStream().getCodec()
+        return FORMATS.getPreferredTargetExtension(vcodec, acodec)
+        
     
     def getAspectRatio(self):
         ratio = self.getVideoStream().getAspectRatio()
@@ -941,7 +958,7 @@ class FFMPEGCutter():
         if nbrOfFragments == 1:
             fragment = self.targetPath()
         else:
-            ext = self.retrieveTargetExtension()
+            ext = self.retrieveConcatExtension()
             fragment = self._getTempPath() + str(index) + ext
         log("generate file:", fragment)
         self.say("Cutting part:" + str(index))
@@ -1038,7 +1055,8 @@ class FFMPEGCutter():
             return mapList
         return []
     
-    def retrieveTargetExtension(self):
+    #this is the extension for concating
+    def retrieveConcatExtension(self):
         default = ".m2t"
         srcExt = os.path.splitext(self.filePath())[1]
         targetExt = os.path.splitext(self.targetPath())[1]
@@ -1064,7 +1082,7 @@ class FFMPEGCutter():
         
         with open(self._tmpCutList, 'w') as cutList:
             for index in range(0, self._fragmentCount):
-                tmp = self._getTempPath() + str(index) + self.retrieveTargetExtension()
+                tmp = self._getTempPath() + str(index) + self.retrieveConcatExtension()
                 cutList.write("file '" + tmp + "'\n")
 
         base = [BIN, "-hide_banner", "-y", "-f", "concat", "-safe", "0", "-i", self._tmpCutList, "-c:v", "copy"]
@@ -1143,7 +1161,7 @@ class FFMPEGCutter():
     
     def _cleanup(self):
         for index in range(self._fragmentCount):
-            fragment = self._getTempPath() + str(index) + self.retrieveTargetExtension()
+            fragment = self._getTempPath() + str(index) + self.retrieveConcatExtension()
             os.remove(fragment)   
 
     def ensureDirectory(self, path, tail):
@@ -1288,10 +1306,11 @@ class VCCutter():
                 return False
         except:
             if len(text) > 5:
-                print ("<" + text.rstrip())  
-                if "Err:" in text:
-                    log(">", text) 
-                    self.warn(text);
+                aLine= text.rstrip()
+                print ("<" + aLine )  
+                if "Err:" in aLine:
+                    log(">", aLine) 
+                    self.warn(aLine);
             return False
         else:
             return True 

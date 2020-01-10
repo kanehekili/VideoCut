@@ -352,6 +352,16 @@ def convertIso639():
     D  mov,mp4,m4a,3gp,3g2,mj2 QuickTime / MOV
 
     Lists the video codecs for each container ->wikipeadia...
+    
+    encoders and decoders can be retrieved by 
+    ffmpeg -encoder
+    ffmpeg -decoder
+    encoder is crucial for encoding: (video, libname, codec= h264)
+    there is more than one encoder for each codec...
+    V..... libx264              libx264 H.264 / AVC / MPEG-4 AVC / MPEG-4 part 10 (codec h264)
+    ffmpeg -help encoder=libx264
+    Encoder libx264 [libx264 H.264 / AVC / MPEG-4 AVC / MPEG-4 part 10]:
+    
     '''
 
     def videoCodecMapping(self):   
@@ -386,7 +396,20 @@ def testFormatMapping():
     dlg = gen.getDialogFileExtensionsFor("h264", "aac")
     print("DLG Extension for:(h264,aac)%s" % dlg)
     
-        
+'''encoder mapping (ffmpeg -hide_banner -encoders)
+ V..... libx264              libx264 H.264 / AVC / MPEG-4 AVC / MPEG-4 part 10 (codec h264)
+ V..... libx264rgb           libx264 H.264 / AVC / MPEG-4 AVC / MPEG-4 part 10 RGB (codec h264)
+ V..... h264_nvenc           NVIDIA NVENC H.264 encoder (codec h264)
+ V..... h264_omx             OpenMAX IL H.264 video encoder (codec h264)
+ V..... h264_v4l2m2m         V4L2 mem2mem H.264 encoder wrapper (codec h264)
+ V..... h264_vaapi           H.264/AVC (VAAPI) (codec h264)
+ A..... aac                  AAC (Advanced Audio Coding)
+ A..... ac3                  ATSC A/52A (AC-3)
+ A..... ac3_fixed            ATSC A/52A (AC-3) (codec ac3)
+'''
+def testEncoderMapping():
+    pass
+          
 if __name__ == '__main__':
     # testCMDffmpegRegex()
     # testregex()
