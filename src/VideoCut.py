@@ -1,3 +1,4 @@
+#!/usr/bin/env python
 # -*- coding: utf-8 -*-
 # 2014-2019 kanehekili (mat.wegmann@gmail.com)
 #
@@ -616,6 +617,7 @@ class MainFrame(QtWidgets.QMainWindow):
         self.settings.update()
         
         self.centerWindow()
+        self._widgets.enableUserActions(False)
         self.show() 
         if aPath is not None:
             self._videoController.setFile(aPath)
@@ -654,6 +656,10 @@ class MainFrame(QtWidgets.QMainWindow):
         self.playAction.setShortcut('Ctrl+P')
         self.playAction.triggered.connect(self.playVideo)
         
+        self.photoAction = QtWidgets.QAction(QtGui.QIcon('./icons/screenshot.png'), 'Take screenshot', self)
+        self.photoAction.setShortcut('Ctrl+P')
+        self.photoAction.triggered.connect(self.takeScreenShot)
+        
         '''
         the settings menues
         '''
@@ -684,6 +690,7 @@ class MainFrame(QtWidgets.QMainWindow):
         self.toolbar.addAction(self.startAction)
         self.toolbar.addAction(self.stopAction)
         self.toolbar.addSeparator()
+        self.toolbar.addAction(self.photoAction)
         self.toolbar.addAction(self.infoAction)
         self.toolbar.addAction(self.playAction)
         self.toolbar.addAction(self.mediaSettings)
@@ -719,7 +726,7 @@ class MainFrame(QtWidgets.QMainWindow):
         
         self.backendfilter = SignalOnEvent(widgets.ui_BackendLabel)
         self.backendfilter.clicked.connect(self.openMediaSettings)
-         
+        self.enableActions(False) 
         return widgets
 
     '''
@@ -800,6 +807,16 @@ class MainFrame(QtWidgets.QMainWindow):
     
     def enableControls(self, enable):
         self._widgets.enableUserActions(enable)
+        
+    def enableActions(self,enable):
+        self.saveAction.setEnabled(enable)
+        self.infoAction.setEnabled(enable)
+        self.playAction.setEnabled(enable)
+        self.startAction.setEnabled(enable)
+        self.stopAction.setEnabled(enable)   
+        self.photoAction.setEnabled(enable)
+        self.langSettings.setEnabled(enable)
+             
                             
     #-------- ACTIONS ----------
     def loadFile(self):
@@ -882,8 +899,12 @@ class MainFrame(QtWidgets.QMainWindow):
                                         
         except:
             Log.logException("Invalid codec format")
-            text = "<br><b>No Information</b><br>"    
+            text = "<br><b>No Information</b><br>"  
+            text2= "<br> Please select a file first"
         self.__getInfoDialog(text + text2).show()
+    
+    def takeScreenShot(self):
+        self._videoController.takeScreenShot()
         
     def playVideo(self):
         isPlaying = self._videoController.toggleVideoPlay()
@@ -1106,9 +1127,8 @@ class LanguageSettingsDialog(QtWidgets.QDialog):
     def __init__(self, parent, defCodes, langData, available3LetterCodes):
         """Init UI."""
         super(LanguageSettingsDialog, self).__init__(parent)
-        self.defaultCodes = defCodes
         self.model = langData
-        self.avail = available3LetterCodes
+        self.setupLanguages(defCodes,available3LetterCodes)
         self.init_ui()
     
     def init_ui(self):
@@ -1234,7 +1254,7 @@ class LanguageSettingsDialog(QtWidgets.QDialog):
             item.setText("No language data available")
             self.listWidget.addItem(item)
             return 0
-        codeToLang = self.model[0]
+        #codeToLang = self.model[0]
         primMix = [None, None, None]
         for lang in self.avail:
             if lang in self.defaultCodes:
@@ -1247,13 +1267,9 @@ class LanguageSettingsDialog(QtWidgets.QDialog):
         for lang in primMix:
             if lang is None:
                 continue
-            if lang in codeToLang:
-                txt = codeToLang[lang]
-            else:
-                txt = lang
 
             item = QtWidgets.QListWidgetItem()                
-            item.setText(txt)
+            item.setText(lang)
             item.setFlags(item.flags() | QtCore.Qt.ItemIsUserCheckable)
             if lang in self.defaultCodes:
                 item.setCheckState(QtCore.Qt.Checked)
@@ -1274,6 +1290,19 @@ class LanguageSettingsDialog(QtWidgets.QDialog):
                 lang.append(code)
         
         return lang
+
+    #defCodes = saved user selected codes, avail = Codes in film
+    # need to be changed to a common denominatior: the country name (deu,ger...)
+    def setupLanguages(self,defCodes,available3LetterCodes): 
+        codeToLang = self.model[0]    
+        self.avail = []
+        self.defaultCodes = []
+        for code in defCodes:
+            self.defaultCodes.append(codeToLang[code])
+             
+        for code in available3LetterCodes:
+            self.avail.append(codeToLang[code])
+     
         
 '''
 Class may be replaced if the underlying interface is not opencv (e.g qt or ffmpeg or sth)
@@ -1290,6 +1319,7 @@ class VideoPlayerCV():
         self._file = str(path)
         self._zero = 0.0
         self._isValid = self._captureFromFile(rotation)
+        self.currentFrame=None
         
     def _captureFromFile(self, rotation):
         if self._streamProbe is None or not self._streamProbe.isKnownVideoFormat():
@@ -1304,11 +1334,15 @@ class VideoPlayerCV():
         self.frameWidth = OPENCV.getFrameWidth()
         self.frameHeight = OPENCV.getFrameHeight()
         self.framecount = OPENCV.getFrameCount()
+        test = self._streamProbe.getVideoStream().duration()
         self.fps = OPENCV.getFPS()
 
         # The problem: cv has a problem if it is BEHIND the last frame...
         # DO NOT USE>> cap.set(cv2.cv.CV_CAP_PROP_POS_AVI_RATIO,1);
-        self.totalTimeMilliSeconds = int(self.framecount / self.fps * 1000)
+        if self.framecount == 0:
+            self.totalTimeMilliSeconds = test*1000
+        else:
+            self.totalTimeMilliSeconds = int(self.framecount / self.fps * 1000)
         self.calcZero(rotation)
         return True
 
@@ -1317,6 +1351,7 @@ class VideoPlayerCV():
         if ret:
             CVImage.ROTATION = self.__getRotation(rotation)
             self._zero = OPENCV.getTimePosition()
+            self.currentFrame=frame
         OPENCV.setFramePosition(0)  # position of the NEXT read 
     
     def __getRotation(self, rotation):
@@ -1346,6 +1381,7 @@ class VideoPlayerCV():
 
         ret, frame = self._capture.read()
         if ret:
+            self.currentFrame=frame
             return frame
  
         self.framecount = self.getCurrentFrameNumber()
@@ -1364,14 +1400,14 @@ class VideoPlayerCV():
         ret, frame = self._capture.read()
         if not ret:
             return self.__getLastFrame(frameIndex - 1, retries + 1)
+        self.currentFrame=frame
         return frame    
 
     def getCurrentFrame(self):
-        ret, frame = self._capture.retrieve()
-        if ret:
-            return frame;
-        else: 
+        if self.currentFrame is None:
             return self.getFrameAt(1)
+        return self.currentFrame
+            
 
     def getPreviousFrame(self):
         framepos = self.getCurrentFrameNumber()
@@ -1428,6 +1464,12 @@ class VideoPlayerCV():
     def getCurrentTimeMS(self):
         return max(OPENCV.getTimePosition() - self._zero, 0.0)
 
+    def takeScreenShot(self,path):
+        if self.currentFrame is None:
+            return False
+        cv2.imwrite(path,cv2.cvtColor(self.currentFrame, cv2.COLOR_RGB2BGR))
+        return True
+
     def close(self):
         if self._capture is not None:
             self._capture.release()
@@ -1456,9 +1498,7 @@ class VideoControl(QtCore.QObject):
     def _initTimer(self):
         self._timer = QtCore.QTimer(self.gui)
         self._timer.timeout.connect(self._displayAutoFrame)
-#TODO: crap. targetFile and SaveTargetFile is stupid.
-#Need an origin Filename and a targetFilename.... - vc only if extensions are same...
-#targetFilename must have the allowed extension FIRST.    
+   
     def getSourceFile(self):
         if self.streamData is not None:
             return self.currentPath + "." + self.streamData.getSourceExtension()
@@ -1507,6 +1547,7 @@ class VideoControl(QtCore.QObject):
             
             self.__initSliderTicks()
             self.gui.enableControls(True)
+            self.gui.enableActions(True)
             ratio = self.streamData.getAspectRatio()
 
             self.gui.updateWindowTitle(OSTools().getFileNameOnly(filePath))
@@ -1781,7 +1822,7 @@ class VideoControl(QtCore.QObject):
         self._videoUI().showFrame(aFrame)
         x = self.player.getCurrentFrameNumber()
         self._showCurrentFrameInfo(x)
-        
+       
     def _videoUI(self):
         return self.gui.getVideoWidget()
     
@@ -1794,6 +1835,15 @@ class VideoControl(QtCore.QObject):
         # TODO: Pass 3 values for 3 widgets....
         self.gui.showInfo(out)
         self.gui.syncSpinButton(frameNumber)
+    
+    def takeScreenShot(self):
+        if self.player is None:
+            return;
+        index=self.player.getCurrentFrameNumber()
+        path = self.currentPath+str(int(index))+'.jpg'
+        if self.player.takeScreenShot(path):
+            self.gui.getMessageDialog("Screenshot saved at:", path).show()
+             
     
     def toggleVideoPlay(self):
         if self.streamData is None:

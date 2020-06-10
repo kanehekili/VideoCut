@@ -179,35 +179,7 @@ def testCMDffmpegRegex():
 
 import json
 
-
-def createunidueISO692Map():
-    # read the iso file
-    HomeDir = os.path.dirname(__file__)
-    DataDir = os.path.join(HomeDir, "data")
-    path = os.path.join(DataDir, "unidueIso692.json")
-    outpath = os.path.join(DataDir, "countryIso692.json")
-    result = []
-    alphaToLang = {}
-    langToAlpha = {}    
-    result.append(alphaToLang)
-    result.append(langToAlpha)
-    with open(path, 'r')as f:
-        block1 = json.load(f)  # Array 2
-    
-    map1 = block1[1]
-    mapLang = map1["items"]
-    for lang, langMap in mapLang.items():
-        txt = langMap['en']
-        full = txt.split('(')[0]
-        code = langMap["iso3"].lower()
-        print("lang %s = full: %s iso: %s" % (lang, full, code))
-        alphaToLang[code] = full
-        langToAlpha[full] = code
-    
-    with open(outpath, 'w')as outfile:
-        json.dump(result, outfile)
-
-
+#Too bad: There are two variants: 639-2/T:deu, 639-2/B:ger (with some more examples..) 
 def convertIso639():
     # read the iso file
     HomeDir = os.path.dirname(__file__)

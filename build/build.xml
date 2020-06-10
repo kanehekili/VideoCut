@@ -22,8 +22,13 @@
 		<copy todir="${rootDir}">
 			<fileset file="*.desktop">
 			</fileset>
+			<fileset file="*install*.sh">
+			</fileset>			
 		</copy>
-			
+
+		<chmod file="${rootDir}/install.sh" perm="uo+rwx"/>
+		<chmod file="${rootDir}/uninstall.sh" perm="uo+rwx"/>
+							
 		<copy todir="${icons}">
 			<fileset dir="${srcIcons}">
 			</fileset>
@@ -44,14 +49,14 @@
 			<fileset dir="${srcffmpeg}">
 			</fileset>
 		</copy>		
-		<chmod file="${ffmpeg}/bin/V3/remux5" perm="ug+rwx"/>
-		<chmod file="${ffmpeg}/bin/V4/remux5" perm="ug+rwx"/>
+		<chmod file="${ffmpeg}/bin/V3/remux5" perm="uo+rwx"/>
+		<chmod file="${ffmpeg}/bin/V4/remux5" perm="uo+rwx"/>
 		
 		<copy todir="${rootDir}">
 			<fileset dir="${source}" includes="*.py" excludes="*Tests*">
 			</fileset>
 		</copy>
-
+		<chmod file="${rootDir}/VideoCut.py" perm="ugo+rwx"/>
 	</target>
 
 	<target name="deploy" depends="build_dir">

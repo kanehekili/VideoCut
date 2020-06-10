@@ -1,7 +1,7 @@
 # VideoCut
 Version 1.2.4
 
-![Download](https://github.com/kanehekili/VideoCut/blob/master/build/videocut1.2.4.tar)
+![Download](https://github.com/kanehekili/VideoCut/blob/master/build/videocut1.2.5.tar)
 
 MP2/MP4 Cutter for Linux on base of OpenCV and ffmpeg. Cutting is lossless, the target file will not be reencoded. 
 
@@ -15,14 +15,15 @@ The new version is written in python3 and uses the qt5 widget kit.
 * OpenCV 2.4 or OPENCV 3 (must be build with ffmpeg)
 * ffmpeg > 3.X or 4.0.X
 * python3-pyqt5
+* hdf5 (Arch only)
 
-#### Install on Linux Mint (Tara) or Ubuntu 18.04 (bionic)
+#### Install on Linux Mint or Ubuntu (tested from 16.04 to 20.04)
 ```
 sudo apt-get install python3-pyqt5 ffmpeg python3-opencv
 ```
 #### Install on Arch or Manjaro
 ```
-sudo pacman -Syu python-pyqt5 python-numpy ffmpeg opencv
+sudo pacman -Syu python-pyqt5 python-numpy hdf5 ffmpeg opencv
 ```
 
 ### Features
@@ -41,19 +42,26 @@ OpenCV:  it is necessary to get a version that has been compiled with ffmpeg
 :boom: Be aware that this tool does not cut exact on frame - except you reencode the whole film.
 
 ### How to install
-* Download the videocut*.tar contained in the "build" folder ![here](https://github.com/kanehekili/VideoCut/raw/master/build/videocut1.2.4.tar)
-* Upack it to a location that suits you.
-* Copy the VideoCut.desktop file to ~/.local/share/applications
-* Change the absolute paths & user name within that desktop file to the location where you've copied the files.
+* Download the videocut*.tar contained in the "build" folder ![here](https://github.com/kanehekili/VideoCut/raw/master/build/videocut1.2.5.tar)
+* Extract it to a location that suits you.
+* Open a terminal to execute the install.sh file with sudo like `sudo videocut/install.sh`
+* (if you are in the download directory - just an example)
+* The app will be installed in /usr/local/bin/videocut with a link to /usr/local/bin. 
+* In the terminal you should be call it via `VideoCut`
 * python qt5, opencv and ffmpeg are required
+* you may now remove that download directory.
 
-### Currently working on:
+### How to remove
+* Open a terminal
+* execute `sudo /usr/local/bin/videocut/uninstall.sh`
+
+### Still on my list (with no high priority):
 * Exact frame cut - see coment below 
 * Conversion tools - from one container to another, change audio or video codecs...
 * Kicking out opencv using SDL and the libavcodec libraries.
 
 ### Using remux instead of ffmpeg
-remuxX is based on ffmpeg, but uses an integrated approach to cut and join videos. Currently there is a bug in ffmpeg to concat mp4. Remux handles it correctly. To activate it, use the "coggs" icon and select "VideoCut muxer".
+remuxX is based on ffmpeg, but uses an integrated approach to cut and join videos. It seems to be more precise as the ffmpeg API. To activate it, use the "coggs" icon and select "VideoCut muxer".
 
 Please note that excat cut (i.e. transcoding) is available for remux5. Its an optimized library based on libav.
 In most cases this lib is faster than native ffmpeg, the cuts are exact when using the "Exact cut" option. Runs on all threads available. 
@@ -111,3 +119,8 @@ Can't be really implemented with the ffmpeg ABI. The transcoded part will have d
 19.12.2019
 * Added multi audio tracks. Support for vc1,vp8 and vp9 codecs. Handles AOMediaVideo (av1) on fast cut, but not on transcode. 
 * Finalized cutting mpeg2 and h246 codecs.
+
+10.06.2020
+* Added install script.
+* Introduced a "screen shot"
+* Some internal polishment

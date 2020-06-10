@@ -560,7 +560,8 @@ static int _initEncoder(struct StreamInfo *info, AVFrame *frame){
     enc_ctx->max_b_frames = 4;
 	if (encoder->id == AV_CODEC_ID_H264){
      	enc_ctx->ticks_per_frame=dec_ctx->ticks_per_frame;//should be 2!
-		av_opt_set(enc_ctx->priv_data, "crf","23",0);
+     	//crf has no big impact on bitrate, 18 has hardly an effect on avc to avc, but increases bitrate from mp2 to mp4...
+		av_opt_set(enc_ctx->priv_data, "crf","18",0);
 		//profile: baseline, main, high, high10, high422, high444
 		av_opt_set(enc_ctx->priv_data, "profile", "high", 0);//more devices..
 		av_opt_set(enc_ctx->priv_data, "preset", "medium", 0);
@@ -579,7 +580,7 @@ static int _initEncoder(struct StreamInfo *info, AVFrame *frame){
 			enc_ctx->rc_buffer_size= (int)(enc_ctx->rc_max_rate);
 			//The lower the more bitrate.... Make it configurable!
 			enc_ctx->qmin = 1;
-			enc_ctx->qmax = 23;
+			enc_ctx->qmax = 18;//18 increase bitrate from mp2 to mp4.. no effect on mkv to mp4...
 		}else {
 			enc_ctx->rc_buffer_size= (int)(enc_ctx->rc_max_rate);
 			enc_ctx->qmin = 18;
@@ -673,6 +674,7 @@ int _setupStreams(SourceContext *sctx ){
 
 
 /**************** MUXING SECTION ***********************/
+//TODO: Tail should be always BEFORE or AT the cut point
 static int seekTailGOP(struct StreamInfo *info, int64_t ts,CutData *borders) {
     AVPacket pkt;
     int64_t lookback=ptsFromTime(10.0,info->inStream->time_base); //go 10 seconds back in time
@@ -736,6 +738,7 @@ static int seekTailGOP(struct StreamInfo *info, int64_t ts,CutData *borders) {
 }
 
 //seeking only the video stream head
+////TODO: Head should be always AFTER or AT the cut point
 static int seekHeadGOP(struct StreamInfo *info, int64_t ts,CutData *borders) {
     AVPacket pkt;
     int64_t lookback=ptsFromTime(1.0,info->inStream->time_base);
