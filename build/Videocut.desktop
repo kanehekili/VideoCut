@@ -3,7 +3,7 @@
 Encoding=UTF-8
 Version=1.0
 Type=Application
-Exec=/usr/local/bin/VideoCut 
+Exec=/usr/local/bin/VideoCut %u
 Name=Video Cut
 Comment=MPG4 cutter
 Icon=/usr/local/bin/videocut/icons/movie-icon.png

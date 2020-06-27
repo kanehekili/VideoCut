@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 # 2014-2019 kanehekili (mat.wegmann@gmail.com)
 #
@@ -246,7 +246,7 @@ class VideoWidget(QtWidgets.QFrame):
         self._defaultHeight = 576
         self._defaultWidth = 720
         self.setSizePolicy(QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Expanding)
-        changeBackgroundColor(self, "lightgray")       
+        #TODO changeBackgroundColor(self, "lightgray")       
         self._image = None
         self.imageRatio = 16.0 / 9.0
         self.setFrameStyle(QtWidgets.QFrame.Panel | QtWidgets.QFrame.Sunken)
@@ -369,16 +369,16 @@ class LayoutWindow(QWidget):
         self.ui_GotoField.setToolTip("Goto Frame")
         
         self.ui_InfoLabel = QtWidgets.QLabel(self)
-        self.ui_InfoLabel.setStyleSheet("QLabel { border: 1px solid darkgray; border-radius: 3px; background: lightblue} ");
+        self.ui_InfoLabel.setStyleSheet("QLabel { border: 1px solid darkgray; border-radius: 3px; color: black; background: lightblue} ");
         self.ui_InfoLabel.setText("")
         self.ui_InfoLabel.setToolTip("Infos about the video position")
         
         self.ui_CutModeLabel = QtWidgets.QLabel(self)
-        self.ui_CutModeLabel.setStyleSheet("QLabel { border: 1px solid darkgray; border-radius: 3px; background: lightgreen} ");
+        self.ui_CutModeLabel.setStyleSheet("QLabel { border: 1px solid darkgray; border-radius: 3px; color: black; background: lightgreen} ");
         self.ui_CutModeLabel.setAlignment(QtCore.Qt.AlignCenter)
         
         self.ui_BackendLabel = QtWidgets.QLabel(self)
-        self.ui_BackendLabel.setStyleSheet("QLabel { border: 1px solid darkgray; border-radius: 3px; background: lightgreen} ");
+        self.ui_BackendLabel.setStyleSheet("QLabel { border: 1px solid darkgray; border-radius: 3px; color: black; background: lightgreen} ");
         self.ui_BackendLabel.setAlignment(QtCore.Qt.AlignCenter)
         self.statusBox = QtWidgets.QHBoxLayout()
         self.statusBox.addWidget(self.ui_CutModeLabel)
@@ -473,6 +473,7 @@ class LayoutWindow(QWidget):
         img = CVImage(frame).scaled(int(self.ui_VideoFrame.imageRatio * SIZE_ICON), SIZE_ICON)
         pix = QtGui.QPixmap.fromImage(img)
         item.setIcon(QtGui.QIcon(pix))
+        #TODO: Respect theme
         if cutEntry.isStartMode():
             item.setBackground(QtGui.QColor(224, 255, 224))
         else:
@@ -481,6 +482,7 @@ class LayoutWindow(QWidget):
 
         text = "%s <br> F: %s<br> T: %s" % (cutEntry.modeString, str(cutEntry.frameNumber), str(cutEntry.getTimeString()))
         marker = QtWidgets.QLabel(text)
+        marker.setStyleSheet("QLabel {color:black;}")
         marker.setWordWrap(False)
         marker.layout()
         
@@ -565,6 +567,7 @@ class LayoutWindow(QWidget):
         iconList = QtWidgets.QListWidget()
         iconList.setAlternatingRowColors(True)
         iconList.setContextMenuPolicy(QtCore.Qt.CustomContextMenu)
+        #TODO: Respect colors
         iconList.setStyleSheet("QListView{outline:none;} QListWidget::item:selected { background: #28D9FF; } ")  # that text color seems not to work!
         fontM = QtGui.QFontMetrics(iconList.font())
         self.ITEM_HEIGHT = fontM.height() * ITEM_ROW_COUNT
@@ -2044,7 +2047,7 @@ def main():
         Log.logException("Error in main:")      
         traceback.print_exc(file=sys.stdout)
 
-
+#TODO: Respect theme
 def stylesheet(self):
     # return "QSlider{margin:1px;padding:1px;background:yellow}" #to view the focus border QSlider:focus{border: 1px solid  #000}
     # No focus and no ticks are available using stylesheets.
