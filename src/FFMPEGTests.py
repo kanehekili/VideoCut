@@ -1,7 +1,7 @@
 '''
 Created on Nov 26, 2016
 
-@author: matze
+@author: kanehekili
 '''
 from FFMPEGTools import FFStreamProbe, FFPacketProbe, OSTools, FFmpegVersion, FormatMapGenerator
 import os

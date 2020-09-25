@@ -1,7 +1,7 @@
 '''
 Created on Oct 4, 2014
 FFMPEG Wrapper - AVCONV will not be supported - ever.
-@author: matze
+@author: kanehekili
 '''
 
 import os

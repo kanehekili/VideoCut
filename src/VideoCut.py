@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-# 2014-2019 kanehekili (mat.wegmann@gmail.com)
+# 2014-2020 kanehekili (mat.wegmann@gmail.com)
 #
 
 import sys, traceback, math
