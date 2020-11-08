@@ -39,12 +39,6 @@ SIZE_ICON = 80
 ITEM_ROW_COUNT = 3
 
 
-def changeBackgroundColor(widget, colorString):
-    widget.setAttribute(QtCore.Qt.WA_StyledBackground, True)
-    style = "background-color: %s;" % colorString
-    widget.setStyleSheet(style)
-
-
 def getAppIcon():
     return QtGui.QIcon('icons/movie-icon.png')
     
@@ -190,26 +184,6 @@ class XMLAccessor():
     def clear(self):
         OSTools().removeFile(self._path)
 
-# class ImageGeometry():
-#     def __init__(self,rotation,numpyArray):
-#        self.height, self.width, bytesPerComponent = numpyArray.shape 
-#        self.cvrotate = self.getRotation(rotation)
-#        if self.cvrotate > 0:
-#             center = (width / 2, height / 2) 
-#             dst= cv2.rotate(numpyArray,self.cvrotate)
-#             self.height, self.width, bytesPerComponent = dst.shape
-#        
-#        self.bytesPerLine = bytesPerComponent * self.width 
-#        
-#     def getRotation(self,rotation):
-#         if rotation > 0 and rotation < 180:
-#             return cv2.ROTATE_90_CLOCKWISE
-#         if rotation > 180:
-#             return cv2.ROTATE_90_COUNTERCLOCKWISE
-#         if rotation == 180:
-#             return cv2.ROTATE_180;
-#         return 0;
-
 
 class CVImage(QtGui.QImage):
     ROTATION = 0
@@ -246,7 +220,6 @@ class VideoWidget(QtWidgets.QFrame):
         self._defaultHeight = 576
         self._defaultWidth = 720
         self.setSizePolicy(QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Expanding)
-        #TODO changeBackgroundColor(self, "lightgray")       
         self._image = None
         self.imageRatio = 16.0 / 9.0
         self.setFrameStyle(QtWidgets.QFrame.Panel | QtWidgets.QFrame.Sunken)
@@ -296,7 +269,68 @@ class VideoWidget(QtWidgets.QFrame):
             self.imageRatio = 1.0 / float(ratio)
         else:
             self.imageRatio = float(ratio)
-
+            
+            
+class VideoDial(QtWidgets.QDial):
+    finetune = pyqtSignal(int)
+    def __init__(self, parent):
+        QtWidgets.QDial.__init__(self, parent)
+        self.dir=0; #1 forw, 2 back, 0 center
+                    
+    def sliderChange(self,sliderChange):
+        if sliderChange==3:
+                
+            pos = self.value()
+            if self.dir==0 and pos > 0:
+                self.dir=1
+            elif self.dir == 0 and pos < 0:
+                self.dir =2 
+            elif pos == 0:
+                self.dir =0
+            
+            if self.dir==1 and pos < 0:
+                self.setValue(self.maximum())
+                return
+            if self.dir==2 and pos > 0:
+                self.setValue(self.minimum())
+                return
+            self.finetune.emit(pos)
+        
+        super(VideoDial, self).sliderChange(sliderChange)                                                        
+       
+    ''' That the native impl...
+    from math import sin, cos, atan2, degrees, radians
+    def  paintEvent(self,paintEvent):
+        painter = QtGui.QPainter(self)
+        option = QtWidgets.QStyleOptionSlider()
+        #not used: brush = painter.pen()
+        #brush.setColor(QtGui.QColor(255,0,0))
+        painter.setPen(self.notchPen)
+        self.initStyleOption(option);
+        self.style().drawComplexControl(QtWidgets.QStyle.CC_Dial, option,painter,self);
+    
+            
+    def paintEvent(self, event):        
+        super(VideoDial, self).paintEvent(event)
+        self.notchPen = QtGui.QPen(QtCore.Qt.red, 2)
+        notchSize=5
+        qp = QtGui.QPainter(self)
+        qp.setRenderHints(qp.Antialiasing)
+        #qp.translate(.5, .5)
+        rad = radians(150)
+        qp.setPen(self.notchPen)
+        c = -cos(rad)
+        s = sin(rad)
+        # use minimal size to ensure that the circle used for notches
+        # is always adapted to the actual dial size if the widget has
+        # width/height ratio very different from 1.0
+        maxSize = min(self.width() / 2, self.height() / 2)
+        minSize = maxSize - notchSize
+        center = self.rect().center()
+        qp.drawLine(center.x(), center.y() -minSize, center.x(), center.y() - maxSize)
+        qp.drawLine(center.x() + s * minSize, center.y() + c * minSize, center.x() + s * maxSize, center.y() + c * maxSize)
+        qp.drawLine(center.x() - s * minSize, center.y() + c * minSize, center.x() - s * maxSize, center.y() + c * maxSize)
+    '''
 
 class VideoCutEntry():
     MODE_START = "Start"
@@ -355,13 +389,16 @@ class LayoutWindow(QWidget):
         self.ui_Slider.setTickPosition(QtWidgets.QSlider.TicksAbove)
         self.ui_Slider.setTickInterval(0)
         
-        self.ui_Dial = QtWidgets.QDial(self)
+        #self.ui_Dial = QtWidgets.QDial(self)
+        self.ui_Dial = VideoDial(self)
         
         self.ui_Dial.setProperty("value", 0)
         self.ui_Dial.setNotchesVisible(True)
         self.ui_Dial.setWrapping(False)
         self.ui_Dial.setNotchTarget(5.0)
         self.ui_Dial.setToolTip("Fine tuning")
+        #no gradients: self.ui_Dial.setStyleSheet("QDial { background-color: qradialgradient(cx:0, cy:0, radius: 1,fx:0.5, fy:0.5, stop:0 white, stop:1 green); }")
+        self.ui_Dial.setStyleSheet("QDial { background-color: #0a0a0a;color:inherit; }")
         self.setDialResolution(self.DIAL_RESOLUTION)
 
         self.ui_GotoField = VCSpinbox(self)
@@ -369,16 +406,16 @@ class LayoutWindow(QWidget):
         self.ui_GotoField.setToolTip("Goto Frame")
         
         self.ui_InfoLabel = QtWidgets.QLabel(self)
-        self.ui_InfoLabel.setStyleSheet("QLabel { border: 1px solid darkgray; border-radius: 3px; color: black; background: lightblue} ");
+        self.ui_InfoLabel.setStyleSheet("QLabel { border: 1px solid darkgray; border-radius: 3px; color: inherit; background: lightblue} ");
         self.ui_InfoLabel.setText("")
         self.ui_InfoLabel.setToolTip("Infos about the video position")
         
         self.ui_CutModeLabel = QtWidgets.QLabel(self)
-        self.ui_CutModeLabel.setStyleSheet("QLabel { border: 1px solid darkgray; border-radius: 3px; color: black; background: lightgreen} ");
+        self.ui_CutModeLabel.setStyleSheet("QLabel { border: 1px solid darkgray; border-radius: 3px; color: inherit; background: lightgreen} ");
         self.ui_CutModeLabel.setAlignment(QtCore.Qt.AlignCenter)
         
         self.ui_BackendLabel = QtWidgets.QLabel(self)
-        self.ui_BackendLabel.setStyleSheet("QLabel { border: 1px solid darkgray; border-radius: 3px; color: black; background: lightgreen} ");
+        self.ui_BackendLabel.setStyleSheet("QLabel { border: 1px solid darkgray; border-radius: 3px; color: inherit; background: lightgreen} ");
         self.ui_BackendLabel.setAlignment(QtCore.Qt.AlignCenter)
         self.statusBox = QtWidgets.QHBoxLayout()
         self.statusBox.addWidget(self.ui_CutModeLabel)
@@ -391,7 +428,7 @@ class LayoutWindow(QWidget):
         
         # status bar
         self.statusbar = QtWidgets.QStatusBar(self)
-        self.statusbar.setStyleSheet("QStatusBar { border: 1px inset darkgray; border-radius: 3px;}QStatusBar::item {border-radius: 3px;} ");
+        #self.statusbar.setStyleSheet("QStatusBar { border: 1px inset inherit; border-radius: 3px;}QStatusBar::item {border-radius: 3px;} ");
         self.statusbar.setSizeGripEnabled(False)
         self.statusbar.showMessage("Idle")
         self.statusbar.addPermanentWidget(self.__createProgressBar())
@@ -494,7 +531,8 @@ class LayoutWindow(QWidget):
         self.__videoController = aVideoController  # for menu callbacks
         self.ui_Slider.valueChanged.connect(aVideoController.sliderMoved)
         
-        self.ui_Dial.valueChanged.connect(aVideoController.dialChanged)
+        #self.ui_Dial.valueChanged.connect(aVideoController.dialChanged)
+        self.ui_Dial.finetune.connect(aVideoController.dialChanged)
         self.ui_Dial.sliderReleased.connect(self.__resetDial)
 
         self.ui_GotoField.valueChanged.connect(self.__gotoFrame)
@@ -567,8 +605,8 @@ class LayoutWindow(QWidget):
         iconList = QtWidgets.QListWidget()
         iconList.setAlternatingRowColors(True)
         iconList.setContextMenuPolicy(QtCore.Qt.CustomContextMenu)
-        #TODO: Respect colors
-        iconList.setStyleSheet("QListView{outline:none;} QListWidget::item:selected { background: #28D9FF; } ")  # that text color seems not to work!
+        #TODO: Respect colors - needs delegate
+        iconList.setStyleSheet("QListView{outline:none;} QListWidget::item:selected { background: #28D9FF;} ")  # that text color seems not to work!
         fontM = QtGui.QFontMetrics(iconList.font())
         self.ITEM_HEIGHT = fontM.height() * ITEM_ROW_COUNT
         return iconList
@@ -854,12 +892,16 @@ class MainFrame(QtWidgets.QMainWindow):
         dlg.show()
     
     def showCodecInfo(self):
-        # TODO: More infos, better layout
         try:
             streamData = self._videoController.streamData 
             container = streamData.formatInfo;
             videoData = streamData.getVideoStream()
             audioData = streamData.getAudioStream()
+            if audioData is None:
+                acodec = "N.A."
+            else:
+                acodec = audioData.getCodec();
+                
             '''
             (FPS Avg,videoData.getFrameRate()),
             (Aspect,videoData.getAspectRatio()),
@@ -887,7 +929,7 @@ class MainFrame(QtWidgets.QMainWindow):
                     <tr><td><b>FPS:</b></td><td> %s </td></tr>
                     <tr><td><b>Duration:</b></td><td> %s [sec]</td></tr>
                     <tr><td><b>Audio codec:</b></td><td> %s </td></tr>
-                    </table>""" % (container.formatNames()[0], container.getBitRate(), container.getSizeKB(), streamData.isTransportStream(), videoData.getCodec(), videoData.getWidth(), videoData.getHeight(), videoData.getAspectRatio(), videoData.getFrameRate(), videoData.duration(), audioData.getCodec())
+                    </table>""" % (container.formatNames()[0], container.getBitRate(), container.getSizeKB(), streamData.isTransportStream(), videoData.getCodec(), videoData.getWidth(), videoData.getHeight(), videoData.getAspectRatio(), videoData.getFrameRate(), videoData.duration(), acodec)
             entries = []
             entries.append("""<br><\br><table border=0 cellspacing="3",cellpadding="2">""")
             
@@ -1095,7 +1137,7 @@ class SettingsDialog(QtWidgets.QDialog):
         # connect
         self.check_reencode.stateChanged.connect(self.on_reencodeChanged)
         self.exRemux = QtWidgets.QCheckBox("VideoCut Muxer")
-        self.exRemux.setToolTip("Uses the remux code instead of default ffmpeg commandline")
+        self.exRemux.setToolTip("Uses the fast remux code instead of ffmpeg commandline")
         self.exRemux.setChecked(self.model.fastRemux)
         self.exRemux.stateChanged.connect(self.on_fastRemuxChanged)
         
@@ -1799,6 +1841,7 @@ class VideoControl(QtCore.QObject):
         if self.player is None or pos == 0:
             self._timer.stop()
             return
+ 
         self._dialStep = math.copysign(1, pos) * round(math.exp(abs(pos / 3.0) - 1))
         ts = int((1 / self.player.fps) * 2500)
         self._timer.start(ts)
@@ -1835,7 +1878,6 @@ class VideoControl(QtCore.QObject):
         ms = int(timeinfo % 1000)
         ts = '{:02}:{:02}:{:02}.{:03}'.format(s // 3600, s % 3600 // 60, s % 60, ms)
         out = "<b>Frame:</b> %08d of %d <b>Time:</b> %s " % (frameNumber, int(self.player.framecount) , ts,)
-        # TODO: Pass 3 values for 3 widgets....
         self.gui.showInfo(out)
         self.gui.syncSpinButton(frameNumber)
     

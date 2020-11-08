@@ -274,18 +274,23 @@ class FormatMap():
     '''
 
     def containsCodecs(self, vCodec, aCodec):
+        if aCodec is None:
+            return vCodec in self.videoCodecs;
+        
         return vCodec in self.videoCodecs and aCodec in self.audioCodecs
     
 
 class FormatMapGenerator():
-    containers = ["mpegts", "mpeg", "vob", "dvd", "mp4", "mov", "matroska", "webm", "3gp", "avi", "flv", "ogg"]
+    #We should select the names after format names.. except the ts files..    
+    containers = ["mpegts", "avchd","mpeg", "vob", "dvd", "mp4", "mov", "matroska", "webm", "3gp", "avi", "flv", "ogg"]
     videoCodecs = {}
     audioCodecs = {}
     extensions = {}
     targetExt ={}
     
-    videoCodecs["mpegts"] = ["mpeg1video", "mpeg2video", "mp4", "h264"]
-    videoCodecs["mpeg"] = ["mpeg1video", "mpeg2video", "mp4", "h264"]
+    videoCodecs["mpegts"] = ["mpeg1video", "mpeg2video"]
+    videoCodecs["avchd"] = ["mp4", "h264"]
+    videoCodecs["mpeg"] = ["mpeg1video", "mpeg2video"]
     videoCodecs["vob"] = ["mpeg1video", "mpeg2video"]
     videoCodecs["dvd"] = ["mpeg1video", "mpeg2video"]
     videoCodecs["mp4"] = ["mpeg1video", "mpeg2video", "wmv?", "vc1", "theora", "mp4", "h264", "h265", "vp8", "vp9"]
@@ -298,6 +303,7 @@ class FormatMapGenerator():
     videoCodecs["ogg"] = ["theora"] 
     
     audioCodecs["mpegts"] = ["mp1", "mp2", "mp3"]
+    audioCodecs["avchd"] = ["aac", "ac3", "dts", "alac"]
     audioCodecs["mpeg"] = ["mp1", "mp2", "mp3"]
     audioCodecs["vob"] = ["mp2"]
     audioCodecs["dvd"] = ["mp1", "mp2", "mp3"]
@@ -313,6 +319,7 @@ class FormatMapGenerator():
 
     # the ffmpeg view of extensions
     extensions["mpegts"] = ["m2t", "ts", "m2ts", "mts"]
+    extensions["avchd"] = ["mp4", "m4p", "m4v","mov"]
     extensions["mpeg"] = ["mpg", "mpeg"]
     extensions["vob"] = ["vob"]
     extensions["dvd"] = ["dvd"]
@@ -326,6 +333,7 @@ class FormatMapGenerator():
     extensions["ogg"] = ["ogg"]    
 
     targetExt["mpegts"] = "mpg"
+    targetExt["avchd"] = "mp4"
     targetExt["mpeg"] = "mpg"
     targetExt["vob"] = "mpg"
     targetExt["dvd"] = "mpg"
@@ -427,12 +435,20 @@ class FFStreamProbe():
                 return stream     
         return None
     
+    def getPrimaryAudioCodec(self):
+        for stream in self.audio:
+            # if stream.getBitRate()>0:
+            if stream.getCodec() != VideoStreamInfo.NA:
+                return stream.getCodec()
+        
+        return None;
+    
     def allAudioStreams(self):
         return self.audio
     
     def getDialogFileExtensions(self):
         vcodec = self.getVideoStream().getCodec()
-        acodec = self.getAudioStream().getCodec()
+        acodec = self.getPrimaryAudioCodec()
         return FORMATS.getDialogFileExtensionsFor(vcodec, acodec)
 
     def getSourceExtension(self):
@@ -441,8 +457,9 @@ class FFStreamProbe():
         return fmtMap.extensions[0]
     
     def getTargetExtension(self):
+        fmt = self.getFormatNames()
         vcodec = self.getVideoStream().getCodec()
-        acodec = self.getAudioStream().getCodec()
+        acodec = self.getPrimaryAudioCodec()
         return FORMATS.getPreferredTargetExtension(vcodec, acodec)
         
     

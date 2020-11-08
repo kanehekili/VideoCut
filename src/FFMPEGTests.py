@@ -489,3 +489,30 @@ while True:
 
 '''
     
+'''
+    some c++ code for codecs and containers
+    std::vector<AVCodec*> encoderList;
+AVCodec * codec = nullptr;
+while (codec = av_codec_next(codec))
+{
+    // try to get an encoder from the system
+    auto encoder = avcodec_find_encoder(codec->id);
+    if (encoder)
+    {
+        encoderList.push_back(encoder);
+    }
+}
+// enumerate all containers
+AVOutputFormat * outputFormat = nullptr;
+while (outputFormat = av_oformat_next(outputFormat))
+{
+    for (auto codec : encoderList)
+    {
+        // only add the codec if it can be used with this container
+        if (avformat_query_codec(outputFormat, codec->id, FF_COMPLIANCE_STRICT) == 1)
+        {
+            // add codec for container
+        }
+    }
+}
+'''
