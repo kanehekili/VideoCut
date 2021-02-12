@@ -677,11 +677,11 @@ class MainFrame(QtWidgets.QMainWindow):
         self.loadAction.setShortcut('Ctrl+L')
         self.loadAction.triggered.connect(self.loadFile)
 
-        self.startAction = QtWidgets.QAction(QtGui.QIcon('./icons/start-icon.png'), 'Set start marker', self)
+        self.startAction = QtWidgets.QAction(QtGui.QIcon('./icons/start-icon.png'), 'Include from here', self)
         self.startAction.setShortcut('Ctrl+G')
         self.startAction.triggered.connect(self._videoController.addStartMarker)
 
-        self.stopAction = QtWidgets.QAction(QtGui.QIcon('./icons/stop-red-icon.png'), 'Set stop marker', self)
+        self.stopAction = QtWidgets.QAction(QtGui.QIcon('./icons/stop-red-icon.png'), 'Exclude from here', self)
         self.stopAction.setShortcut('Ctrl+H')
         self.stopAction.triggered.connect(self._videoController.addStopMarker)
         

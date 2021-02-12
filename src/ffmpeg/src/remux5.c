@@ -72,6 +72,7 @@ struct StreamInfo{
 	int64_t frame_nbr; //count the frame number, since stream->nb_frames fails...
 	int type; //either video or audio
 	char *lang;
+    short isTransportStream;
 };
 
 typedef struct {
@@ -152,6 +153,11 @@ static int findBestVideoStream(){//enum AVMediaType type
     info->type=TYPE_VIDEO;
     info->frame_nbr=0;
     context.videoIndex=0;
+
+    const char* MPEG_TS_ID = "mpegts";
+    const char* test = context.ifmt_ctx->iformat->name;
+    info->isTransportStream = strcmp(test,MPEG_TS_ID) == 0 ;
+
     return info->srcIndex;
 }
 
@@ -722,7 +728,13 @@ static int seekTailGOP(struct StreamInfo *info, int64_t ts,CutData *borders) {
         idx++;
     }
     borders->start=gop[idx];
-    borders->end=gop[idx+1];
+    //h264 non TS precise cut:
+    short isTS = info->isTransportStream;
+    short isMP4 = info->in_codec_ctx->codec_id==AV_CODEC_ID_H264;
+	if (isMP4 && !isTS)
+		borders->end=borders->dts;
+	else
+		borders->end=gop[idx+1];
     AVRational time_base = info->inStream->time_base;
     int64_t vStreamOffset = info->inStream->start_time;    
     double_t st = av_q2d(time_base)*(ts-vStreamOffset);

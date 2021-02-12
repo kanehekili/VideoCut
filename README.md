@@ -124,3 +124,8 @@ Can't be really implemented with the ffmpeg ABI. The transcoded part will have d
 * Added install script.
 * Introduced a "screen shot"
 * Some internal polishment
+
+13.02.2021
+* Made clear what "Start" and "Stop" means (Tooltip)
+* Increased precision for h264 (non TS) codecs. (remux)
+
