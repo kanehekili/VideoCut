@@ -104,6 +104,7 @@ def testFrameProbe():
     print ("is TS:", m.isTransportStream())
     
     print ("-------- langMApping: -------------")
+    #TODO we need tuples
     langmap = m.getLanguageMapping()
     for key, index in langmap.items():
         print("lang:%s @ %d" % (key, index))
@@ -199,11 +200,36 @@ def convertIso639():
             engName = dict1["int"][0]
             nativeName = dict1["native"][0]
             alphaToLang[code] = engName
-            langToAlpha[engName] = code
+            if engName in langToAlpha:
+                print("double: %s code:%s"%(engName,code))
+                langToAlpha[engName].append(code)
+            else:
+                langToAlpha[engName] = [code]
         print("lang %s = eng: %s navtive: %s" % (code, engName, nativeName))
 
     with open(outpath, 'w')as outfile:
         json.dump(result, outfile)    
+
+
+def readIso639Map():
+    # read the iso file
+    HomeDir = os.path.dirname(__file__)
+    DataDir = os.path.join(HomeDir, "data")
+    path = os.path.join(DataDir, "countryIso639.json")
+    with open(path, 'r')as f:
+        result = json.load(f) 
+        
+    return result
+
+def testInvalidIso639():
+    key='qaa'
+    data = readIso639Map()
+    codeToLang=data[0]
+    ctl = codeToLang.get(key,"Not found")
+    ltc = data[1].get(ctl,"und")
+    
+    print("key:%s ctl:%s ltc:%s"%(key,ctl,ltc))
+    
 
 #########################################################
     '''
@@ -389,11 +415,12 @@ if __name__ == '__main__':
     # testPath()
     # testParse()
     # testNonblockingRead()
-    # testFrameProbe()
+    #testFrameProbe()
     # testPacketProbe("/home/matze/Videos/pur/purX.m2t")
     # createIso692Map()
-    # convertIso639()
-    testFormatMapping()
+    convertIso639()
+    #testFormatMapping()
+    #testInvalidIso639()
     ''' 
         #Very slow!!!
         f = FFFrameProbe("xxx")

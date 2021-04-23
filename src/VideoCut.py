@@ -801,11 +801,10 @@ class MainFrame(QtWidgets.QMainWindow):
         # TODO use the settings model!
         if self._videoController.streamData is None:
             return
-        langMap = FFMPEGTools.createIso639Map()
+        langMap = FFMPEGTools.Iso639Model()
         lang = self.settings.getPreferedLanguageCodes()
         dlg = LanguageSettingsDialog(self, lang, langMap, self._videoController.getLanguages())
         if dlg.exec_():
-            print(dlg.getLanguages())
             self.settings.setPreferedLanguageCodes(dlg.getLanguages())
      
     def showInfo(self, text):
@@ -861,7 +860,7 @@ class MainFrame(QtWidgets.QMainWindow):
                             
     #-------- ACTIONS ----------
     def loadFile(self):
-        initalPath = self._videoController.getSourceFile()
+        initalPath =self._videoController.getSourceDir()
         result = QtWidgets.QFileDialog.getOpenFileName(parent=self, directory=initalPath, caption="Load Video");
         if result[0]:
             fn = self.__encodeQString(result)
@@ -870,7 +869,7 @@ class MainFrame(QtWidgets.QMainWindow):
             self._videoController.setFile(fn)  # encode error: str(result)
             
     def saveVideo(self):
-        initalPath = self._videoController.getSourceFile()
+        initalPath = self._videoController.getSourceFile()#The original filename...
         targetPath = self._videoController.getTargetFile()
         extn = self._videoController.getAllowedExtensions()
         fileFilter = "Video Files (%s)" % extn
@@ -1169,11 +1168,12 @@ class SettingsDialog(QtWidgets.QDialog):
         
 class LanguageSettingsDialog(QtWidgets.QDialog):
 
-    def __init__(self, parent, defCodes, langData, available3LetterCodes):
+    def __init__(self, parent, defCodes, langData, videoCodes):
         """Init UI."""
         super(LanguageSettingsDialog, self).__init__(parent)
-        self.model = langData
-        self.setupLanguages(defCodes,available3LetterCodes)
+        self.iso639 = langData
+        self.available3LetterCodes=videoCodes
+        self.setupLanguages(defCodes)
         self.init_ui()
     
     def init_ui(self):
@@ -1299,7 +1299,6 @@ class LanguageSettingsDialog(QtWidgets.QDialog):
             item.setText("No language data available")
             self.listWidget.addItem(item)
             return 0
-        #codeToLang = self.model[0]
         primMix = [None, None, None]
         for lang in self.avail:
             if lang in self.defaultCodes:
@@ -1327,26 +1326,25 @@ class LanguageSettingsDialog(QtWidgets.QDialog):
     
     def getLanguages(self):
         lang = []
-        langToCode = self.model[1]
         for index in range(self.listWidget.count()):
             item = self.listWidget.item(index)
             if item.checkState() == Qt.Checked:
-                code = langToCode[item.text()]
-                lang.append(code)
+                #code= self.iso639.codeForCountry(item.text(),self.available3LetterCodes)
+                lang.append(item.text()) #save the intl language
         
         return lang
 
-    #defCodes = saved user selected codes, avail = Codes in film
-    # need to be changed to a common denominatior: the country name (deu,ger...)
-    def setupLanguages(self,defCodes,available3LetterCodes): 
-        codeToLang = self.model[0]    
+    #defCodes = saved user selected codes (INTL name), avail = Codes in film
+    def setupLanguages(self,defCodes): 
         self.avail = []
         self.defaultCodes = []
-        for code in defCodes:
-            self.defaultCodes.append(codeToLang[code])
+        for intlName in defCodes:
+            #self.defaultCodes.append(self.iso639.countryForCode(code))
+            self.defaultCodes.append(intlName)
              
-        for code in available3LetterCodes:
-            self.avail.append(codeToLang[code])
+        for code in self.available3LetterCodes:
+            #self.avail.append(codeToLang.get(code,code))
+            self.avail.append(self.iso639.countryForCode(code))
      
         
 '''
@@ -1534,6 +1532,7 @@ class VideoControl(QtCore.QObject):
         self._initTimer()
         self.videoCuts = []
         self.currentPath = OSTools().getHomeDirectory()
+        self._currentFile=None
         self.streamData = None
         self._vPlayer = None
         mainFrame.signalActive.connect(self.displayWarningMessage)
@@ -1544,15 +1543,22 @@ class VideoControl(QtCore.QObject):
         self._timer = QtCore.QTimer(self.gui)
         self._timer.timeout.connect(self._displayAutoFrame)
    
+   
+   #Why use soureextension? This may not be the original one.
     def getSourceFile(self):
         if self.streamData is not None:
-            return self.currentPath + "." + self.streamData.getSourceExtension()
-
+            return self._currentFile
         return self.currentPath
+
+    def getSourceDir(self):
+        return OSTools().getDirectory(self.currentPath)
 
     def getTargetFile(self):
         if self.streamData is not None:
-            target= self.currentPath + "." + self.streamData.getTargetExtension()
+            ext = self.streamData.getTargetExtension()
+            target= self.currentPath + "." + ext
+            if OSTools().fileExists(target):
+                target= self.currentPath + "-cut." + ext
             return target 
 
         return self.currentPath + "-vc.mp4"
@@ -1579,7 +1585,8 @@ class VideoControl(QtCore.QObject):
             self.videoCuts = []
         try:
             self.streamData = FFStreamProbe(filePath)
-            self.currentPath = OSTools().getPathWithoutExtension(filePath); 
+            self.currentPath = OSTools().getPathWithoutExtension(filePath);
+            self._currentFile=filePath 
         except: 
             Log.logException("Error 1")
             self.streamData = None  
@@ -1737,7 +1744,7 @@ class VideoControl(QtCore.QObject):
 
     def _cleanupWorker(self, worker):
         # QThread: Destroyed while thread is still running
-         
+        msg = worker.msg 
         self.gui.stopProgress()
         worker.quit()
         worker.wait();
@@ -1745,6 +1752,9 @@ class VideoControl(QtCore.QObject):
             self.gui.getMessageDialog("Operation failed", "Cut aborted").show()
         elif self.cutter.hasErrors():
             self.lastError = "Remux failed: %s " % (self.cutter.getErrors()[0])
+            self.displayWarningMessage()
+        elif msg is not None:
+            self.lastError = "Remux failed: %s " % (msg)
             self.displayWarningMessage()
         else:
             dx = time() - self.cutTimeStart
@@ -1792,7 +1802,8 @@ class VideoControl(QtCore.QObject):
     def _initSliderThread(self):
         if self.sliderThread is not None:
             Worker.stop;
-            self.sliderThread.exit()
+            self.sliderThread.quit();
+            self.sliderThread.wait();
             sleep(0.1)
         self.sliderThread = Worker(self.player.getFrameAt)
         self.sliderThread.signal.connect(self._processFrame)
@@ -1940,20 +1951,16 @@ class Worker(QtCore.QThread):
     stop = False
 
     def __init__(self, func):
-        super(Worker, self).__init__()
+        QtCore.QThread.__init__(self)
         self.func = func
         self.fbnr = 0
 
-        # self._dialStep = 1
     def run(self):
         current = -1;
         while self.fbnr != current:
             current = self.fbnr
             self.result = self.func(current)
             self.signal.emit()
-
-    def __del__(self):
-        self.wait()
 
     def showFrame(self, frameNumber):
         self.fbnr = frameNumber
@@ -1992,12 +1999,14 @@ class LongRunningOperation(QtCore.QThread):
         QtCore.QThread.__init__(self)
         self.function = func
         self.arguments = args
+        self.msg=None
 
     def run(self):
         try:
             self.function(*self.arguments)
-        except:
+        except Exception as ex:
             Log.logException("***Error in LongRunningOperation***")
+            self.msg = "Error while converting: "+str(ex)
         finally:
             self.signal.emit(self)
 
@@ -2018,7 +2027,7 @@ class StatusDispatcher(QtCore.QObject):
         self.signal.emit(aString)
     
     def progress(self, percent):
-        self.progressSignal.emit(percent)
+        self.progressSignal.emit(round(percent))
 
 
 class ConfigAccessor():

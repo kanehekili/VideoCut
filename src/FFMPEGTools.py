@@ -43,9 +43,13 @@ class Logger():
     def logException(self, text):
         logging.exception(text)
 
-
-# TODO join them with the OSTools class and create an import in ant
 class OSTools():
+    __instance=None
+
+    def __new__(cls):
+        if OSTools.__instance is None:
+            OSTools.__instance=object.__new__(cls)
+        return OSTools.__instance
     
     def getPathWithoutExtension(self, aPath):
         if aPath:
@@ -54,6 +58,18 @@ class OSTools():
         else:
             rawPath = ""
         return rawPath
+
+    def getExtension(self,path,withDot=True):
+        comp = os.path.splitext(path)
+        if len(comp)>1: 
+            if withDot:
+                return comp[1]
+            else:
+                return comp[1][1:]
+        return comp[0]
+
+    def getDirectory(self,aPath):
+        return os.path.dirname(aPath)
 
     def getWorkingDirectory(self):
         abspath = os.path.abspath(__file__)
@@ -174,18 +190,44 @@ Return array wit htwo dicts:
 dict 0= code->language
 dict 1 = language->code
 '''
-
-
-def createIso639Map():
-    # read the iso file
-    HomeDir = os.path.dirname(__file__)
-    DataDir = os.path.join(HomeDir, "data")
-    path = os.path.join(DataDir, "countryIso639.json")
-    with open(path, 'r')as f:
-        result = json.load(f) 
-        
-    return result
+class Iso639Model():
+    NOCODE="und"
+    NOLANG="Undetermined"
+    __instance=None
     
+    def __new__(cls):
+        if Iso639Model.__instance is None:
+            Iso639Model.__instance=object.__new__(cls)
+        return Iso639Model.__instance
+    
+    def __init__(self):
+        model=self.readIso639Map()
+        self.codeToLang=model[0]
+        self.langToCode=model[1]
+   
+    def readIso639Map(self):
+        # read the iso file
+        HomeDir = os.path.dirname(__file__)
+        DataDir = os.path.join(HomeDir, "data")
+        path = os.path.join(DataDir, "countryIso639.json")
+        with open(path, 'r')as f:
+            result = json.load(f) 
+            
+        return result
+    
+    #answer the 3 letter code for a country name that is included in "pref" (like deu or ger)
+    def codeForCountry(self,countryName, pref=None):
+        codes = self.langToCode.get(countryName,[self.NOCODE])
+        if pref is not None:
+            for isoCode in codes:
+                if isoCode in pref:
+                    return isoCode
+        
+        return codes[0] 
+    
+    def countryForCode(self,code):
+        return self.codeToLang.get(code,self.NOLANG)
+   
 '''
 Probes packets.
 if count = -1 no partial seeking takes place
@@ -279,6 +321,8 @@ class FormatMap():
         
         return vCodec in self.videoCodecs and aCodec in self.audioCodecs
     
+    def hasExtension(self,fileExt):
+        return fileExt in self.extensions
 
 class FormatMapGenerator():
     #We should select the names after format names.. except the ts files..    
@@ -358,28 +402,60 @@ class FormatMapGenerator():
             self.table[fi] = fmt
 
     #need to reflect our internal changes, such as m2t to mpg or mp4
-    def getPreferredTargetExtension(self,vCodec,aCodec):
-        fmap = self._findFmtMap(vCodec, aCodec)
+    def getPreferredTargetExtension(self,vCodec,aCodec,currFormats):
+        
+        for vInfo in currFormats:
+            res = self.targetExt.get(vInfo,None)
+            if res:
+                return res;
+                
+        #IF not found ...
+        fmap = self._findFmtTargetMap(vCodec, aCodec)
         if fmap:
             return fmap.targetExt
         return "mp4" #or what?
 
+                
 
-    def getDialogFileExtensionsFor(self, vCodec, aCodec):
-        extList = []
-        fmap = self._findFmtMap(vCodec, aCodec)
+    def getDialogFileExtensionsFor(self, vCodec, aCodec,currFormats):
+        extList = set() #Set
+        for vInfo in currFormats:
+            ext = self.targetExt.get(vInfo,None)
+            if ext:
+                extList.add("*." +ext)
+        fmap = self._findFmtTargetMap(vCodec, aCodec)
         if fmap:
-            extList.append("*." + fmap.targetExt)
+            extList.add("*." + fmap.targetExt)
             for ext in fmap.extensions:
                 wc = "*." + ext
-                if not wc in extList:
-                    extList.append(wc)
+                #if not wc in extList:
+                extList.add(wc)  
         return " ".join(extList)
     
-    def _findFmtMap(self,vCodec, aCodec):
+    #This is target map only!  
+    def _findFmtTargetMap(self,vCodec, aCodec):
         for fi, fmtMap in self.table.items():
+            if fi=="mpegts":
+                continue
             if fmtMap.containsCodecs(vCodec, aCodec):
                 return fmtMap
+        return None
+
+    def fromFormatList(self,fmtList):
+        formats=[]
+        for item in fmtList:
+            fmt= self.table.get(item,None)
+            if fmt:
+                formats.append(fmt)
+        return formats
+    
+    #takes the extension and get the most likely format.
+    def fromFilename(self,path):
+        ext = OSTools().getExtension(path,withDot=False)
+        for fi, fmtMap in self.table.items():
+            if ext in fmtMap.extensions:
+                return fmtMap
+        
         return None
 
 FORMATS = FormatMapGenerator()
@@ -449,18 +525,19 @@ class FFStreamProbe():
     def getDialogFileExtensions(self):
         vcodec = self.getVideoStream().getCodec()
         acodec = self.getPrimaryAudioCodec()
-        return FORMATS.getDialogFileExtensionsFor(vcodec, acodec)
+        return FORMATS.getDialogFileExtensionsFor(vcodec, acodec,self.getFormatNames())
 
+    #single extension
     def getSourceExtension(self):
         fmt = self.getFormatNames()[0]
         fmtMap = FORMATS.table[fmt];
         return fmtMap.extensions[0]
     
+    #Single extension.
     def getTargetExtension(self):
-        fmt = self.getFormatNames()
         vcodec = self.getVideoStream().getCodec()
         acodec = self.getPrimaryAudioCodec()
-        return FORMATS.getPreferredTargetExtension(vcodec, acodec)
+        return FORMATS.getPreferredTargetExtension(vcodec, acodec,self.getFormatNames())
         
     
     def getAspectRatio(self):
@@ -506,11 +583,23 @@ class FFStreamProbe():
     
     # tuple with stream index and the language -for FFmpegCutter
     def getLanguageMapping(self):
-        lang = {}  # key ISo code, value the stream index
-        for audio in self.audio:
-            res = audio.getLanguage()
-            if res != VideoFormatInfo.NA and res not in lang:
-                lang[res] = audio.getStreamIndex()
+        lang={} #key code, value: tuple(audio index, subtitle index)
+        for stream in self.streams:
+            if stream.isVideo():
+                continue
+            res = stream.getLanguage()
+            if res == VideoFormatInfo.NA:
+                continue
+            
+            if res not in lang:
+                lang[res]=[-1,-1]
+            
+            if stream.isAudio():
+                if lang[res][0]==-1:
+                    lang[res][0]=stream.getStreamIndex()
+                    
+            elif lang[res][1]==-1:
+                lang[res][1]=stream.getStreamIndex()
         return lang 
    
     def hasFormat(self, formatName):
@@ -568,6 +657,12 @@ class FFStreamProbe():
         print ("getDuration: ", s.duration())
         print ("isAudio: ", s.isAudio())
         print ("isVideo: ", s.isVideo())
+        print ("-----------Formats-----------")
+        f=self.formatInfo
+        print("Fmt Names:",f.formatNames())
+        print("Fmt bitrate;",f.getBitRate())
+        print("Fmt dur;",f.getDuration())
+        print("Fmt size;",f.getSizeKB())
         print ("-----------EOF---------------")
 
     '''
@@ -662,6 +757,9 @@ class VideoStreamInfo():
     
     def _parse(self, dataArray):
         for entry in dataArray:
+            if entry.startswith('['):
+                continue;
+            
             try:
                 (key, val) = entry.strip().split('=')
             except:
@@ -785,6 +883,13 @@ class VideoStreamInfo():
         """
         if 'codec_type' in self.dataDict:
             if str(self.dataDict['codec_type']) == 'video':
+                return True
+        return False
+
+    def isSubTitle(self):
+        # Is this stream labeled as subtitle stream?
+        if 'codec_type' in self.dataDict:
+            if str(self.dataDict['codec_type']) == 'subtitle':
                 return True
         return False
 
@@ -941,7 +1046,6 @@ class FFMPEGCutter():
 
     def __init__(self, cutConfig, totalTime):
         self._config = cutConfig
-        # #TODO respect languages from config
         self._tempDir = '/tmp'
         self._tmpCutList = self._getTempPath() + "cut.txt"
         self._fragmentCount = 1;  
@@ -980,13 +1084,14 @@ class FFMPEGCutter():
         log("generate file:", fragment)
         self.say("Cutting part:" + str(index))
         
-        cmdExt = self._videoMode(self.MODE_CUT)
+        cmdExt = self._videoMode()
         audioMode = self._audioMode(self.MODE_CUT)
-        
+        subTitleMode= self._subtitleMode()
         # the prefetch time finds a keyframe closest. post seek does not improve the result 
         
         cmd = [BIN, "-hide_banner", "-y", "-ss", prefetchString, "-i", self.filePath(), "-t", durString]
         cmdExt.extend(audioMode)
+        cmdExt.extend(subTitleMode)
         if len(self.langMappings) > 0:
             cmd.extend(self.langMappings)
         cmdExt.extend(["-avoid_negative_ts", "1", "-shortest", fragment])
@@ -997,7 +1102,8 @@ class FFMPEGCutter():
             for path in executeAsync(cmd, self):
                 self.parseAndDispatch(prefix, path)
         except Exception as error:
-            self.say("Cutting part %s failed: %s " % (str(index), error))
+            self.say("Cutting part %s failed: %s " % (str(index), str(error)))
+            self.warn("Error: %s" %(str(error)))
             self.runningProcess = None
             return False
         
@@ -1033,8 +1139,8 @@ class FFMPEGCutter():
 #                 return ["-c:a","aac"]
 
         return ["-c:a", "copy"]
-    
-    def _videoMode(self, mode=None):
+ 
+    def _videoMode(self):
         videoStream = self._config.streamData.getVideoStream() 
         # TODO: wrong: The target defines which codec we are using....
         log("video:", videoStream.getCodec())
@@ -1050,6 +1156,38 @@ class FFMPEGCutter():
                 
         return ["-c:v", "copy"]
     
+    def _subtitleMode(self):
+        '''
+        -scodec [subtitle codec]
+        Not every subtitle codec can be used for every video container format!
+        [subtitle codec] parameter examples:
+        for MKV containers: copy, ass, srt, ssa (srt=pref, copy if same)
+        for MP4 containers: copy, mov_text
+        for MOV containers: copy, mov_text         
+        
+        mov_text = mp4 subrip... Blueray=hdmv_pgs_subtitle
+        '''
+        scopy = "copy"
+        cmd="-scodec"
+        '''streamData = self._config.streamData
+        info = streamData.getFormatNames()
+        allFmts= FORMATS.fromFormatList(info)
+        '''
+        srcFmt = FORMATS.fromFilename(self.filePath())
+        targetFmt = FORMATS.fromFilename(self.targetPath())
+               
+        if srcFmt == targetFmt:
+            return [cmd,scopy]
+        '''
+        Subtitle encoding currently only possible from text to text or bitmap to bitmap
+        if targetFmt.format=="matroska":
+            return [cmd,"srt"]
+        
+        if targetFmt.targetExt=="mp4":
+            return [cmd,"mov_text"]
+        '''
+        return []
+    
     def _getTempPath(self):
         return self._tempDir + '/vc_'
     
@@ -1061,13 +1199,33 @@ class FFMPEGCutter():
         videoMap = "0:" + str(vs.getStreamIndex())
         mapList = ["-map", videoMap]  # this is video
         
-        langMap = self._config.streamData.getLanguageMapping()
-        prefLangs = self._config.languages
+        
+        #TODO subtitle language mapping only, if codecs/formats fit. 
+        scopy = self._subtitleMode()
+        langMap = self._config.streamData.getLanguageMapping() #dict lang, (aindex,sIndex)
+        avail = self._config.streamData.getLanguages()
+        selectedLangs = self._config.languages #intl language
+        prefCode=[] 
+        for lang in selectedLangs:
+            prefCode.append(Iso639Model().codeForCountry(lang,avail))
+
+        for code,indexTuple in langMap.items():
+            if code in prefCode: 
+                entry = "0:" + str(indexTuple[0])
+                mapList.append("-map")
+                mapList.append(entry)
+                if len(scopy)>0:
+                    entry = "0:" + str(indexTuple[1])
+                    mapList.append("-map")
+                    mapList.append(entry)
+                
+        '''
         for lang in prefLangs:
             if lang in langMap:
                 entry = "0:" + str(langMap[lang])
                 mapList.append("-map")
                 mapList.append(entry)
+        '''
         if len(mapList) > 2:
             return mapList
         return []
@@ -1075,8 +1233,9 @@ class FFMPEGCutter():
     #this is the extension for concating
     def retrieveConcatExtension(self):
         default = ".m2t"
-        srcExt = os.path.splitext(self.filePath())[1]
-        targetExt = os.path.splitext(self.targetPath())[1]
+        tool=OSTools()
+        srcExt = tool.getExtension(self.filePath())
+        targetExt = tool.getExtension(self.targetPath())
         if "mp" in srcExt:
             return default
         return targetExt
@@ -1102,7 +1261,7 @@ class FFMPEGCutter():
                 tmp = self._getTempPath() + str(index) + self.retrieveConcatExtension()
                 cutList.write("file '" + tmp + "'\n")
 
-        base = [BIN, "-hide_banner", "-y", "-f", "concat", "-safe", "0", "-i", self._tmpCutList, "-c:v", "copy"]
+        base = [BIN, "-hide_banner", "-y", "-f", "concat", "-safe", "0", "-i", self._tmpCutList, "-c:v","copy","-c:s", "copy"]
         cmd = base + self._audioMode(self.MODE_JOIN)
         if len(self.langMappings) > 0:
             cmd.extend(["-map", "0"])
@@ -1293,11 +1452,12 @@ class VCCutter():
         
         codes = []
         
-        langlist = self.config.streamData.getLanguages()
-        prefLangs = self.config.languages
+        codeList = self.config.streamData.getLanguages() #3letter codes == base
+        prefLangs = self.config.languages #Intl Lang ->convert to 3 letter code.
         for lang in prefLangs:
-            if lang in langlist:
-                codes.append(lang)
+            code = Iso639Model().codeForCountry(lang, codeList)
+            if code in codeList:
+                codes.append(code)
                 
         if len(codes) > 0:
             return codes

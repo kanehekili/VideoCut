@@ -1,5 +1,5 @@
 # VideoCut
-Version 1.2.7
+Version 1.2.8
 
 ![Download](https://github.com/kanehekili/VideoCut/raw/master/build/videocut1.2.7.tar)
 
@@ -25,6 +25,17 @@ sudo apt-get install python3-pyqt5 ffmpeg python3-opencv
 ```
 sudo pacman -Syu python-pyqt5 python-numpy hdf5 ffmpeg opencv
 ```
+
+#### Set GTK Theme for this QT application
+If you are running a DE with GTK/Gnome (as opposed to LXQT or KDE) you need to tweak your system:
+
+`sudo nano /etc/environment`
+
+add the follwing line:
+
+`QT_QPA_PLATFORMTHEME=gtk2`
+
+and logout/login (or reboot)
 
 ### Features
 Cuts an mpg file into parts and joins them afterwards. All commands can be reached via the toolbar.
@@ -129,3 +140,8 @@ Can't be really implemented with the ffmpeg ABI. The transcoded part will have d
 * Made clear what "Start" and "Stop" means (Tooltip)
 * Increased precision for h264 (non TS) codecs. (remux)
 
+23.04.2021
+* Fixed unknown language codes
+* Supports subtitles (ffmpeg & remux - remux only in "fast" mode) 
+* Reworked remux5: better audio sync, more formats.
+* Better support for mkv (only meager using the ffmpeg option)
