@@ -332,7 +332,7 @@ class FormatMapGenerator():
     extensions = {}
     targetExt ={}
     
-    videoCodecs["mpegts"] = ["mpeg1video", "mpeg2video"]
+    videoCodecs["mpegts"] = ["mpeg1video", "mpeg2video"]#critical!
     videoCodecs["avchd"] = ["mp4", "h264"]
     videoCodecs["mpeg"] = ["mpeg1video", "mpeg2video"]
     videoCodecs["vob"] = ["mpeg1video", "mpeg2video"]
@@ -404,7 +404,10 @@ class FormatMapGenerator():
     #need to reflect our internal changes, such as m2t to mpg or mp4
     def getPreferredTargetExtension(self,vCodec,aCodec,currFormats):
         
+        #mpegts: depends if h264 or mp2.... 
         for vInfo in currFormats:
+            if vInfo=="mpegts":
+                continue
             res = self.targetExt.get(vInfo,None)
             if res:
                 return res;
@@ -420,6 +423,9 @@ class FormatMapGenerator():
     def getDialogFileExtensionsFor(self, vCodec, aCodec,currFormats):
         extList = set() #Set
         for vInfo in currFormats:
+            if vInfo=="mpegts":
+                continue
+
             ext = self.targetExt.get(vInfo,None)
             if ext:
                 extList.add("*." +ext)

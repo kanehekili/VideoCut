@@ -1,7 +1,7 @@
 # VideoCut
-Version 1.2.8
+Version 1.2.9
 
-![Download](https://github.com/kanehekili/VideoCut/raw/master/build/videocut1.2.8.tar)
+![Download](https://github.com/kanehekili/VideoCut/raw/master/build/videocut1.2.9.tar)
 
 MP2/MP4 Cutter for Linux on base of OpenCV and ffmpeg. Cutting is lossless, the target file will not be reencoded. 
 
@@ -145,3 +145,6 @@ Can't be really implemented with the ffmpeg ABI. The transcoded part will have d
 * Supports subtitles (ffmpeg & remux - remux only in "fast" mode) 
 * Reworked remux5: better audio sync, more formats.
 * Better support for mkv (only meager using the ffmpeg option)
+
+24.04.2021
+* Fix for mpegts target extensions (merci @ https://github.com/moebius1)
