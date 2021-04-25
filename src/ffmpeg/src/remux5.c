@@ -957,7 +957,9 @@ static int write_packet(struct StreamInfo *info,AVPacket *pkt){
 		   context.video_trail_dts=pkt->dts;//needed by trailing audio - outstream timebase
         } else if (isSubTitle){
         	//pkt->dts= refDTS;//works with vc-1 & avc remux, not transcode(far too early)
-        	int64_t audioRefTime= av_rescale_q(context.audioRef,audioRef->inStream->time_base,info->inStream->time_base);
+        	int64_t audioRefTime= d1;
+        	if (context.audioRef)
+        		audioRefTime= av_rescale_q(context.audioRef,audioRef->inStream->time_base,info->inStream->time_base);
         	pkt->dts = d1-audioRefTime;
         }else { //Audio
             if (in_stream->parser && in_stream->parser->dts != AV_NOPTS_VALUE){

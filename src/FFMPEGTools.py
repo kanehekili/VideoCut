@@ -347,7 +347,7 @@ class FormatMapGenerator():
     videoCodecs["ogg"] = ["theora"] 
     
     audioCodecs["mpegts"] = ["mp1", "mp2", "mp3"]
-    audioCodecs["avchd"] = ["aac", "ac3", "dts", "alac"]
+    audioCodecs["avchd"] = ["aac", "ac3","eac3", "dts", "alac"]
     audioCodecs["mpeg"] = ["mp1", "mp2", "mp3"]
     audioCodecs["vob"] = ["mp2"]
     audioCodecs["dvd"] = ["mp1", "mp2", "mp3"]
@@ -424,6 +424,7 @@ class FormatMapGenerator():
         extList = set() #Set
         for vInfo in currFormats:
             if vInfo=="mpegts":
+                extList.add("*." +self.extensions[vInfo][0])
                 continue
 
             ext = self.targetExt.get(vInfo,None)
@@ -441,8 +442,8 @@ class FormatMapGenerator():
     #This is target map only!  
     def _findFmtTargetMap(self,vCodec, aCodec):
         for fi, fmtMap in self.table.items():
-            if fi=="mpegts":
-                continue
+            #if fi=="mpegts":
+            #    continue
             if fmtMap.containsCodecs(vCodec, aCodec):
                 return fmtMap
         return None
