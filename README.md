@@ -23,7 +23,7 @@ sudo apt-get install python3-pyqt5 ffmpeg python3-opencv
 ```
 #### Install on Arch or Manjaro
 ```
-sudo pacman -Syu python-pyqt5 python-numpy hdf5 ffmpeg opencv
+sudo pacman -Syu python-pyqt5 python-numpy hdf5 ffmpeg python-opencv
 ```
 
 #### Set GTK Theme for this QT application
@@ -58,7 +58,7 @@ Finalized in Version 1.3.0.  Not all containers (e.g. mp4) accept subtitles. A A
 For DVB transport stream you should keep the ".m2t" ending, mkv containers shouldn't be changed either. See [here](https://en.wikipedia.org/wiki/Comparison_of_video_container_formats) for a overview of containers.
 
 ### How to install
-* Download the videocut*.tar contained in the "build" folder ![here](https://github.com/kanehekili/VideoCut/raw/master/build/videocut1.2.5.tar)
+* Download the videocut*.tar from the download link (see above)
 * Extract it to a location that suits you.
 * Open a terminal to execute the install.sh file with sudo like `sudo videocut/install.sh`
 * (if you are in the download directory - just an example)
