@@ -1027,7 +1027,7 @@ static void updateRefTime(int64_t videoRef,struct StreamInfo *info){
 		context.refTime+=videoRef-info->writtenDTS-dx; //This is out time!-(int)info->deltaDTS;
 		av_log(NULL, AV_LOG_VERBOSE,"****** REF %ld = last: %ld curr: %ld\n",context.refTime,info->writtenDTS,videoRef);
 	}else {
-		context.refTime=videoRef;
+		context.refTime=videoRef==0?1:videoRef;
 		av_log(NULL, AV_LOG_VERBOSE,"****** REF %ld\n",videoRef);
 	}
 }

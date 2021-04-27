@@ -1,7 +1,7 @@
 # VideoCut
-Version 1.2.10
+Version 1.3.0
 
-![Download](https://github.com/kanehekili/VideoCut/raw/master/build/videocut1.2.10.tar)
+![Download](https://github.com/kanehekili/VideoCut/raw/master/build/videocut1.3.0.tar)
 
 MP2/MP4 Cutter for Linux on base of OpenCV and ffmpeg. Cutting is lossless, the target file will not be reencoded. 
 
@@ -51,6 +51,11 @@ Only ffmpeg and libavformat versions >=3.1 are supported.
 OpenCV:  it is necessary to get a version that has been compiled with ffmpeg
 
 :boom: Be aware that this tool does not cut exact on frame - except you reencode the whole film.
+
+### Subtitles
+Finalized in Version 1.3.0.  Not all containers (e.g. mp4) accept subtitles. A AVCH (h264 TS) Stream with DVB_SUB codec cannot be converted into mp4, so your miles may vary if you change the output container (defined by the file extension)
+
+For DVB transport stream you should keep the ".m2t" ending, mkv containers shouldn't be changed either. See [here](https://en.wikipedia.org/wiki/Comparison_of_video_container_formats) for a overview of containers.
 
 ### How to install
 * Download the videocut*.tar contained in the "build" folder ![here](https://github.com/kanehekili/VideoCut/raw/master/build/videocut1.2.5.tar)
