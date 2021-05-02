@@ -5,7 +5,7 @@ if [ "$EUID" -ne 0 ] ; then
   exit 1
 fi
 
-sudo rm /usr/share/applications/Videocut.desktop
+sudo rm /usr/share/applications/VideoCut.desktop
 sudo rm /usr/local/bin/VideoCut
 sudo rm -rf /usr/local/bin/videocut
 echo "App removed."

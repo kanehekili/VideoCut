@@ -6,7 +6,7 @@ if [ "$EUID" -ne 0 ] ; then
 fi
 #copy desktop to /usr/share applications
 DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
-sudo cp $DIR/Videocut.desktop /usr/share/applications;
+sudo cp $DIR/VideoCut.desktop /usr/share/applications;
 sudo mkdir -p /usr/local/bin/videocut;
 sudo cp -r $DIR/* /usr/local/bin/videocut/;
 sudo chmod  uo+rw /usr/local/bin/videocut/data;

@@ -14,12 +14,14 @@ from PyQt5.Qt import Qt
 try:
     import cv2  # cv3
     cvmode = 3
+    CV_VERSION =  int(cv2.__version__.replace('.',''))
     # print (cv2.getBuildInformation())
 except ImportError:
     print ("OpenCV 3 not found,, expecting Version 2 now")
     try:
         from cv2 import cv  # this is cv2!
         cvmode = 2
+        CV_VERSION =  int(cv.__version__.replace('.',''))
     except ImportError:
         print ("OpenCV 2 not found")  
         app = QApplication(sys.argv)
@@ -203,13 +205,8 @@ class CVImage(QtGui.QImage):
         super(CVImage, self).__init__(dst.data, width, height, bytesPerLine, QtGui.QImage.Format_RGB888)
     
     def getRotation(self):
+        #seems to be fixed in opencv 4.5... 
         return self.ROTATION;
-#         if self.ROTATION > 0 and self.ROTATION < 180:
-#             return cv2.ROTATE_90_CLOCKWISE
-#         
-#         if self.ROTATION > 180:
-#             return cv2.ROTATE_90_COUNTERCLOCKWISE
-#         return -1
 
 
 class VideoWidget(QtWidgets.QFrame):
@@ -497,7 +494,9 @@ class LayoutWindow(QWidget):
         self.ui_Slider.setPageStep(ticks * 2)
     
     def setGotoFieldMaximum(self, count):
+        self.ui_GotoField.blockSignals(True)
         self.ui_GotoField.setMaximum(count)
+        self.ui_GotoField.blockSignals(False)
     
     def clearVideoFrame(self):
         self.ui_VideoFrame.showFrame(None)
@@ -872,7 +871,7 @@ class MainFrame(QtWidgets.QMainWindow):
         initalPath = self._videoController.getSourceFile()#The original filename...
         targetPath = self._videoController.getTargetFile()
         extn = self._videoController.getAllowedExtensions()
-        fileFilter = "Video Files (%s)" % extn
+        fileFilter = "Video Files (%s);;All Files(*.*)" % extn
         result = QtWidgets.QFileDialog.getSaveFileName(parent=self, directory=targetPath, filter=fileFilter, caption="Save Video");
         if result[0]:
             fn = self.__encodeQString(result)
@@ -1360,7 +1359,6 @@ class VideoPlayerCV():
         self._streamProbe = streamProbe
         self._capture = None
         self._file = str(path)
-        self._zero = 0.0
         self._isValid = self._captureFromFile(rotation)
         self.currentFrame=None
         
@@ -1377,27 +1375,49 @@ class VideoPlayerCV():
         self.frameWidth = OPENCV.getFrameWidth()
         self.frameHeight = OPENCV.getFrameHeight()
         self.framecount = OPENCV.getFrameCount()
-        test = self._streamProbe.getVideoStream().duration()
+        test = self._streamProbe.formatInfo.getDuration()
         self.fps = OPENCV.getFPS()
+        if self.fps>1000.0:
+            self.fps = self._streamProbe.getVideoStream().getFrameRate()
 
         # The problem: cv has a problem if it is BEHIND the last frame...
         # DO NOT USE>> cap.set(cv2.cv.CV_CAP_PROP_POS_AVI_RATIO,1);
+        self.__setup(rotation)
         if self.framecount == 0:
             self.totalTimeMilliSeconds = test*1000
         else:
             self.totalTimeMilliSeconds = int(self.framecount / self.fps * 1000)
-        self.calcZero(rotation)
+        
         return True
 
-    def calcZero(self, rotation):
+    def __setup(self, rotation):
+        OPENCV.setFramePosition(0)
         ret, frame = self._capture.read()
         if ret:
             CVImage.ROTATION = self.__getRotation(rotation)
-            self._zero = OPENCV.getTimePosition()
             self.currentFrame=frame
-        OPENCV.setFramePosition(0)  # position of the NEXT read 
+        OPENCV.setFramePosition(self.framecount-1)  # position of the NEXT read
+        ret, frame = self._capture.read()
+        if not ret:
+            self.__findStreamEnd()
+        else:
+            self.framecount=OPENCV.getFramePosition()
+        OPENCV.setFramePosition(0) 
+    
+    
+    def __findStreamEnd(self):
+        cnt=1
+        ret=True
+        while ret:
+            OPENCV.setFramePosition(cnt)     
+            ret, frame = self._capture.read()
+            cnt+=1000
+        
+        self.framecount=OPENCV.getFramePosition()            
     
     def __getRotation(self, rotation):
+        if CV_VERSION > 450: #seems to be fixed with 4.5.0
+            return 0
         if rotation > 0 and rotation < 180:
             return cv2.ROTATE_90_CLOCKWISE
         if rotation > 180:
@@ -1413,11 +1433,6 @@ class VideoPlayerCV():
     def isValid(self):
         return self._isValid 
 
-    """Milliseconds per frame."""
-
-    def mspf(self):
-        return int(1000 // (self.fps or 25))
-            
     def getNextFrame(self):
         if not self.isValid():
             return None
@@ -1505,7 +1520,11 @@ class VideoPlayerCV():
 
     # Current position of the video file in milliseconds. 
     def getCurrentTimeMS(self):
-        return max(OPENCV.getTimePosition() - self._zero, 0.0)
+        #more precise & reliable than OPENCV.getTimePosition()
+        fpos = OPENCV.getFramePosition()-1;
+        ct = fpos/self.fps*1000
+        return max(ct,0.0)
+
 
     def takeScreenShot(self,path):
         if self.currentFrame is None:
@@ -1543,7 +1562,6 @@ class VideoControl(QtCore.QObject):
         self._timer = QtCore.QTimer(self.gui)
         self._timer.timeout.connect(self._displayAutoFrame)
    
-   
    #Why use soureextension? This may not be the original one.
     def getSourceFile(self):
         if self.streamData is not None:
@@ -1557,7 +1575,7 @@ class VideoControl(QtCore.QObject):
         if self.streamData is not None:
             ext = self.streamData.getTargetExtension()
             target= self.currentPath + "." + ext
-            if OSTools().fileExists(target):
+            if self._currentFile == target:
                 target= self.currentPath + "-cut." + ext
             return target 
 
@@ -1765,7 +1783,6 @@ class VideoControl(QtCore.QObject):
     '''
     FFMPEG cutting API
     '''    
-
     def __makeCuts(self, srcPath, targetPath, spanns, settings):
         # TODO pass settings
         config = CuttingConfig(srcPath, targetPath, settings.getPreferedLanguageCodes())
@@ -1788,7 +1805,6 @@ class VideoControl(QtCore.QObject):
     '''
     new VCCutter API
     '''
-
     def __directCut(self, srcPath, targetPath, spanns, settings):
         # TODO pass settings
         config = CuttingConfig(srcPath, targetPath, settings.getPreferedLanguageCodes())
@@ -1900,7 +1916,6 @@ class VideoControl(QtCore.QObject):
         if self.player.takeScreenShot(path):
             self.gui.getMessageDialog("Screenshot saved at:", path).show()
              
-    
     def toggleVideoPlay(self):
         if self.streamData is None:
             return False
@@ -1914,7 +1929,7 @@ class VideoControl(QtCore.QObject):
         self._vPlayer.timeout.connect(self._grabNextFrame)
         # 50 ms if 25 fps and 25 if 50fps
         fRate = (1 / self.player.fps) * 1250
-        self._vPlayer.start(fRate)
+        self._vPlayer.start(round(fRate))
         return True
 
     def __stopVideo(self):
@@ -1943,7 +1958,6 @@ class VideoControl(QtCore.QObject):
             self.player.framecount = self.player.getCurrentFrameNumber()
             self.__stopVideo()        
 
-
 # -- threads
 class Worker(QtCore.QThread):
     signal = pyqtSignal()
@@ -1967,7 +1981,6 @@ class Worker(QtCore.QThread):
         if not self.stop:
             self.start()
 
-    
 class SignalOnEvent(QtCore.QObject):
     clicked = pyqtSignal()
     
@@ -1990,8 +2003,6 @@ class SignalOnEvent(QtCore.QObject):
 
     
 ''' Long running operations for actions that do not draw or paint '''        
-
-
 class LongRunningOperation(QtCore.QThread):
     signal = pyqtSignal(object) 
 
@@ -2062,9 +2073,7 @@ class ConfigAccessor():
             return False
         return True     
 
-
-WIN = None
-
+WIN = None  
 
 def handle_exception(exc_type, exc_value, exc_traceback):
     """ handle all exceptions """

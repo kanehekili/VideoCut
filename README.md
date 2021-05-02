@@ -1,7 +1,7 @@
 # VideoCut
-Version 1.3.0
+Version 1.3.1
 
-![Download](https://github.com/kanehekili/VideoCut/raw/master/build/videocut1.3.0.tar)
+![Download](https://github.com/kanehekili/VideoCut/raw/master/build/videocut1.3.1.tar)
 
 MP2/MP4 Cutter for Linux on base of OpenCV and ffmpeg. Cutting is lossless, the target file will not be reencoded. 
 
@@ -154,3 +154,10 @@ Can't be really implemented with the ffmpeg ABI. The transcoded part will have d
 25.04.2021
 * Fix for mpegts target extensions (merci @ https://github.com/moebius1)
 * DVB_SUBTITLE + eac3 audio support for m2t container 
+
+02.05.2021
+* Fix for webm container audio (parser based containers)
+* changed rules for target file names and extensions
+* update on roation informaton & handling OPENCV 4.5 +
+* fix for slider crash on next file
+* missing timestamp compensation (TS & VP8 streams)

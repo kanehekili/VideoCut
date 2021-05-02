@@ -767,7 +767,6 @@ int _setupStreams(SourceContext *sctx ){
 
 
 /**************** MUXING SECTION ***********************/
-//TODO: Tail should be always BEFORE or AT the cut point
 static int seekTailGOP(struct StreamInfo *info, int64_t ts,CutData *borders) {
     AVPacket pkt;
     int64_t lookback=ptsFromTime(10.0,info->inStream->time_base); //go 10 seconds back in time
@@ -775,6 +774,7 @@ static int seekTailGOP(struct StreamInfo *info, int64_t ts,CutData *borders) {
     int keyFrameCount=0;
     int maxFrames=3;
     int64_t gop[3]={0,0,0};
+    int64_t secureTs = 0;
 
     if (lookback > ts)
         lookback=0;
@@ -790,18 +790,19 @@ static int seekTailGOP(struct StreamInfo *info, int64_t ts,CutData *borders) {
             continue;
         }    
         int i;
+        secureTs=pkt.dts==AV_NOPTS_VALUE?pkt.pts:pkt.dts;
         if (pkt.flags == AV_PKT_FLAG_KEY){
             for (i =0; i< maxFrames-1; i++){
                 gop[i]=gop[i+1];
             }
-            gop[maxFrames-1]=pkt.dts;
+            gop[maxFrames-1]=secureTs;
             keyFrameCount++;
             if (timeHit)
                 break;
         } 
-        if (pkt.dts >= ts && !timeHit){
+        if (secureTs >= ts && !timeHit){
             timeHit=1;
-            borders->dts=pkt.dts;
+            borders->dts=secureTs;
             borders->pts=pkt.pts;
         }
         av_packet_unref(&pkt); 
@@ -815,6 +816,10 @@ static int seekTailGOP(struct StreamInfo *info, int64_t ts,CutData *borders) {
         idx++;
     }
     borders->start=gop[idx];
+    if (!timeHit){
+    	borders->dts=secureTs;
+    	av_log(NULL, AV_LOG_INFO,"TailGOP failed, using last dts %ld \n",secureTs);
+    }
     //h264 non TS precise cut:
     short isTS = info->isTransportStream;
     short isMP4 = info->in_codec_ctx->codec_id==AV_CODEC_ID_H264;
@@ -837,7 +842,6 @@ static int seekTailGOP(struct StreamInfo *info, int64_t ts,CutData *borders) {
 }
 
 //seeking only the video stream head
-////TODO: Head should be always AFTER or AT the cut point
 static int seekHeadGOP(struct StreamInfo *info, int64_t ts,CutData *borders) {
     AVPacket pkt;
     int64_t lookback=ptsFromTime(4.0,info->inStream->time_base);
@@ -846,6 +850,7 @@ static int seekHeadGOP(struct StreamInfo *info, int64_t ts,CutData *borders) {
     int gopIndx=0;
     int maxFrames=3;
     int64_t gop[3]={0,0,0};
+    int64_t secureTs =0;
 
     if (lookback > ts)
         lookback=ts;
@@ -860,10 +865,11 @@ static int seekHeadGOP(struct StreamInfo *info, int64_t ts,CutData *borders) {
             av_packet_unref(&pkt); 
             continue;
         }    
+       secureTs=pkt.dts==AV_NOPTS_VALUE?pkt.pts:pkt.dts;
         if (pkt.flags == AV_PKT_FLAG_KEY && pkt.dts != AV_NOPTS_VALUE){
             if (timeHit)
             	gopIndx++;
-            gop[gopIndx]=pkt.dts;
+            gop[gopIndx]=secureTs;
             keyFrameCount++; 
             if (gopIndx==maxFrames-1)//one gop == 2 frames are needed
                 break;
@@ -871,7 +877,7 @@ static int seekHeadGOP(struct StreamInfo *info, int64_t ts,CutData *borders) {
         
         if (pkt.dts >= ts && !timeHit){
             timeHit=1;
-            borders->dts=pkt.dts;
+            borders->dts=secureTs;
             borders->pts=pkt.pts;
         }
         av_packet_unref(&pkt); 
@@ -883,6 +889,10 @@ static int seekHeadGOP(struct StreamInfo *info, int64_t ts,CutData *borders) {
 	int t2 = abs(ts - gop[1]);
     if (context.muxMode != MODE_TRANSCODE && t2 < t1){
 			idx++;
+    }
+    if (!timeHit){
+    	borders->dts=secureTs;//the last one...
+    	av_log(NULL, AV_LOG_INFO,"HeadGOP failed, using last dts %ld \n",secureTs);
     }
     borders->start=gop[idx];
     borders->end=gop[idx+1];
@@ -944,7 +954,7 @@ static int write_packet(struct StreamInfo *info,AVPacket *pkt){
         		double_t fpTotal = info->frame_nbr*info->deltaDTS;
     			dynDelta=round(info->deltaDTS+fpTotal)-context.deltaTotal;
     			context.deltaTotal+=dynDelta;
-      			pkt->dts = currentDTS+dynDelta; //Only way to work on transcode and vc1!
+      			pkt->dts = info->frame_nbr==0?0:currentDTS+dynDelta; //Only way to work on transcode and vc1!
         	} else {
         		//refTime: In some stream jumps have been observed (joined by ffmpeg!)
         		dynDelta =d1-context.refTime; //real offset tbi
@@ -962,8 +972,13 @@ static int write_packet(struct StreamInfo *info,AVPacket *pkt){
         		audioRefTime= av_rescale_q(context.audioRef,audioRef->inStream->time_base,info->inStream->time_base);
         	pkt->dts = d1-audioRefTime;
         }else { //Audio
-            if (in_stream->parser && in_stream->parser->dts != AV_NOPTS_VALUE){
-            	dynDelta = in_stream->parser->dts-d1;
+        	int64_t secureTS = AV_NOPTS_VALUE;
+        	if (in_stream->parser){
+        		secureTS = in_stream->parser->dts == AV_NOPTS_VALUE?in_stream->parser->pts:in_stream->parser->dts;
+        	}
+            if (secureTS != AV_NOPTS_VALUE){
+            	int64_t prev= in_stream->parser->last_dts == AV_NOPTS_VALUE?in_stream->parser->last_pts:in_stream->parser->last_dts;
+            	dynDelta = av_rescale_q(secureTS-prev, in_stream->time_base, out_stream->time_base);
             }
             else {
             	dynDelta = av_rescale_q(dur, in_stream->time_base, out_stream->time_base);
@@ -1593,10 +1608,8 @@ static int seekAndMux(double_t timeslots[],int seekCount){
     double_t fps = (double_t)framerate.num/framerate.den;//same as get_fps
     videoStream->deltaDTS = (videoStream->outStream->time_base.den/fps);
     //objective is to get an audio frame earlier
-    int64_t audioDelta =audioStream->inStream?av_rescale_q(videoStream->deltaDTS, videoStream->outStream->time_base,audioStream->inStream->time_base):0L;
+    //int64_t audioDelta =audioStream->inStream?av_rescale_q(videoStream->deltaDTS, videoStream->outStream->time_base,audioStream->inStream->time_base):0L;
     int64_t videoDelta = av_rescale_q(videoStream->deltaDTS, videoStream->outStream->time_base,videoStream->inStream->time_base);
-//    if (context.fmtFlags & AVFMT_NOTIMESTAMPS)
-//    	audioDelta = audioStream->inStream?av_rescale_q(videoStream->deltaDTS, videoStream->outStream->time_base,audioStream->inStream->time_base):0L;
     
     CutData headBorders={0,0,0,0};
     CutData tailBorders={0,0,0,0};
@@ -1664,21 +1677,23 @@ static int seekAndMux(double_t timeslots[],int seekCount){
          * On no PTS codes like vp9 we calculate it.
          */
         if (context.muxMode == MODE_TRANSCODE){
-        	int64_t audioSync=0;
+        	int64_t audioSync=headBorders.pts - headBorders.dts;
         	if (audioStream->inStream){
-        		if (audioDelta == 0 && headBorders.pts != AV_NOPTS_VALUE)
+        		if (videoDelta == 0 && headBorders.pts != AV_NOPTS_VALUE)
         			audioSync = headBorders.pts - headBorders.dts;
         		else
-				audioSync = audioDelta*3;
-        		context.audio_sync_dts= av_rescale_q( headBorders.dts-audioSync,videoStream->inStream->time_base, audioStream->inStream->time_base);
-        		av_log(NULL, AV_LOG_VERBOSE,"Audio sync @ %ld\n",context.audio_sync_dts);
+        			audioSync = videoDelta;
+        		int64_t secure= headBorders.pts != AV_NOPTS_VALUE?headBorders.pts:headBorders.dts;
+        		secure = max(secure - audioSync,0);
+        		context.audio_sync_dts= av_rescale_q( secure,videoStream->inStream->time_base, audioStream->inStream->time_base);
+        		av_log(NULL, AV_LOG_VERBOSE,"Audio sync @ %ld offset:%ld \n",context.audio_sync_dts,audioSync);
         	}
             res = transcode(headBorders.dts,tailBorders.dts);
         }
         else {
-        	if (audioStream->inStream){//-1xaudio )
-            	context.audio_sync_dts= av_rescale_q( headBorders.start-audioDelta,videoStream->inStream->time_base, audioStream->inStream->time_base);
-            	av_log(NULL, AV_LOG_VERBOSE,"Audio sync @ %ld\n",context.audio_sync_dts);
+        	if (audioStream->inStream){//-1xaudio
+            	context.audio_sync_dts= av_rescale_q( headBorders.start-videoDelta,videoStream->inStream->time_base, audioStream->inStream->time_base);
+            	av_log(NULL, AV_LOG_VERBOSE,"Audio sync @ %ld \n",context.audio_sync_dts);
         	}
             res = mux1(headBorders,tailBorders);
         }

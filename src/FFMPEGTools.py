@@ -382,7 +382,7 @@ class FormatMapGenerator():
     targetExt["vob"] = "mpg"
     targetExt["dvd"] = "mpg"
     targetExt["mp4"] = "mp4"
-    targetExt["mov"] = "mov"
+    targetExt["mov"] = "mp4"
     targetExt["matroska"] = "mkv"
     targetExt["webm"] = "webm"
     targetExt["3gp"] = "3gp"
@@ -643,8 +643,8 @@ class FFStreamProbe():
         print ("getCodecTimeBase: ", s.getCodecTimeBase())
         print ("getTimeBase: ", s.getTimeBase())
         print ("getAspect ", s.getAspectRatio())
-        print ("getFrameRate: ", s.getFrameRate())
-        print ("getCMFRameRate: ", s.frameRate())  # Common denominator
+        print ("getFrameRate_r: ", s.getFrameRate())
+        print ("getAVGFrameRate: ", s.frameRateAvg())  # Common denominator
         print ("getDuration: ", s.duration())
         print ("getWidth: ", s.getWidth())
         print ("getHeight: ", s.getHeight())
@@ -792,13 +792,17 @@ class VideoStreamInfo():
         return 1.0
 
     def getRotation(self):
-        if 'TAG:rotate' in self.dataDict:
-            return int(self.dataDict['TAG:rotate'])
+        result = self.dataDict.get('TAG:rotate',None)
+        if result:
+            return int(result)
+        result = self.tagDict.get('rotate',None)
+        if result:
+            return int(result)
         return 0;
 
     def getFrameRate(self):
-        if 'avg_frame_rate' in self.dataDict:
-            z, n = self.dataDict['avg_frame_rate'].split('/')
+        if 'r_frame_rate' in self.dataDict:
+            z, n = self.dataDict['r_frame_rate'].split('/')
             if int(n) != 0:
                 return float(z) / int(n)
         return 1.0
@@ -810,9 +814,9 @@ class VideoStreamInfo():
     then r_frame_rate will be 150 (it is the least common multiple).
     '''
 
-    def frameRate(self):
-        if "r_frame_rate" in self.dataDict:
-            (n, z) = self.dataDict["r_frame_rate"].split("/")
+    def frameRateAvg(self):
+        if "avg_frame_rate" in self.dataDict:
+            (n, z) = self.dataDict["avg_frame_rate"].split("/")
             if int(z) != 0:
                 return float(n) / float(z) 
         return 1.0
