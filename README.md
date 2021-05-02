@@ -60,9 +60,11 @@ For DVB transport stream you should keep the ".m2t" ending, mkv containers shoul
 ### How to install
 * Download the videocut*.tar from the download link (see above)
 * Extract it to a location that suits you.
-* Open a terminal to execute the install.sh file with sudo like `sudo videocut/install.sh`
+* Open a terminal to execute the install.sh file inside the folder with sudo like `sudo ./install.sh`
 * (if you are in the download directory - just an example)
 * The app will be installed in /usr/local/bin/videocut with a link to /usr/local/bin. 
+* The app should be appear in a menu or "Actvities"
+* Can be openend by selecting a video file & Open with...
 * In the terminal you should be call it via `VideoCut`
 * python qt5, opencv and ffmpeg are required
 * you may now remove that download directory.
@@ -72,12 +74,11 @@ For DVB transport stream you should keep the ".m2t" ending, mkv containers shoul
 * execute `sudo /usr/local/bin/videocut/uninstall.sh`
 
 ### Still on my list (with no high priority):
-* Exact frame cut - see coment below 
-* Conversion tools - from one container to another, change audio or video codecs...
+* Exact frame cut - see comment below 
 * Kicking out opencv using SDL and the libavcodec libraries.
 
 ### Using remux instead of ffmpeg
-remuxX is based on ffmpeg, but uses an integrated approach to cut and join videos. It seems to be more precise as the ffmpeg API. To activate it, use the "coggs" icon and select "VideoCut muxer".
+remux5 is a c binary based on ffmpeg, but uses an integrated approach to cut and join videos. It seems to be more precise than the ffmpeg API. It is activated by default. To activate FFMPEG, use the "coggs" icon (or click on the green labels) and deselect "VideoCut Muxer".
 
 Please note that excat cut (i.e. transcoding) is available for remux5. Its an optimized library based on libav.
 In most cases this lib is faster than native ffmpeg, the cuts are exact when using the "Exact cut" option. Runs on all threads available. 
