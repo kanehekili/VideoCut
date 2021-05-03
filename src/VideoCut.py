@@ -1374,46 +1374,40 @@ class VideoPlayerCV():
 
         self.frameWidth = OPENCV.getFrameWidth()
         self.frameHeight = OPENCV.getFrameHeight()
-        self.framecount = OPENCV.getFrameCount()
-        test = self._streamProbe.formatInfo.getDuration()
+        self.framecount = round(OPENCV.getFrameCount())
         self.fps = OPENCV.getFPS()
-        if self.fps>1000.0:
-            self.fps = self._streamProbe.getVideoStream().getFrameRate()
-
+        
+        #ffmpeg
+        duration = self._streamProbe.formatInfo.getDuration()
+        ff_fps= self._streamProbe.getVideoStream().getFrameRate()
+        ff_FrameCount = round(ff_fps*duration)
+        Log.logInfo("Analyze %s frameCount:%d fps:%.3f ffmpeg frameCount:%d fps:%.3f"%(self._file,self.framecount,self.fps,ff_FrameCount,ff_fps))   
+        fps_check= (self.fps/ff_fps)
+        if abs(fps_check -1.0)>0.1:
+            Log.logInfo("Irregular data, ratio: %.3f"%(fps_check))
+            self.framecount=ff_FrameCount
+            self.fps=ff_fps 
+        
         # The problem: cv has a problem if it is BEHIND the last frame...
         # DO NOT USE>> cap.set(cv2.cv.CV_CAP_PROP_POS_AVI_RATIO,1);
         self.__setup(rotation)
+        
         if self.framecount == 0:
-            self.totalTimeMilliSeconds = test*1000
+            self.totalTimeMilliSeconds = duration*1000
         else:
             self.totalTimeMilliSeconds = int(self.framecount / self.fps * 1000)
         
         return True
 
+    #setup, may not take too long. GUI not accessible yet. 
     def __setup(self, rotation):
         OPENCV.setFramePosition(0)
         ret, frame = self._capture.read()
         if ret:
             CVImage.ROTATION = self.__getRotation(rotation)
             self.currentFrame=frame
-        OPENCV.setFramePosition(self.framecount-1)  # position of the NEXT read
-        ret, frame = self._capture.read()
-        if not ret:
-            self.__findStreamEnd()
-        else:
-            self.framecount=OPENCV.getFramePosition()
         OPENCV.setFramePosition(0) 
     
-    
-    def __findStreamEnd(self):
-        cnt=1
-        ret=True
-        while ret:
-            OPENCV.setFramePosition(cnt)     
-            ret, frame = self._capture.read()
-            cnt+=1000
-        
-        self.framecount=OPENCV.getFramePosition()            
     
     def __getRotation(self, rotation):
         if CV_VERSION > 450: #seems to be fixed with 4.5.0
@@ -1623,7 +1617,6 @@ class VideoControl(QtCore.QObject):
             self.gui.updateWindowTitle(OSTools().getFileNameOnly(filePath))
             self.gui.getVideoWidget().setVideoGeometry(ratio, rot)
             self._asyncInitVideoViews()
-           
         except:
             print ("Error -see log")
             Log.logException("Error 2")
