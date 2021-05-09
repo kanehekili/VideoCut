@@ -17,21 +17,21 @@ try:
     CV_VERSION =  int(cv2.__version__.replace('.',''))
     # print (cv2.getBuildInformation())
 except ImportError:
-    print ("OpenCV 3 not found,, expecting Version 2 now")
+    print (("OpenCV 3 not found,, expecting Version 2 now"))
     try:
         from cv2 import cv  # this is cv2!
         cvmode = 2
         CV_VERSION =  int(cv.__version__.replace('.',''))
     except ImportError:
-        print ("OpenCV 2 not found")  
+        print (("OpenCV 2 not found"))  
         app = QApplication(sys.argv)
         QtWidgets.QMessageBox.critical(None, "OpenCV",
-            "Opencv2 or opencv3 must be installed to run VideoCut.")
+            ("Opencv2 or opencv3 must be installed to run VideoCut."))
         sys.exit(1)
 
 from datetime import timedelta
 
-from FFMPEGTools import FFMPEGCutter, FFStreamProbe, CuttingConfig, OSTools, Logger, VCCutter, FORMATS
+from FFMPEGTools import FFMPEGCutter, FFStreamProbe, CuttingConfig, OSTools, Logger, VCCutter
 import FFMPEGTools 
 from time import sleep, time
 import xml.etree.cElementTree as CT
@@ -508,7 +508,8 @@ class LayoutWindow(QWidget):
         
         item = QtWidgets.QListWidgetItem()
         item.setSizeHint(QtCore.QSize(SIZE_ICON, self.ITEM_HEIGHT))
-        img = CVImage(frame).scaled(int(self.ui_VideoFrame.imageRatio * SIZE_ICON), SIZE_ICON)
+        #frame.copy= prevent color disruption of the current "main" if dialog is called afterwards
+        img = CVImage(frame.copy()).scaled(int(self.ui_VideoFrame.imageRatio * SIZE_ICON), SIZE_ICON)
         pix = QtGui.QPixmap.fromImage(img)
         item.setIcon(QtGui.QIcon(pix))
         #TODO: Respect theme
@@ -531,8 +532,7 @@ class LayoutWindow(QWidget):
     def hookEvents(self, aVideoController):
         self.__videoController = aVideoController  # for menu callbacks
         self.ui_Slider.valueChanged.connect(aVideoController.sliderMoved)
-        
-        #self.ui_Dial.valueChanged.connect(aVideoController.dialChanged)
+
         self.ui_Dial.finetune.connect(aVideoController.dialChanged)
         self.ui_Dial.sliderReleased.connect(self.__resetDial)
 
@@ -1660,7 +1660,7 @@ class VideoControl(QtCore.QObject):
         self._grabNextFrame()
         #messages are not ready here...
         self.restoreVideoCuts()
-        self.statusbar().say("Ready")
+        self.statusbar().say(("Ready"))
         
 
     def restoreVideoCuts(self):
