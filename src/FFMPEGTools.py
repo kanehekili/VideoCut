@@ -12,36 +12,40 @@ import time
 import re
 import logging
 import json
-
+from logging.handlers import RotatingFileHandler
+from itertools import tee
+import configparser
 
 class Logger():
-    HomeDir = os.path.dirname(__file__)
-    DataDir = os.path.join(HomeDir, "data")
-    LogPath = None
-
     def __init__(self):
-        self.__setupDirectories()
-        
-    def __setupDirectories(self):
-        OSTools().ensureDirectory(self.DataDir, None)
+        homeDir = os.path.expanduser("~")
+        self.LogDir =OSTools().joinPathes(homeDir,".config","VideoCut")
+        OSTools().ensureDirectory(self.LogDir, None)
         self.setupLogging()
         
+        
     def setupLogging(self): 
-        path = os.path.join(self.DataDir, "VC.log")
-        logging.basicConfig(filename=path, level=logging.DEBUG, format='%(asctime)s %(message)s')  
-        self.LogPath = path         
+        logpath = os.path.join(self.LogDir,"VC.log")
+        rotating_handler = RotatingFileHandler(logpath, mode='a', maxBytes=10000000, backupCount=2)
+        logging.basicConfig(
+            handlers=[rotating_handler],
+            level=logging.DEBUG,
+            format='%(asctime)s %(message)s'
+        )  
+        self.logger = logging.getLogger(__name__)
+        
 
     def logInfo(self, aString):
-        logging.log(logging.INFO, aString)
+        self.logger.log(logging.INFO, aString)
 
     def logError(self, aString):
-        logging.log(logging.ERROR, aString)
+        self.logger.log(logging.ERROR, aString)
     
     def logClose(self):
         logging.shutdown() 
 
     def logException(self, text):
-        logging.exception(text)
+        self.logger.exception(text)
 
 class OSTools():
     __instance=None
@@ -50,6 +54,10 @@ class OSTools():
         if OSTools.__instance is None:
             OSTools.__instance=object.__new__(cls)
         return OSTools.__instance
+    
+    def touch(self,fname, times=None):
+        with open(fname, 'a'):
+            os.utime(fname, times)
     
     def getPathWithoutExtension(self, aPath):
         if aPath:
@@ -110,6 +118,63 @@ class OSTools():
         with open(fn, 'a'):
             os.utime(fn, None)
         return fn
+
+    def joinPathes(self,*pathes):
+        res=pathes[0]
+        for head,tail in self.__pairwise(pathes):
+        #for a, b in tee(pathes):
+            res = os.path.join(res, tail)
+        return res
+
+    def __pairwise(self,iterable):
+        a, b = tee(iterable)
+        next(b, None)
+        return list(zip(a, b))
+
+
+class ConfigAccessor():
+    __SECTION = "videocut"
+    homeDir = OSTools().getHomeDirectory()
+
+    def __init__(self, filePath):
+        self._path = OSTools().joinPathes(self.homeDir,".config","VideoCut",filePath)
+        self.parser = configparser.ConfigParser()
+        self.parser.add_section(self.__SECTION)
+        
+    def read(self):
+        self.parser.read(self._path)
+        
+    def set(self, key, value):
+        self.parser.set(self.__SECTION, key, value)
+
+    def get(self, key,default=None):
+        if self.parser.has_option(self.__SECTION, key):
+            return self.parser.get(self.__SECTION, key)
+        return default
+
+    def getBoolean(self, key,default=None):
+        if self.parser.has_option(self.__SECTION, key):
+            return self.parser.getboolean(self.__SECTION, key)
+        return default
+
+    def getInt(self, key,default=None):
+        if self.parser.has_option(self.__SECTION, key):
+            return self.parser.getint(self.__SECTION, key)
+        return default
+
+    def getFloat(self, key,default=None):
+        if self.parser.has_option(self.__SECTION, key):
+            return self.parser.getfloat(self.__SECTION, key)
+        return default
+
+        
+    def store(self):
+        try:
+            with open(self._path, 'w') as aFile:
+                self.parser.write(aFile)
+        except IOError:
+            return False
+        return True     
 
 
 BIN = "ffmpeg"

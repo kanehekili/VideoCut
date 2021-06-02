@@ -1,0 +1,30 @@
+# Maintainer: Kanehekili (mat dot wegmann at gmail dot com)
+pkgname=VideoCut
+pkgsrc=videocut
+pkgver=@xxx@
+pkgrel=1
+pkgdesc="Fast mp4/matroska/Av1/webm/mp2/mpts lossless Video cutter"
+url="https://github.com/kanehekili/VideoCut"
+license=('GPL 2')
+depends=('python-pyqt5' 'python-numpy' 'hdf5' 'ffmpeg' 'python-opencv')
+install='vc.install'
+arch=('x86_64')
+source=(https://raw.githubusercontent.com/kanehekili/VideoCut/master/build/videocut@xxx@.tar)
+md5sums=(@md5sum@)
+
+build() {
+#cd "$srcdir/$_pkgname"
+#..todo
+echo "Build nothing"
+}
+
+package(){	
+  cd ${srcdir}
+  mkdir -p "${pkgdir}/usr/local/bin/${pkgsrc}"
+  mkdir -p "${pkgdir}/usr/share/applications"
+  rm  $srcdir/$pkgsrc/install.sh
+  rm  $srcdir/$pkgsrc/uninstall.sh
+  cp  $srcdir/$pkgsrc/${pkgname}.desktop "${pkgdir}/usr/share/applications"
+  cp -r $srcdir/$pkgsrc/* "${pkgdir}/usr/local/bin/${pkgsrc}"  || return 1
+} 
+

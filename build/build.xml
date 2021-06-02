@@ -7,15 +7,20 @@
 		<property name="icons" value="${rootDir}/icons"/>
 		<property name="data" value="${rootDir}/data"/>
 		<property name="ffmpeg" value="${rootDir}/ffmpeg"/>
+		<property name="aurTarget" value="AUR"/>
 		<delete dir="${stage}"/>
+		<delete dir="${aurTarget}"/>
 		<mkdir dir="${stage}"/>
 		<mkdir dir="${rootDir}"/>
 		<mkdir dir="${icons}"/>
 		<mkdir dir="${data}"/>
 		<mkdir dir="${ffmpeg}"/>
+		<mkdir dir="${aurTarget}"/>
 
 		<property name="source" value="../src"/>
 		<property name="srcIcons" value="${source}/icons"/>
+
+		<property name="aurSource" value="AUR-template"/>
 		<property name="srcffmpeg" value="${source}/ffmpeg"/>
 		<property name="srcdata" value="${source}/data"/>
 		
@@ -35,15 +40,7 @@
 		</copy>
 		<copy todir="${data}">
 			<fileset file="${srcdata}\countryIso639.json"/>
-			<fileset file="vc.ini"/>
-			  <filterset>
-			    <filter token="xxx" value="${version}"/>
-			  </filterset>
 		</copy>
-
-		<copy todir="${srcdata}">
-			<fileset file="${data}\vc.ini"/>
-		</copy>		
 		
 		<copy todir="${ffmpeg}">
 			<fileset dir="${srcffmpeg}">
@@ -51,12 +48,28 @@
 		</copy>		
 		<chmod file="${ffmpeg}/bin/V3/remux5" perm="uo+rwx"/>
 		<chmod file="${ffmpeg}/bin/V4/remux5" perm="uo+rwx"/>
-		
+
 		<copy todir="${rootDir}">
-			<fileset dir="${source}" includes="*.py" excludes="*Tests*">
-			</fileset>
+			<fileset file="${source}/FFMPEGTools.py" />
+		</copy>	
+				
+		<copy todir="${rootDir}">
+			<fileset file="${source}/VideoCut.py" />
+			 <filterset>
+			    <filter token="xxx" value="${version}"/>
+			  </filterset>			
 		</copy>
 		<chmod file="${rootDir}/VideoCut.py" perm="ugo+rwx"/>
+		
+		<!-- PKBUILD -->
+		<checksum file="${aurSource}/PKGBUILD" property="aurMD5"/>
+		<copy todir="${aurTarget}">
+			<fileset file="${aurSource}/*"/>
+			<filterset>
+				<filter token="md5sum" value="${aurMD5}"/>
+				<filter token="xxx" value="${version}"/>
+			</filterset>
+		</copy>
 	</target>
 
 	<target name="deploy" depends="build_dir">
