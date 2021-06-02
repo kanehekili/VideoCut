@@ -4,13 +4,15 @@
 #
 
 import sys, traceback, math
-import configparser
+
 from PyQt5.QtCore import pyqtSignal
 from PyQt5 import QtCore, QtGui, QtWidgets
 from PyQt5.QtWidgets import QApplication, QWidget
 import json
 from PyQt5.Qt import Qt
-
+#####################################################
+Version = "@xxx@"
+#####################################################
 try:
     import cv2  # cv3
     cvmode = 3
@@ -31,7 +33,7 @@ except ImportError:
 
 from datetime import timedelta
 
-from FFMPEGTools import FFMPEGCutter, FFStreamProbe, CuttingConfig, OSTools, Logger, VCCutter
+from FFMPEGTools import FFMPEGCutter, FFStreamProbe, CuttingConfig, OSTools, ConfigAccessor, VCCutter
 import FFMPEGTools 
 from time import sleep, time
 import xml.etree.cElementTree as CT
@@ -1032,17 +1034,8 @@ class SettingsModel():
 
     def __init__(self, mainframe):
         # keep flags- save them later
-        self.fastRemux = vc_config.get("useRemux") == 'True'
-        self.reencoding = vc_config.get("recode") == 'True'
-#        vc_config.set("useRemux", "False")
-#         vc_config.set("container","mp4")
-#         vc_config.set("containerList","mp4,mpg,mkv,flv,m2t")
-#         vc_config.set("recode","False")
-#         vc_config.store()
-#         self.fastRemux=False
-#         self.selectedContainer="mp4" 
-#         self.containerList=["mp4","mpg","mkv","flv","m2t"] 
-#         self.reencoding=False
+        self.fastRemux = vc_config.getBoolean("useRemux",True)
+        self.reencoding = vc_config.getBoolean("recode",False)
         self.mainFrame = mainframe
     
     def update(self):
@@ -1097,7 +1090,7 @@ class SettingsDialog(QtWidgets.QDialog):
         self.setSizePolicy(QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Expanding)
         versionBox = QtWidgets.QHBoxLayout()
         lbl = QtWidgets.QLabel("Version:")
-        ver = QtWidgets.QLabel(vc_config.get("version"))
+        ver = QtWidgets.QLabel(Version)
         versionBox.addStretch(1)
         versionBox.addWidget(lbl)
         versionBox.addWidget(ver)
@@ -2047,37 +2040,6 @@ class StatusDispatcher(QtCore.QObject):
         self.progressSignal.emit(round(percent))
 
 
-class ConfigAccessor():
-    __SECTION = "videocut"
-
-    def __init__(self, filePath):
-        self._path = filePath
-        self.parser = configparser.ConfigParser()
-        self.parser.add_section(self.__SECTION)
-        
-    def read(self):
-        self.parser.read(self._path)
-        
-    def set(self, key, value):
-        self.parser.set(self.__SECTION, key, value)
-    
-    def get(self, key):
-        if self.parser.has_option(self.__SECTION, key):
-            return self.parser.get(self.__SECTION, key)
-        return None
-
-    def getInt(self, key):
-        if self.parser.has_option(self.__SECTION, key):
-            return self.parser.getint(self.__SECTION, key)
-        return None
-        
-    def store(self):
-        try:
-            with open(self._path, 'w') as aFile:
-                self.parser.write(aFile)
-        except IOError:
-            return False
-        return True     
 
 WIN = None  
 
@@ -2094,10 +2056,10 @@ def main():
         global WIN
         global Log
         global vc_config
-        Log = Logger()
+        Log = FFMPEGTools.Log
         OSTools().setCurrentWorkingDirectory()
         #Log.logInfo('*** start in %s***' % OSTools().getWorkingDirectory())        
-        vc_config = ConfigAccessor("data/vc.ini")
+        vc_config = ConfigAccessor("vc.ini")
         vc_config.read();
         
         argv = sys.argv

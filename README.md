@@ -1,7 +1,7 @@
 # VideoCut
-Version 1.3.1
+Version 1.3.2
 
-![Download](https://github.com/kanehekili/VideoCut/raw/master/build/videocut1.3.1.tar)
+![Download](https://github.com/kanehekili/VideoCut/raw/master/build/videocut1.3.2.tar)
 
 MP2/MP4 Cutter for Linux on base of OpenCV and ffmpeg. Cutting is lossless, the target file will not be reencoded. 
 
@@ -17,13 +17,13 @@ The new version is written in python3 and uses the qt5 widget kit.
 * python3-pyqt5
 * hdf5 (Arch only)
 
-#### Install on Linux Mint or Ubuntu (tested from 16.04 to 20.04)
+#### Install dependencies on Linux Mint or Ubuntu (tested from 16.04 to 20.04)
 ```
 sudo apt-get install python3-pyqt5 ffmpeg python3-opencv
 ```
-#### Install on Arch or Manjaro
+#### Install dependencies on Arch or Manjaro
 ```
-sudo pacman -Syu python-pyqt5 python-numpy hdf5 ffmpeg python-opencv
+sudo pacman -Syu python-pyqt5 ffmpeg python-opencv
 ```
 
 #### Set GTK Theme for this QT application
@@ -58,6 +58,7 @@ Finalized in Version 1.3.0.  Not all containers (e.g. mp4) accept subtitles. A A
 For DVB transport stream you should keep the ".m2t" ending, mkv containers shouldn't be changed either. See [here](https://en.wikipedia.org/wiki/Comparison_of_video_container_formats) for a overview of containers.
 
 ### How to install
+* Install dependencies (see prerequisites)
 * Download the videocut*.tar from the download link (see above)
 * Extract it to a location that suits you.
 * Open a terminal to execute the install.sh file inside the folder with sudo like `sudo ./install.sh`
@@ -65,17 +66,20 @@ For DVB transport stream you should keep the ".m2t" ending, mkv containers shoul
 * The app will be installed in /usr/local/bin/videocut with a link to /usr/local/bin. 
 * The app should be appear in a menu or "Actvities"
 * Can be openend by selecting a video file & Open with...
-* In the terminal you should be call it via `VideoCut`
+* In the terminal can be started via `VideoCut`
 * python qt5, opencv and ffmpeg are required
 * you may now remove that download directory.
+* logs can be found in the user homes ".config/VideoCut" folder
 
 ### How to remove
 * Open a terminal
 * execute `sudo /usr/local/bin/videocut/uninstall.sh`
 
-### Still on my list (with no high priority):
+### Still on my list:
 * Exact frame cut - see comment below 
 * Kicking out opencv using SDL and the libavcodec libraries.
+* Make PKGBUILD for Arch and debs for debian/ubuntu
+* Multi language support
 
 ### Using remux instead of ffmpeg
 remux5 is a c binary based on ffmpeg, but uses an integrated approach to cut and join videos. It seems to be more precise than the ffmpeg API. It is activated by default. To activate FFMPEG, use the "coggs" icon (or click on the green labels) and deselect "VideoCut Muxer".
@@ -162,3 +166,9 @@ Can't be really implemented with the ffmpeg ABI. The transcoded part will have d
 * update on roation informaton & handling OPENCV 4.5 +
 * fix for slider crash on next file
 * missing timestamp compensation (TS & VP8 streams)
+
+28.05.2021
+* Improve installation
+* change VC.log location to /.config/VideoCut
+* change vc.ini to the same location 
+* prepare for PKGBUILD
