@@ -57,13 +57,22 @@ Finalized in Version 1.3.0.  Not all containers (e.g. mp4) accept subtitles. A A
 
 For DVB transport stream you should keep the ".m2t" ending, mkv containers shouldn't be changed either. See [here](https://en.wikipedia.org/wiki/Comparison_of_video_container_formats) for a overview of containers.
 
-### How to install
+### Install VideoCut via AUR (Arch Linux only)
+* Use pamac or other GUI tools, search for "videocut", click install
+* Manually :
+    * Download [PKGBUILD ](https://aur.archlinux.org/cgit/aur.git/snapshot/videocut.tar.gz)
+    * unpack it and go into the "videocut" folder
+    * execute `makepkg -s`
+    * excute `sudo pacman -U videocut-1.x.x.x-1-x86_64.pkg.tar.zst` 
+    * uninstall via `sudo pacman -Rs videocut`
+
+### How to install with a terminal
 * Install dependencies (see prerequisites)
 * Download the videocut*.tar from the download link (see above)
 * Extract it to a location that suits you.
 * Open a terminal to execute the install.sh file inside the folder with sudo like `sudo ./install.sh`
 * (if you are in the download directory - just an example)
-* The app will be installed in /usr/local/bin/videocut with a link to /usr/local/bin. 
+* The app will be installed in /opt/videocut with a link to /usr/bin. 
 * The app should be appear in a menu or "Actvities"
 * Can be openend by selecting a video file & Open with...
 * In the terminal can be started via `VideoCut`
@@ -73,12 +82,12 @@ For DVB transport stream you should keep the ".m2t" ending, mkv containers shoul
 
 ### How to remove
 * Open a terminal
-* execute `sudo /usr/local/bin/videocut/uninstall.sh`
+* execute `sudo /opt/videocut/uninstall.sh`
 
 ### Still on my list:
 * Exact frame cut - see comment below 
 * Kicking out opencv using SDL and the libavcodec libraries.
-* Make PKGBUILD for Arch and debs for debian/ubuntu
+* Make debs packages for debian/ubuntu
 * Multi language support
 
 ### Using remux instead of ffmpeg
