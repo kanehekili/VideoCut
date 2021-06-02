@@ -3,11 +3,11 @@
 Encoding=UTF-8
 Version=1.0
 Type=Application
-Exec=/usr/local/bin/VideoCut %f
+Exec=/opt/videocut/VideoCut.py %f
 Name=Video Cut
 GenericName=Video Cut
 Comment=MPG4 cutter
-Icon=/usr/local/bin/videocut/icons/movie-icon.png
+Icon=/opt/videocut/icons/movie-icon.png
 NoDisplay=false
 Terminal=false
 StartupWMClass=VideoCut
