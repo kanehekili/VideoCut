@@ -61,15 +61,6 @@
 		</copy>
 		<chmod file="${rootDir}/VideoCut.py" perm="ugo+rwx"/>
 		
-		<!-- PKBUILD -->
-		<checksum file="${aurSource}/PKGBUILD" property="aurMD5"/>
-		<copy todir="${aurTarget}">
-			<fileset file="${aurSource}/*"/>
-			<filterset>
-				<filter token="md5sum" value="${aurMD5}"/>
-				<filter token="xxx" value="${version}"/>
-			</filterset>
-		</copy>
 	</target>
 
 	<target name="deploy" depends="build_dir">
@@ -83,5 +74,16 @@
 			<arg value="videocut"/>
 		</exec>
 		<delete dir="${stage}"/>
+		
+		<!-- PKBUILD -->
+		<checksum file="videocut${version}.tar" property="aurMD5"/>
+		<copy todir="${aurTarget}">
+			<fileset file="${aurSource}/*"/>
+			<filterset>
+				<filter token="md5sum" value="${aurMD5}"/>
+				<filter token="xxx" value="${version}"/>
+			</filterset>
+		</copy>		
+		
 	</target>
 </project>	
