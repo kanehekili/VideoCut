@@ -84,6 +84,8 @@
 				<filter token="xxx" value="${version}"/>
 			</filterset>
 		</copy>		
-		
+		<exec dir="${aurTarget}" executable="makepkg" output="${aurTarget}/.SRCINFO" os="Linux">
+		 <arg value="--printsrcinfo"/> 
+		</exec>
 	</target>
 </project>	
