@@ -778,7 +778,7 @@ static int seekTailGOP(struct StreamInfo *info, int64_t ts,CutData *borders) {
 
     if (lookback > ts)
         lookback=0;
-     av_init_packet(&pkt);
+     pkt= *av_packet_alloc();
     if(av_seek_frame(context.ifmt_ctx, info->srcIndex, ts-lookback, AVSEEK_FLAG_BACKWARD) < 0){
         av_log(NULL, AV_LOG_ERROR,"Err: av_seek_frame failed.\n");
         return -1;
@@ -855,7 +855,7 @@ static int seekHeadGOP(struct StreamInfo *info, int64_t ts,CutData *borders) {
     if (lookback > ts)
         lookback=ts;
     //const int genPts= context.ifmt_ctx->flags & AVFMT_FLAG_GENPTS; alway 0->so packet buffer is used
-    av_init_packet(&pkt);
+    pkt= *av_packet_alloc();
     if(av_seek_frame(context.ifmt_ctx, info->srcIndex, ts-lookback, AVSEEK_FLAG_BACKWARD) < 0){
         av_log(NULL, AV_LOG_ERROR,"Err: av_seek_frame failed.\n");
         return -1;
@@ -1090,7 +1090,7 @@ static int mux1(CutData head,CutData tail){
     struct StreamInfo *videoStream = getVideoRef();
     int fcnt =0;
     context.audioRef=0;
-    av_init_packet(&pkt);
+    pkt= *av_packet_alloc();
     int64_t audioTail = audioref->inStream? av_rescale_q(tail.end,videoStream->inStream->time_base, audioref->inStream->time_base):0;
     av_log(NULL,AV_LOG_VERBOSE,">>> Audio tail: %ld tail.end: %ld\n",audioTail,tail.end);
     short audioAtEnd = audioTail==0;
@@ -1195,7 +1195,7 @@ static int64_t seekPrimaryOffset(struct StreamInfo *info){
     AVPacket pkt;
     int64_t first_dts = 0;
     
-     av_init_packet(&pkt);
+     pkt= *av_packet_alloc();
      if(av_seek_frame(context.ifmt_ctx, info->srcIndex,0, AVSEEK_FLAG_BACKWARD) < 0){
         av_log(NULL, AV_LOG_ERROR,"Err: av_seek_frame failed.\n");
         return -1;
@@ -1236,7 +1236,7 @@ static int flushFrames(struct StreamInfo *info, AVFrame *frame){
                     AVPacket enc_pkt;
                     enc_pkt.data = NULL;
                     enc_pkt.size = 0;
-                    av_init_packet(&enc_pkt);
+                    enc_pkt= *av_packet_alloc();
                     int ret3 =0;
                     while (ret3 >=0){
                         ret3=avcodec_receive_packet(info->out_codec_ctx,&enc_pkt);
@@ -1262,7 +1262,7 @@ static int flushPackets(struct StreamInfo *info,int64_t stop){
         return 1;
     pkt.data = NULL;
     pkt.size = 0;
-    av_init_packet(&pkt);
+    pkt= *av_packet_alloc();
     av_log(NULL, AV_LOG_VERBOSE,"Flush packets\n");
     if((ret = avcodec_send_frame(info->out_codec_ctx, NULL))>=0){
         while (ret >=0){
@@ -1300,7 +1300,7 @@ static int pushTailAudio(){
     if (!audioRef->inStream)
     	return 1;
     int64_t audioTail = av_rescale_q(context.video_trail_dts,videoRef->outStream->time_base, audioRef->outStream->time_base);
-    av_init_packet(&pkt);
+    pkt= *av_packet_alloc();
 
     while (av_read_frame(context.ifmt_ctx, &pkt)>=0) {
     	struct StreamInfo *info = getStream(pkt.stream_index);
@@ -1348,7 +1348,7 @@ static int transcode( int64_t start, int64_t stop){
     if (ret <0)
         return -1; 
     
-    av_init_packet(&pkt);
+    pkt= *av_packet_alloc();
 
     int64_t tcStart = _preTransposeScale(start, videoref);
     int64_t tcStop = _preTransposeScale(stop, videoref);
@@ -1439,7 +1439,8 @@ static int transcode( int64_t start, int64_t stop){
             else if (ret==0){
                 av_log(NULL, AV_LOG_VERBOSE,"+\n");
                 AVPacket enc_pkt={ .data = NULL, .size = 0 };
-                av_init_packet(&enc_pkt);
+
+                enc_pkt = *av_packet_alloc();
                 while (avcodec_receive_packet(info->out_codec_ctx,&enc_pkt)>=0){
                     enc_pkt.stream_index=info->inStream->index;//compatibility
                     short update = (enc_pkt.flags == AV_PKT_FLAG_KEY && !fcnt);
@@ -1541,7 +1542,7 @@ static int dumpDecodingData(){
     
     pkt.data = NULL;
     pkt.size = 0;
-    av_init_packet(&pkt); 
+    pkt= *av_packet_alloc();
     frame = av_frame_alloc(); 
     
     while (av_read_frame(context.ifmt_ctx, &pkt)>=0) {

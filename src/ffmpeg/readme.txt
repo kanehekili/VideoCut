@@ -8,13 +8,12 @@ Tested on debian buster,Linux Mint and Ubuntu, as well as Fedora, propably on ot
 
 Is activ by setting the "VideoCut Muxer" switch to on.(Toolbar ->Clogs icon)
 
-The source was compiled with: (this is geany syntax)
- gcc -g -Wall -c "%f", where %f is the filename (remux5.c)
- 
- build with:
- gcc -g -o "%e" "%f" -g -lavutil -lavformat -lavcodec -lz -lavutil -lm 
- 
- %e output file name..
+Makefile:
+remux5: remux5.o
+	gcc  -o ../bin/V4/remux5 remux5.o -g -lavutil -lavformat -lavcodec 
+
+remux5.o: remux5.c
+	gcc -c remux5.c 
  
 On debian derivates follwing packes are needed to compile_
  sudo apt-get install build-essential cmake git libgtk2.0-dev pkg-config libavcodec-dev libavformat-dev libswscale-dev
