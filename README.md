@@ -5,11 +5,11 @@ Version 1.3.2
 
 MP2/MP4 Cutter for Linux on base of OpenCV and ffmpeg. Cutting is lossless, the target file will not be reencoded. 
 
-It can be used for cutting out certain parts of the film. Has been written in conjunction with the MDVB Recorder for removing ads. Handles avi, mp2,mp4 (PS or TS). Other formats not tested but possible.
+It can be used for cutting out certain parts of the film. Has been written in conjunction with the MDVB Recorder for removing ads. Handles avi,mkv,webm,vc1,mp2,mp4 (PS or TS). Other formats not tested but possible.
 
 Lossless cutting implies not to reencode (decode/encode) the frames. So cutting can only be done at "I-Frames". The library searches for the closest Frame at the given cutting point.
 
-The new version is written in python3 and uses the qt5 widget kit.  
+The current version is written in python3 and uses the qt5 widget kit.  
 ### Prerequisites
 * python3
 * OpenCV 2.4 or OPENCV 3 (must be build with ffmpeg)
@@ -20,10 +20,6 @@ The new version is written in python3 and uses the qt5 widget kit.
 #### Install dependencies on Linux Mint or Ubuntu (tested from 16.04 to 20.04)
 ```
 sudo apt-get install python3-pyqt5 ffmpeg python3-opencv
-```
-#### Install dependencies on Arch or Manjaro
-```
-sudo pacman -Syu python-pyqt5 ffmpeg python-opencv
 ```
 
 #### Set GTK Theme for this QT application
@@ -57,7 +53,7 @@ Finalized in Version 1.3.0.  Not all containers (e.g. mp4) accept subtitles. A A
 
 For DVB transport stream you should keep the ".m2t" ending, mkv containers shouldn't be changed either. See [here](https://en.wikipedia.org/wiki/Comparison_of_video_container_formats) for a overview of containers.
 
-### Install VideoCut via AUR (Arch Linux only)
+### Install VideoCut via AUR (Arch Linux /Manjaro only)
 * Use pamac or other GUI tools, search for "videocut", click install
 * Manually :
     * Download [PKGBUILD ](https://aur.archlinux.org/cgit/aur.git/snapshot/videocut.tar.gz)
@@ -181,3 +177,7 @@ Can't be really implemented with the ffmpeg ABI. The transcoded part will have d
 * change VC.log location to /.config/VideoCut
 * change vc.ini to the same location 
 * prepare for PKGBUILD
+
+25.11.2021
+* ISO Code refactoring
+* Bugfixing UI/Errorhandling

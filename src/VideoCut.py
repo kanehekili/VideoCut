@@ -785,7 +785,7 @@ class MainFrame(QtWidgets.QMainWindow):
         # TODO use the settings model!
         if self._videoController.streamData is None:
             return
-        langMap = FFMPEGTools.Iso639Model()
+        langMap = FFMPEGTools.IsoMap()
         lang = self.settings.getPreferedLanguageCodes()
         dlg = LanguageSettingsDialog(self, lang, langMap, self._videoController.getLanguages())
         if dlg.exec_():
@@ -885,22 +885,7 @@ class MainFrame(QtWidgets.QMainWindow):
             else:
                 acodec = audioData.getCodec();
                 
-            '''
-            (FPS Avg,videoData.getFrameRate()),
-            (Aspect,videoData.getAspectRatio()),
-            (Video Codec,videoData.getCodec()),
-            
-            (Width,videoData.getWidth()),
-            (Height,videoData.getHeight()),
-            getCodecTimeBase
-            getTimeBase
-            (Bitrate,videoData.bitRate()),
-            (Duration,videoData.duration())
-            (FPS?,vidoeaData.frameRate())
-            
-            (Audio Codec,audioData.getCodec())
-            '''
-            # text = '<table border=0 cellspacing="3",cellpadding="2"><tr border=1><td><b>Video Codec:</b></td><td> %s </td></tr><td><b>Dimension:</b></td><td> %s x %s </td></tr><tr><td><b>Aspect:</b></td><td> %s </td></tr><tr><td><b>FPS:</b></td><td> %s </td></tr><tr><td><b>Duration:</b></td><td> %s </td></tr><tr><td><b>Audio codec:</b></td><td> %s </td></tr></table>' %(videoData.getCodec(),videoData.getWidth(),videoData.getHeight(),videoData.getAspectRatio(),videoData.getFrameRate(),videoData.duration(),audioData.getCodec())
+            # text = '<table border=0 cellspacing="3",cellpadding="2"><tr border=1><td><b>Video Codec:</b></td><td> %s </td></tr><td><b>Dimension:</b></td><td> %s x %s </td></tr><tr><td><b>Aspect:</b></td><td> %s </td></tr><tr><td><b>FPS:</b></td><td> %s </td></tr><tr><td><b>Duration:</b></td><td> %s </td></tr><tr><td><b>Audio codec:</b></td><td> %s </td></tr></table>' %(videoData.getCodec(),videoData.getWidth(),videoData.getHeight(),videoData.getAspectRatio(),videoData.frameRateMultiple(),videoData.duration(),audioData.getCodec())
             text = """<table border=0 cellspacing="3",cellpadding="2">
                     <tr border=1><td><b>Container:</b></td><td> %s </td></tr>
                     <tr><td><b>Bitrate:</b></td><td> %s [kb/s]</td></tr>
@@ -909,10 +894,10 @@ class MainFrame(QtWidgets.QMainWindow):
                     <tr><td><b>Video Codec:</b></td><td> %s </td></tr>
                     <tr><td><b>Dimension:</b></td><td> %sx%s </td></tr>
                     <tr><td><b>Aspect:</b></td><td> %s </td></tr>
-                    <tr><td><b>FPS:</b></td><td> %s </td></tr>
-                    <tr><td><b>Duration:</b></td><td> %s [sec]</td></tr>
+                    <tr><td><b>FPS:</b></td><td> %.2f </td></tr>
+                    <tr><td><b>Duration:</b></td><td> %.1f [sec]</td></tr>
                     <tr><td><b>Audio codec:</b></td><td> %s </td></tr>
-                    </table>""" % (container.formatNames()[0], container.getBitRate(), container.getSizeKB(), streamData.isTransportStream(), videoData.getCodec(), videoData.getWidth(), videoData.getHeight(), videoData.getAspectRatio(), videoData.getFrameRate(), videoData.duration(), acodec)
+                    </table>""" % (container.formatNames()[0], container.getBitRate(), container.getSizeKB(), streamData.isTransportStream(), videoData.getCodec(), videoData.getWidth(), videoData.getHeight(), videoData.getAspectRatio(), self._videoController.fps(), videoData.duration(), acodec)
             entries = []
             entries.append("""<br><\br><table border=0 cellspacing="3",cellpadding="2">""")
             
@@ -1339,9 +1324,7 @@ class VideoPlayerCV():
         self.currentFrame=None
         
     def _captureFromFile(self, rotation):
-        if self._streamProbe is None or not self._streamProbe.isKnownVideoFormat():
-            print ("STREAM NOT KNOWN")
-            Log.logInfo("STREAM NOT KNOWN")
+        if not self._sanityCheck():
             return False
         self._capture = OPENCV.getCapture();
         if not self._capture.open(self._file):
@@ -1355,11 +1338,11 @@ class VideoPlayerCV():
         
         #ffmpeg
         duration = self._streamProbe.formatInfo.getDuration()
-        ff_fps= self._streamProbe.getVideoStream().getFrameRate()
+        ff_fps= self._streamProbe.getVideoStream().frameRateMultiple()
         ff_FrameCount = round(ff_fps*duration)
         Log.logInfo("Analyze %s frameCount:%d fps:%.3f ffmpeg frameCount:%d fps:%.3f"%(self._file,self.framecount,self.fps,ff_FrameCount,ff_fps))   
         fps_check= (self.fps/ff_fps)
-        if abs(fps_check -1.0)>0.1:
+        if abs(fps_check -1.0)>10.0:
             Log.logInfo("Irregular data, ratio: %.3f"%(fps_check))
             self.framecount=ff_FrameCount
             self.fps=ff_fps 
@@ -1372,6 +1355,19 @@ class VideoPlayerCV():
             self.totalTimeMilliSeconds = duration*1000
         else:
             self.totalTimeMilliSeconds = int(self.framecount / self.fps * 1000)
+        
+        return True
+
+    def _sanityCheck(self):
+        if self._streamProbe is None or not self._streamProbe.isKnownVideoFormat():
+            print ("STREAM NOT KNOWN")
+            Log.logInfo("STREAM NOT KNOWN")
+            return False
+        
+        if len(self._streamProbe.video)!=1:
+            print("Zero or more than 1 video stream")
+            Log.logInfo("Zero or more than 1 video stream")
+            return False
         
         return True
 
@@ -1547,6 +1543,12 @@ class VideoControl(QtCore.QObject):
     def getSourceDir(self):
         return OSTools().getDirectory(self.currentPath)
 
+    def fps(self):
+        if self.player:
+            return self.player.fps
+        else:
+            return 1.0
+
     def getTargetFile(self):
         if self.streamData is not None:
             ext = self.streamData.getTargetExtension()
@@ -1569,7 +1571,7 @@ class VideoControl(QtCore.QObject):
     def displayWarningMessage(self):
         if self.lastError is None:
             return
-        self.gui.showWarning(self.lastError)
+        self.gui.showWarning(self.lastError+"\nCheck log in .config/VideoCut for details")
         self.lastError = None
         
     #-- Menu handling ---    
@@ -1771,8 +1773,8 @@ class VideoControl(QtCore.QObject):
         config = CuttingConfig(srcPath, targetPath, settings.getPreferedLanguageCodes())
         config.streamData = self.streamData
         config.reencode = settings.reencoding
-        
         config.messenger = self.statusbar()
+
         self.cutter = FFMPEGCutter(config, self.calculateNewVideoTime(spanns))
         self.cutter.ensureAvailableSpace()
         slices = len(spanns)
@@ -1796,7 +1798,8 @@ class VideoControl(QtCore.QObject):
         config.reencode = settings.reencoding
         
         self.cutter = VCCutter(config)
-        self.cutter.cut(spanns)
+        if self.cutter.setupBinary():
+            self.cutter.cut(spanns)
     
     def _initSliderThread(self):
         if self.sliderThread is not None:
@@ -1811,11 +1814,12 @@ class VideoControl(QtCore.QObject):
     # we want 1 minute per single step
     def __initSliderTicks(self):
         videoInfo = self.streamData.getVideoStream()
-        fps = videoInfo.getFrameRate()
+        #fps = videoInfo.frameRateAvg()
+        _fps = self.fps()
         if self.player.framecount > 0:
-            ratio = round(LayoutWindow.SLIDER_RESOLUTION * 60 * fps / self.player.framecount, 1)
+            ratio = round(LayoutWindow.SLIDER_RESOLUTION * 60 * _fps / self.player.framecount, 1)
             self.gui.setSliderTicks(round(ratio))
-            self.gui.setDialResolution(fps)
+            self.gui.setDialResolution(_fps)
             self.gui.setGotoMaximum(int(self.player.framecount))
         
     # connected to slider-called whenever position is changed.

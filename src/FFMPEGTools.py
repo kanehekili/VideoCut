@@ -251,20 +251,14 @@ def executeAsync(cmd, commander):
 def executeCmd(cmd):
     return subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT).communicate()    
 '''
-Return array wit htwo dicts:
+Return array with two dicts:
 dict 0= code->language
 dict 1 = language->code
 '''
-class Iso639Model():
+class _Iso639Model():
     NOCODE="und"
     NOLANG="Undetermined"
-    __instance=None
-    
-    def __new__(cls):
-        if Iso639Model.__instance is None:
-            Iso639Model.__instance=object.__new__(cls)
-        return Iso639Model.__instance
-    
+
     def __init__(self):
         model=self.readIso639Map()
         self.codeToLang=model[0]
@@ -292,6 +286,10 @@ class Iso639Model():
     
     def countryForCode(self,code):
         return self.codeToLang.get(code,self.NOLANG)
+
+#factory:
+def IsoMap(_singleton=_Iso639Model()):
+    return _singleton
    
 '''
 Probes packets.
@@ -614,7 +612,7 @@ class FFStreamProbe():
     
     def getAspectRatio(self):
         ratio = self.getVideoStream().getAspectRatio()
-        if ratio == 1.0:
+        if ratio == 1.0 and int(self.getVideoStream().getHeight())>0:
             ratio = float(self.getVideoStream().getWidth()) / float(self.getVideoStream().getHeight())
         return ratio
 
@@ -708,7 +706,7 @@ class FFStreamProbe():
         print ("getCodecTimeBase: ", s.getCodecTimeBase())
         print ("getTimeBase: ", s.getTimeBase())
         print ("getAspect ", s.getAspectRatio())
-        print ("getFrameRate_r: ", s.getFrameRate())
+        print ("getFrameRate_r: ", s.frameRateMultiple())
         print ("getAVGFrameRate: ", s.frameRateAvg())  # Common denominator
         print ("getDuration: ", s.duration())
         print ("getWidth: ", s.getWidth())
@@ -865,7 +863,13 @@ class VideoStreamInfo():
             return int(result)
         return 0;
 
-    def getFrameRate(self):
+    '''
+    Smallest framerate in float
+    r_frame_rate is NOT the average frame rate, it is the smallest frame rate that can accurately represent all timestamps. 
+    So no, it is not wrong if it is larger than the average! For example, if you have mixed 25 and 30 fps content, 
+    then r_frame_rate will be 150 (it is the least common multiple).
+    '''
+    def frameRateMultiple(self):
         if 'r_frame_rate' in self.dataDict:
             z, n = self.dataDict['r_frame_rate'].split('/')
             if int(n) != 0:
@@ -873,18 +877,35 @@ class VideoStreamInfo():
         return 1.0
 
     '''
-    Smallest framerate in float
-    r_frame_rate is NOT the average frame rate, it is the smallest frame rate that can accurately represent all timestamps. 
-    So no, it is not wrong if it is larger than the average! For example, if you have mixed 25 and 30 fps content, 
-    then r_frame_rate will be 150 (it is the least common multiple).
+    The average framerate might be wrong on webm containers (vp8 codec) by a thousand. 
+    It usually is ok when using transportstreams (where r_frame_rate shows the non interlaced frequency...)
     '''
-
     def frameRateAvg(self):
         if "avg_frame_rate" in self.dataDict:
             (n, z) = self.dataDict["avg_frame_rate"].split("/")
             if int(z) != 0:
                 return float(n) / float(z) 
         return 1.0
+
+    def saneFPS(self):
+        if self.isInterlaced():
+            return self.frameRateAvg()
+        else:
+            return self.frameRateMultiple()
+
+    '''
+    ‘tt’ =    Interlaced video, top field coded and displayed first 
+    ‘bb’=  Interlaced video, bottom field coded and displayed first 
+    ‘tb’= Interlaced video, top coded first, bottom displayed first 
+    ‘bt’= Interlaced video, bottom coded first, top displayed first 
+    '''
+    def isInterlaced(self):
+        interlacedID=["tb","tt","bt","bb"]
+        if "field_order" in self.dataDict:
+            fo=self.dataDict["field_order"]
+            if fo in interlacedID:
+                return True
+        return False
 
     def getCodec(self):
         if 'codec_name' in self.dataDict:
@@ -1283,7 +1304,7 @@ class FFMPEGCutter():
         selectedLangs = self._config.languages #intl language
         prefCode=[] 
         for lang in selectedLangs:
-            prefCode.append(Iso639Model().codeForCountry(lang,avail))
+            prefCode.append(IsoMap()().codeForCountry(lang,avail))
 
         for code,indexTuple in langMap.items():
             if code in prefCode: 
@@ -1327,6 +1348,7 @@ class FFMPEGCutter():
         # add all files into a catlist: file '/tmp/vc_tmp0.m2t' ..etc
         # ffmpeg -f concat -i catlist.txt  -c copy concat.mp4
         # reencoding takes place in the cut - NOT here.
+        # TODO check fifo: https://video.stackexchange.com/questions/30548/how-to-merge-multiple-mp4-videofiles-using-concat-of-ffmpeg-while-transposing-18
         if self._fragmentCount == 1:
             return
 
@@ -1459,7 +1481,7 @@ class VCCutter():
 
     def __init__(self, cutConfig):
         self.config = cutConfig
-        self.setupBinary()
+        #self.setupBinary()
         self.regexp = re.compile("([0-9]+) D:([0-9.]+) (.+) ([0-9.]+)%")
         self.runningProcess = None
         self.killed = False
@@ -1469,11 +1491,12 @@ class VCCutter():
         fv = FFmpegVersion()
         if fv.version < 3.0:
             self.warn("Invalid FFMPEG Version! Needs to be 3.0 or higher") 
-            return
+            return False
         val = str(fv.version)[:1]
         p = OSTools().getWorkingDirectory();
         tail = "ffmpeg/bin/V" + val + "/remux5"
         self.bin = os.path.join(p, tail)
+        return True
 
     # cutlist = [ [t1,t2] [t3,t4]...]
     def cut(self, cutlist):
@@ -1531,7 +1554,7 @@ class VCCutter():
         codeList = self.config.streamData.getLanguages() #3letter codes == base
         prefLangs = self.config.languages #Intl Lang ->convert to 3 letter code.
         for lang in prefLangs:
-            code = Iso639Model().codeForCountry(lang, codeList)
+            code = IsoMap().codeForCountry(lang, codeList)
             if code in codeList:
                 codes.append(code)
                 
