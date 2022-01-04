@@ -138,6 +138,7 @@ def testPacketProbe(filename):
 
 def testFFmpegVersion():
     fv = FFmpegVersion()
+    fv.figureItOut()
     val = str(fv.version)[:1]
     print(">>" + val)
 
@@ -412,15 +413,24 @@ def testFormatMapping():
 '''
 def testEncoderMapping():
     pass
+
+def expoTest():
+    import math
+    #self._dialStep = math.copysign(1, pos) * round(math.exp(abs(pos / 3.0) - 1))
+    for i in range(1,25):
+        #res = round(math.exp(abs(10.0/i*5.3)))
+        res = round(math.exp((-0.4*i +5)/ 1.9))
+        print("%d) %d"%(i,res))
           
 if __name__ == '__main__':
+    expoTest()
     # testCMDffmpegRegex()
     # testregex()
-    # testFFmpegVersion()
+    #testFFmpegVersion()
     # testPath()
     # testParse()
     # testNonblockingRead()
-    testFrameProbe()
+    #testFrameProbe()
     # testPacketProbe("/home/matze/Videos/pur/purX.m2t")
     # createIso692Map()
     #convertIso639()
@@ -547,4 +557,35 @@ while (outputFormat = av_oformat_next(outputFormat))
         }
     }
 }
+
+Stuff to learn:
+ffmpg solution for frames:
+    def captureFrame(settings: QSettings, source: str, frametime: str, thumbsize: QSize=None,
+                     external: bool=False) -> QPixmap:
+        if thumbsize is None:
+            thumbsize = VideoService.config.thumbnails['INDEX']
+        capres = QPixmap()
+        img = QTemporaryFile(os.path.join(QDir.tempPath(), 'XXXXXX.jpg'))
+        if img.open():
+            imagecap = img.fileName()
+            cmd = VideoService.findBackends(settings).ffmpeg
+            tsize = '{0:d}x{1:d}'.format(thumbsize.width(), thumbsize.height())
+            args = '-hide_banner -ss {frametime} -i "{source}" -vframes 1 -s {tsize} -y "{imagecap}"'.format(**locals())
+            proc = VideoService.initProc()
+            if proc.state() == QProcess.NotRunning:
+                proc.start(cmd, shlex.split(args))
+                proc.waitForFinished(-1)
+                if proc.exitStatus() == QProcess.NormalExit and proc.exitCode() == 0:
+                    capres = QPixmap(imagecap, 'JPG')
+                if external:
+                    painter = QPainter(capres)
+                    painter.drawPixmap(0, 0, QPixmap(':/images/external.png', 'PNG'))
+                    painter.end()
+        img.remove()
+        return capres
+
+**locals == 
+>>> name = "Fred"
+>>> f"He said his name is {name}."
+
 '''

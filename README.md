@@ -48,6 +48,9 @@ OpenCV:  it is necessary to get a version that has been compiled with ffmpeg
 
 :boom: Be aware that this tool does not cut exact on frame - except you reencode the whole film.
 
+### Virtualenv or conda 
+The fast remux binary doesn't run in a virtual environment, since the ffmpeg libraries used are not available. The ffmpeg blob could be used, if it would be on the /usr/bin path on the host system. Cross OS binary calls tend be a lot slower that in the native environment - so this software is limited to Linux (native or virtualized)
+
 ### Subtitles
 Finalized in Version 1.3.0.  Not all containers (e.g. mp4) accept subtitles. A AVCH (h264 TS) Stream with DVB_SUB codec cannot be converted into mp4, so your miles may vary if you change the output container (defined by the file extension)
 
@@ -74,7 +77,7 @@ For DVB transport stream you should keep the ".m2t" ending, mkv containers shoul
 * In the terminal can be started via `VideoCut`
 * python qt5, opencv and ffmpeg are required
 * you may now remove that download directory.
-* logs can be found in the user homes ".config/VideoCut" folder
+* logs can be found in the user home ".config/VideoCut" folder
 
 ### How to remove
 * Open a terminal

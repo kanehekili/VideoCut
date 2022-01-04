@@ -4,7 +4,7 @@ FFMPEG Wrapper - AVCONV will not be supported - ever.
 @author: kanehekili
 '''
 
-import os
+import os,sys
 import subprocess
 from subprocess import Popen
 from datetime import timedelta
@@ -15,20 +15,24 @@ import json
 from logging.handlers import RotatingFileHandler
 from itertools import tee
 import configparser
+from shutil import which
 
 class Logger():
     def __init__(self):
         homeDir = os.path.expanduser("~")
         self.LogDir =OSTools().joinPathes(homeDir,".config","VideoCut")
         OSTools().ensureDirectory(self.LogDir, None)
+        self.mainHandler=None
         self.setupLogging()
         
         
     def setupLogging(self): 
         logpath = os.path.join(self.LogDir,"VC.log")
-        rotating_handler = RotatingFileHandler(logpath, mode='a', maxBytes=10000000, backupCount=2)
+        self.mainHandler = RotatingFileHandler(logpath, mode='a', maxBytes=10000000, backupCount=2)
+        handler = logging.StreamHandler(sys.stdout)
+        handler.setLevel(logging.DEBUG)
         logging.basicConfig(
-            handlers=[rotating_handler],
+            handlers=[handler,self.mainHandler],
             level=logging.DEBUG,
             format='%(asctime)s %(message)s'
         )  
@@ -1218,6 +1222,8 @@ class FFMPEGCutter():
     Base problem: AC-3 should be replaced by either mp2 or aac in mp4 container (AVC Video)
     '''
 
+    #TODO: use containerlist for best audio codec (eg avi to mp4 can only be reencoded)
+
     def _audioMode(self, mode):
         # streamData is FFStreamProbe
         if self._config.streamData.getAudioStream() is None:
@@ -1265,6 +1271,7 @@ class FFMPEGCutter():
         mov_text = mp4 subrip... Blueray=hdmv_pgs_subtitle
         '''
         scopy = "copy"
+        #how to regognize - won't work even hard coded: scopy = "srt"
         cmd="-scodec"
         '''streamData = self._config.streamData
         info = streamData.getFormatNames()
@@ -1304,7 +1311,7 @@ class FFMPEGCutter():
         selectedLangs = self._config.languages #intl language
         prefCode=[] 
         for lang in selectedLangs:
-            prefCode.append(IsoMap()().codeForCountry(lang,avail))
+            prefCode.append(IsoMap().codeForCountry(lang,avail))
 
         for code,indexTuple in langMap.items():
             if code in prefCode: 
@@ -1489,6 +1496,10 @@ class VCCutter():
         
     def setupBinary(self):
         fv = FFmpegVersion()
+        fv.figureItOut()
+        if fv.error is not None:
+            self.warn("No FFMPEG libraries found - Choose FFMPEG as muxer")
+            return False
         if fv.version < 3.0:
             self.warn("Invalid FFMPEG Version! Needs to be 3.0 or higher") 
             return False
@@ -1506,8 +1517,11 @@ class VCCutter():
         slices = len(cutlist)
         timeString = []
         for index, cutmark in enumerate(cutlist):
-            t1 = cutmark[0].timePos
-            t2 = cutmark[1].timePos
+#            t1 = cutmark[0].timePos
+#            t2 = cutmark[1].timePos
+            t1 = cutmark[0].timeDelta()
+            t2 = cutmark[1].timeDelta()
+            
             timeString.append(timedeltaToString2(t1))
             timeString.append(',')
             timeString.append(timedeltaToString2(t2))
@@ -1616,11 +1630,19 @@ class VCCutter():
 class FFmpegVersion():
 
     def __init__(self):
+        self.error=None
         self.version = 0.0;
-        self.figureItOut()
+    
+    def confirmFFmpegInstalled(self):
+        return which(BIN)  
     
     def figureItOut(self):
-        result = subprocess.Popen(["/usr/bin/ffmpeg", "-version"], stdout=subprocess.PIPE).communicate()
+        try:
+            result = subprocess.Popen(["/usr/bin/ffmpeg", "-version"], stdout=subprocess.PIPE).communicate()
+        except Exception as error:
+            self.error = str(error)
+            return
+            
         if len(result[0]) > 0:
             text = result[0].decode("utf-8")
             m = re.search("[0-9].[0-9]+", text)
