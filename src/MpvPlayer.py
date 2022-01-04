@@ -12,18 +12,26 @@ from PyQt5.QtCore import Qt
 from PyQt5 import QtCore,QtWidgets
 from PyQt5 import QtGui
 from PyQt5.QtWidgets import QApplication
-from PIL.ImageQt import ImageQt
+
 from threading import Condition
 from PyQt5.QtCore import pyqtSignal
 import FFMPEGTools
 import sys,time
 
 try:
+    from PIL.ImageQt import ImageQt #Not there by default...
+except ImportError:
+    print ("PIL lib not found")
+    app = QApplication(sys.argv)
+    QtWidgets.QMessageBox.critical(None, "PIL lib","python PIL must be installed to run VideoCut.")
+    sys.exit(1)    
+
+try:
     from lib.mpv import MPV
 except ImportError:
     print (("MPV lib not found"))  
     app = QApplication(sys.argv)
-    QtWidgets.QMessageBox.critical(None, "MPV lib","libmpv be installed to run VideoCut.")
+    QtWidgets.QMessageBox.critical(None, "MPV lib","libmpv must be installed to run VideoCut.")
     sys.exit(1)    
 
 Log=FFMPEGTools.Log
