@@ -4,7 +4,7 @@ FFMPEG Wrapper - AVCONV will not be supported - ever.
 @author: kanehekili
 '''
 
-import os
+import os,sys
 import subprocess
 from subprocess import Popen
 from datetime import timedelta
@@ -15,20 +15,24 @@ import json
 from logging.handlers import RotatingFileHandler
 from itertools import tee
 import configparser
+from shutil import which
 
 class Logger():
     def __init__(self):
         homeDir = os.path.expanduser("~")
         self.LogDir =OSTools().joinPathes(homeDir,".config","VideoCut")
         OSTools().ensureDirectory(self.LogDir, None)
+        self.mainHandler=None
         self.setupLogging()
         
         
     def setupLogging(self): 
         logpath = os.path.join(self.LogDir,"VC.log")
-        rotating_handler = RotatingFileHandler(logpath, mode='a', maxBytes=10000000, backupCount=2)
+        self.mainHandler = RotatingFileHandler(logpath, mode='a', maxBytes=10000000, backupCount=2)
+        handler = logging.StreamHandler(sys.stdout)
+        handler.setLevel(logging.DEBUG)
         logging.basicConfig(
-            handlers=[rotating_handler],
+            handlers=[handler,self.mainHandler],
             level=logging.DEBUG,
             format='%(asctime)s %(message)s'
         )  
@@ -228,12 +232,22 @@ def timedeltaToString2(deltaTime):
     mso = str(ms).rjust(3, '0')
     return '%s.%s' % (so, mso)
 
-
-def log(*messages):
+def log(*messages): #text value only...
     # Hook for logger...
     # cnt = len(messages)
-    # print "{0} {1}".format(*messages)
+    #print("{0} {1}".format(*messages))
     Log.logInfo("{0} {1}".format(*messages))
+    '''
+    cnt = len(messages)
+    r= range(cnt)
+    tmp=[]
+    for n in r:
+        tmp.append('{')
+        tmp.append(str(n))
+        tmp.append('}')
+    fmt=''.join(tmp)    
+    Log.logInfo(fmt.format(*messages))
+    '''
 
     
     # execs an command, yielding the lines to caller. Throws exception on error
@@ -366,13 +380,13 @@ class PacketInfo():
 
     
 class FormatMap():
-
-    def __init__(self, fmt, vcList, acList, extensions,targetExt):
+    def __init__(self, fmt, vcList, acList, extensions,targetExt,fmtlib):
         self.format = fmt
         self.videoCodecs = vcList
         self.audioCodecs = acList;
         self.extensions = extensions
         self.targetExt=targetExt
+        self.formatLib = fmtlib
 
     '''
     @return if vCodec and aCodec are contained in this format
@@ -386,31 +400,75 @@ class FormatMap():
     
     def hasExtension(self,fileExt):
         return fileExt in self.extensions
+    
+    def defaultVideoCodec(self):
+        return self.videoCodecs[0]
+    
+    #Those formats are used for c:v xxx or -f options
+    def defaultFormats(self):
+        return self.formatLib
+    
+    def videoFormat(self):
+        return self.formatLib[0]    
+
+    def audioFormat(self):
+        return self.formatLib[1]
+    
+    def subtitleFormat(self):
+        return self.formatLib[2]
+
 
 class FormatMapGenerator():
-    #We should select the names after format names.. except the ts files..    
-    containers = ["mpegts", "avchd","mpeg", "vob", "dvd", "mp4", "mov", "matroska", "webm", "3gp", "avi", "flv", "ogg"]
+    '''
+    Image-based sub-title codecs in ffmpeg
+        dvbsub ok
+        dvdsub ok
+        pgssub -not an encode
+        xsub   -not an encoder
+    
+    Text-based subtitle codecs in ffmpeg
+        ssa,ass  ok
+        webvtt   ok
+        jacosub  no
+        microdvd no
+        mov_text ok
+        mpl2     no
+        pjs      no
+        realtext no
+        sami     no 
+        stl      no
+        subrip   ok
+        subviewer no
+        subviewer1 no
+        text      ok 
+        vplayer   ?
+        webvtt    ok     
+    '''    
+    SUB_IMG=["dvbsub","pgssub*","hdmv_pgs_subtitle*","xsub*"]
+    SUB_TEXT=["ssa","ass","webvtt","mov_text","subrip","srt","text","webvtt"]
+    
+    #supported muxers
+    muxers = ["mpegts","mpeg", "vob", "dvd", "mp4", "mov", "matroska", "webm", "3gp", "avi", "flv", "ogg"]
     videoCodecs = {}
     audioCodecs = {}
     extensions = {}
     targetExt ={}
-    
-    videoCodecs["mpegts"] = ["mpeg1video", "mpeg2video"]#critical!
-    videoCodecs["avchd"] = ["mp4", "h264"]
-    videoCodecs["mpeg"] = ["mpeg1video", "mpeg2video"]
-    videoCodecs["vob"] = ["mpeg1video", "mpeg2video"]
-    videoCodecs["dvd"] = ["mpeg1video", "mpeg2video"]
-    videoCodecs["mp4"] = ["mpeg1video", "mpeg2video", "wmv?", "vc1", "theora", "mp4", "h264", "h265", "vp8", "vp9"]
-    videoCodecs["mov"] = ["mpeg1video", "mpeg2video", "wmv?", "vc1", "theora", "mp4", "h264", "h265", "vp8", "vp9"]
-    videoCodecs["matroska"] = ["mpeg1video", "mpeg2video", "wmv?", "vc1", "theora", "mp4", "h264", "h265", "vp8", "vp9", "av1"]
+    formats={} #the -f switch ..
+
+    videoCodecs["mpegts"] = ["mpeg2video","mpeg1video" ]#critical!
+    videoCodecs["mpeg"] = ["mpeg2video","mpeg1video"]
+    videoCodecs["vob"] = ["mpeg2video","mpeg1video"]
+    videoCodecs["dvd"] = ["mpeg2video","mpeg1video"]
+    videoCodecs["mp4"] = ["mp4","mpeg1video", "mpeg2video", "wmv?", "vc1", "theora", "h264", "h265", "vp8", "vp9"]
+    videoCodecs["mov"] = ["h264","mpeg1video", "mpeg2video", "wmv?", "vc1", "theora", "mp4", "h265", "vp8", "vp9"]
+    videoCodecs["matroska"] = ["h264","mpeg1video", "mpeg2video", "wmv?", "vc1", "theora", "mp4", "h265", "vp8", "vp9", "av1"]
     videoCodecs["webm"] = ["vp8", "vp9"]
     videoCodecs["3gp"] = ["mp4", "h263", "vc1"]
-    videoCodecs["avi"] = ["mpeg1video", "mpeg2video", "wmv?", "vc1", "theora", "mp4", "h264", "h265", "vp8", "vp9"]
-    videoCodecs["flv"] = ["mp4", "h264", "vp6"]
+    videoCodecs["avi"] = ["h264","mpeg1video", "mpeg2video", "wmv?", "vc1", "theora", "mp4", "h265", "vp8", "vp9"]
+    videoCodecs["flv"] = ["h264","mp4", "vp6"]
     videoCodecs["ogg"] = ["theora"] 
     
     audioCodecs["mpegts"] = ["mp1", "mp2", "mp3"]
-    audioCodecs["avchd"] = ["aac", "ac3","eac3", "dts", "alac"]
     audioCodecs["mpeg"] = ["mp1", "mp2", "mp3"]
     audioCodecs["vob"] = ["mp2"]
     audioCodecs["dvd"] = ["mp1", "mp2", "mp3"]
@@ -426,7 +484,6 @@ class FormatMapGenerator():
 
     # the ffmpeg view of extensions
     extensions["mpegts"] = ["m2t", "ts", "m2ts", "mts"]
-    extensions["avchd"] = ["mp4", "m4p", "m4v","mov"]
     extensions["mpeg"] = ["mpg", "mpeg"]
     extensions["vob"] = ["vob"]
     extensions["dvd"] = ["dvd"]
@@ -440,7 +497,6 @@ class FormatMapGenerator():
     extensions["ogg"] = ["ogg"]    
 
     targetExt["mpegts"] = "mpg"
-    targetExt["avchd"] = "mp4"
     targetExt["mpeg"] = "mpg"
     targetExt["vob"] = "mpg"
     targetExt["dvd"] = "mpg"
@@ -452,16 +508,30 @@ class FormatMapGenerator():
     targetExt["avi"] = "avi"
     targetExt["flv"] = "flv"
     targetExt["ogg"] = "ogg"    
-    
 
+    #formats name for encoding and codec ->ffmpeg -h muxer=matroska and -encoders
+    #video, audio,subtitle
+    formats["mpegts"] = ["mpegts","mp2",None]
+    formats["mpeg"] = ["mpeg2video","mp2",None]
+    formats["vob"] = ["mpeg2video","mp2","dvdsub"]
+    formats["dvd"] = ["mpeg2video","mp2","dvdsub"]
+    formats["mp4"] = ["libx264","aac","mov_text"]
+    formats["mov"] = ["libx264","aac","mov_text"]
+    formats["matroska"] = ["libx264","libvorbis","srt"] 
+    formats["webm"] = ["libvpx-vp9","libvorbis","webvtt"]
+    formats["3gp"] = ["h263_v4l2m2m","libopencore_amrnb",None]
+    formats["avi"] = ["libx264","libmp3lame",None]
+    formats["flv"] = ["flv","libmp3lame",None]
+    formats["ogg"] = ["libtheora","libvorbis",None] 
+    
     
     def __init__(self):
         self.setup()
     
     def setup(self):
         self.table = {}
-        for fi in self.containers:
-            fmt = FormatMap(fi, self.videoCodecs[fi], self.audioCodecs[fi], self.extensions[fi],self.targetExt[fi])
+        for fi in self.muxers:
+            fmt = FormatMap(fi, self.videoCodecs[fi], self.audioCodecs[fi], self.extensions[fi],self.targetExt[fi],self.formats[fi])
             self.table[fi] = fmt
 
     #need to reflect our internal changes, such as m2t to mpg or mp4
@@ -528,6 +598,9 @@ class FormatMapGenerator():
         
         return None
 
+    def sameSubGroup(self,codec1,codec2):
+        return codec1 in self.SUB_TEXT and codec2 in self.SUB_TEXT or codec1 in self.SUB_IMG and codec2 in self.SUB_IMG         
+
 FORMATS = FormatMapGenerator()
 
         
@@ -546,6 +619,7 @@ class FFStreamProbe():
         datalines = []
         self.video = []
         self.audio = []
+        self.subtitle=[]
         self.formatInfo = None
 
         lines = result[0].decode("utf-8").split('\n')
@@ -566,8 +640,10 @@ class FFStreamProbe():
         for a in self.streams:
             if a.isAudio():
                 self.audio.append(a)
-            if a.isVideo():
+            elif a.isVideo():
                 self.video.append(a)
+            elif a.isSubTitle():
+                self.subtitle.append(a)
              
     def getVideoStream(self):
         if len(self.video) == 0:
@@ -605,6 +681,8 @@ class FFStreamProbe():
     
     #Single extension.
     def getTargetExtension(self):
+        if not self.getVideoStream():
+            return None
         vcodec = self.getVideoStream().getCodec()
         acodec = self.getPrimaryAudioCodec()
         return FORMATS.getPreferredTargetExtension(vcodec, acodec,self.getFormatNames())
@@ -697,6 +775,26 @@ class FFStreamProbe():
         
     def isH264(self):
         return "h264" == self.getVideoStream().getCodec()
+    
+    
+    '''
+    subtitles
+    tested: subrip and move_text 
+    '''
+    def hasSubtitles(self):
+        return len(self.subtitle) > 0
+    
+    def subtitleCodec(self):
+        if self.hasSubtitles():
+            return self.subtitle[0].getCodec()
+        
+        return None
+        
+    def firstSubtitleStream(self):
+        if self.hasSubtitles():
+            return self.subtitle[0]
+        return None
+    
     
     def printCodecInfo(self):
         print ("-------- Video -------------")
@@ -877,7 +975,7 @@ class VideoStreamInfo():
         return 1.0
 
     '''
-    The average framerate might be wrong on webm containers (vp8 codec) by a thousand. 
+    The average framerate might be wrong on webm muxers (vp8 codec) by a thousand. 
     It usually is ok when using transportstreams (where r_frame_rate shows the non interlaced frequency...)
     '''
     def frameRateAvg(self):
@@ -908,22 +1006,19 @@ class VideoStreamInfo():
         return False
 
     def getCodec(self):
-        if 'codec_name' in self.dataDict:
-            return self.dataDict['codec_name']
-        return self.NA
+        return self.dataDict.get('codec_name',self.NA)
+    
+    def codecTag(self): #sth like avc1 on h264 codec 
+        return self.dataDict.get('codec_tag_string',self.NA)
     
     def hasAACCodec(self):
         return self.getCodec() == "aac"
     
     def getWidth(self):
-        if 'width' in self.dataDict:
-            return self.dataDict['width']
-        return self.NA
+        return self.dataDict.get('width',self.NA)
 
     def getHeight(self):
-        if 'height' in self.dataDict:
-            return self.dataDict['height']
-        return self.NA       
+        return self.dataDict.get('height',self.NA)
     
     def isAVC(self):  # MOV, h264
         if 'is_avc' in self.dataDict:
@@ -969,26 +1064,15 @@ class VideoStreamInfo():
     
     def isAudio(self):
         # Is this stream labeled as an audio stream?
-        if 'codec_type' in self.dataDict:
-            if str(self.dataDict['codec_type']) == 'audio':
-                return True
-        return False
+        return str(self.dataDict.get('codec_type',"")) == 'audio'
 
     def isVideo(self):
-        """
-        Is the stream labeled as a video stream.
-        """
-        if 'codec_type' in self.dataDict:
-            if str(self.dataDict['codec_type']) == 'video':
-                return True
-        return False
-
+        #Is the stream labeled as a video stream.
+        return str(self.dataDict.get('codec_type',"")) == 'video'
+        
     def isSubTitle(self):
         # Is this stream labeled as subtitle stream?
-        if 'codec_type' in self.dataDict:
-            if str(self.dataDict['codec_type']) == 'subtitle':
-                return True
-        return False
+        return str(self.dataDict.get('codec_type',"")) == 'subtitle'
 
 
 class FFFrameProbe():
@@ -1043,7 +1127,6 @@ class FFFrameProbe():
                 datalines.append(a)
 
 
-# TODO: subclass the init. Only accessor methods
 class VideoFrameInfo():
     '''
     [FRAME]
@@ -1127,7 +1210,7 @@ class VideoFrameInfo():
         
 class CuttingConfig():
 
-    def __init__(self, srcfilePath, targetPath, audioTracks):
+    def __init__(self, srcfilePath, targetPath, audioTracks,subsOn):
         ''' Sets an object that understands say(aText)'''
         self.messenger = None
         self.reencode = False
@@ -1135,7 +1218,10 @@ class CuttingConfig():
         self.srcfilePath = srcfilePath
         self.targetPath = targetPath
         self.languages = audioTracks
+        self.subtitlesOn=subsOn #to make ffmpeg concat possible
 
+    def supportSubtitles(self):
+        return self.streamData.hasSubtitles() and self.subtitlesOn
 
 class FFMPEGCutter():
     MODE_JOIN = 1;
@@ -1154,11 +1240,7 @@ class FFMPEGCutter():
         self.langMappings = self._buildMapping()
     
     '''
-    current limitation:
-    Basically, if you specify "second 157" and there is no key frame until 
-    second 159, it will include two seconds of audio (with no video) at the start, 
-    then will start from the first key frame. 
-    So be careful when splitting and doing codec copy
+    cut
     '''
 
     def cutPart(self, startTimedelta, endTimedelta, index=0, nbrOfFragments=1):
@@ -1218,16 +1300,25 @@ class FFMPEGCutter():
     Base problem: AC-3 should be replaced by either mp2 or aac in mp4 container (AVC Video)
     '''
 
+    #TODO: use containerlist for best audio codec (eg avi to mp4 can only be reencoded)
+
     def _audioMode(self, mode):
         # streamData is FFStreamProbe
         if self._config.streamData.getAudioStream() is None:
             return []
-        log("audio:", self._config.streamData.getAudioStream().getCodec())
+        targetFmt = FORMATS.fromFilename(self.targetPath())
+        log("audio:", self._config.streamData.getAudioStream().getCodec()," targets:",targetFmt) #TODO logging
+        container=targetFmt.format
+        lib = "copy"
+        if self._config.reencode:
+            targetFmt = FORMATS.fromFilename(self.targetPath())
+            lib = targetFmt.audioFormat()
+        
         if self._config.streamData.needsAudioADTSFilter():            
-            return ["-c:a", "copy", "-bsf:a", "aac_adtstoasc"]
+            return ["-c:a", lib, "-bsf:a", "aac_adtstoasc"]
 
-        if self._config.streamData.isMPEG2() and (self._fragmentCount == 1 or mode == self.MODE_JOIN):
-            return ["-c:a", "copy", "-f", "dvd"]
+        if self._config.streamData.isMPEG2() and container=='mpegts' and (self._fragmentCount == 1 or mode == self.MODE_JOIN):
+            return ["-c:a", lib, "-f", "dvd"]
 
         # This must be configurable - at least for tests. mp2 seems to work for kodi+mp4
 #        if self._config.streamData.getVideoStream().getCodec()=="h264" and self._config.streamData.getAudioStream().getCodec()=="ac3":
@@ -1235,54 +1326,91 @@ class FFMPEGCutter():
 #             elif (codec == "ac3"): #TDO and avc /mp4 video codec.
 #                 return ["-c:a","aac"]
 
-        return ["-c:a", "copy"]
+        return ["-c:a", lib]
  
     def _videoMode(self):
         videoStream = self._config.streamData.getVideoStream() 
         # TODO: wrong: The target defines which codec we are using....
-        log("video:", videoStream.getCodec())
-        if self._config.reencode:
-            # TODO: this must be adapted to the target file! Eg. dvd,webm etc -> ffmepg -formats | grep raw (av1 is experimental and won't work)
-            return ["-c:v", "libx264", "-preset", "medium"]  # -preset slow -crf 22
         
-        if self._config.streamData.needsH264Filter():
-            if self._fragmentCount == 1:  # CUT ONLY -NOT JOIN!
-                return ["-c:v", "copy", "-bsf:v", "h264_mp4toannexb"] 
-            else:
-                return ["-c:v", "copy", "-bsf:v", "h264_mp4toannexb", "-f", "mpegts"]
-                
-        return ["-c:v", "copy"]
+        srcFmt = FORMATS.fromFilename(self.filePath())
+        srcContainer=srcFmt.format
+        
+
+        log("video:", videoStream.getCodec())
+        lib="copy"
+        bsf=None
+        codec=None
+        if self._config.reencode:
+            # TODO: chec if valid
+            targetFmt = FORMATS.fromFilename(self.targetPath())
+            lib = targetFmt.videoFormat()
+            #return ["-c:v", lib, "-preset", "medium"]  # -preset slow -crf 22
+        
+        if self._config.streamData.needsH264Filter():# and srcContainer == 'mp4': #TODO educated guess,MKV target OK
+            bsf=["-bsf:v", "h264_mp4toannexb"] 
+            if self._fragmentCount > 1 and not self._config.supportSubtitles():  # CUT ONLY -NOT JOIN!
+                codec=["-f", "mpegts"] #TODO; and waht about audio and dvd??
+
+        cmd = ["-c:v", lib]
+        if bsf is not None:
+            cmd.extend(bsf)
+        if codec is not None:
+            cmd.extend(codec)    
+        return cmd
     
     def _subtitleMode(self):
         '''
+        Adding srt file: (tx3g codec)
+        ffmpeg -i ocean-fast.mp4 -i CM.de.srt  -c:v copy -c:a copy -c:s mov_text -y DEFA-SRT.mp4
+        ffmpeg -i "DEFA - East German trailer subs.mkv" -c:v copy -c:a copy -c:s mov_text -y DEFA-SRT.mp4 
+        >>add CM srt., copy stuff and make srt a mov text
+        cutting srt in mkv:
+        ffmpeg -ss 1004.128 -i title_t00.mkv -t 00:00:30.00 -c:v copy -c:a copy -c:s copy xf.mkv
+        remux hd_pgm text(blueray) to mp4:
+        ?
         -scodec [subtitle codec]
         Not every subtitle codec can be used for every video container format!
         [subtitle codec] parameter examples:
-        for MKV containers: copy, ass, srt, ssa (srt=pref, copy if same)
-        for MP4 containers: copy, mov_text
-        for MOV containers: copy, mov_text         
+        for MKV muxers: copy, ass, srt, ssa (srt=pref, copy if same)
+        for MP4 muxers: copy, mov_text
+        for MOV muxers: copy, mov_text         
         
         mov_text = mp4 subrip... Blueray=hdmv_pgs_subtitle
-        '''
-        scopy = "copy"
-        cmd="-scodec"
-        '''streamData = self._config.streamData
-        info = streamData.getFormatNames()
-        allFmts= FORMATS.fromFormatList(info)
-        '''
-        srcFmt = FORMATS.fromFilename(self.filePath())
-        targetFmt = FORMATS.fromFilename(self.targetPath())
-               
-        if srcFmt == targetFmt:
-            return [cmd,scopy]
-        '''
-        Subtitle encoding currently only possible from text to text or bitmap to bitmap
-        if targetFmt.format=="matroska":
-            return [cmd,"srt"]
         
-        if targetFmt.targetExt=="mp4":
-            return [cmd,"mov_text"]
+        S..... ssa                  ASS (Advanced SubStation Alpha) subtitle (codec ass)
+        S..... ass                  ASS (Advanced SubStation Alpha) subtitle
+        S..... dvbsub               DVB subtitles (codec dvb_subtitle)
+        S..... dvdsub               DVD subtitles (codec dvd_subtitle)
+        S..... mov_text             3GPP Timed Text subtitle
+        s..... srt                  SubRip subtitle (codec subrip)
+        S..... subrip               SubRip subtitle
+        S..... text                 Raw text subtitle
+        S..... ttml                 TTML subtitle
+        S..... webvtt               WebVTT subtitle
+        S..... xsub                 DivX subtitles (XSUB)
+
+        ffmpeg is not able to convert Picture subs into text subs and vice versa. 
+        A pgssub can't be converted into mov_text/srt...
         '''
+        
+        if self._config.supportSubtitles():
+            scopy = "copy"
+            cmd="-c:s"
+            srcFmt = FORMATS.fromFilename(self.filePath())
+            targetFmt = FORMATS.fromFilename(self.targetPath())
+            if srcFmt.targetExt != targetFmt.targetExt:
+                subSrc= self._config.streamData.subtitleCodec()
+                subTarget= targetFmt.subtitleFormat()
+                if not FORMATS.sameSubGroup(subSrc,subTarget): #TODO ? Only if we can't copy them.  
+                    log("subtitle:","src and target are not both text or image")
+                    return []
+                if subTarget is None:
+                    log("subtitle:","container does not support subtitles")
+                    return[]
+                scopy=subTarget
+                
+            res=[cmd,scopy]
+            return res
         return []
     
     def _getTempPath(self):
@@ -1304,7 +1432,7 @@ class FFMPEGCutter():
         selectedLangs = self._config.languages #intl language
         prefCode=[] 
         for lang in selectedLangs:
-            prefCode.append(IsoMap()().codeForCountry(lang,avail))
+            prefCode.append(IsoMap().codeForCountry(lang,avail))
 
         for code,indexTuple in langMap.items():
             if code in prefCode: 
@@ -1327,7 +1455,8 @@ class FFMPEGCutter():
             return mapList
         return []
     
-    #this is the extension for concating
+    #Either target ext or m2t if we need mpegts format..
+    #?if self._config.streamData.needsH264Filter()->TS
     def retrieveConcatExtension(self):
         default = ".m2t"
         tool=OSTools()
@@ -1489,6 +1618,10 @@ class VCCutter():
         
     def setupBinary(self):
         fv = FFmpegVersion()
+        fv.figureItOut()
+        if fv.error is not None:
+            self.warn("No FFMPEG libraries found - Choose FFMPEG as muxer")
+            return False
         if fv.version < 3.0:
             self.warn("Invalid FFMPEG Version! Needs to be 3.0 or higher") 
             return False
@@ -1506,8 +1639,11 @@ class VCCutter():
         slices = len(cutlist)
         timeString = []
         for index, cutmark in enumerate(cutlist):
-            t1 = cutmark[0].timePos
-            t2 = cutmark[1].timePos
+#            t1 = cutmark[0].timePos
+#            t2 = cutmark[1].timePos
+            t1 = cutmark[0].timeDelta()
+            t2 = cutmark[1].timeDelta()
+            
             timeString.append(timedeltaToString2(t1))
             timeString.append(',')
             timeString.append(timedeltaToString2(t2))
@@ -1616,11 +1752,19 @@ class VCCutter():
 class FFmpegVersion():
 
     def __init__(self):
+        self.error=None
         self.version = 0.0;
-        self.figureItOut()
+    
+    def confirmFFmpegInstalled(self):
+        return which(BIN)  
     
     def figureItOut(self):
-        result = subprocess.Popen(["/usr/bin/ffmpeg", "-version"], stdout=subprocess.PIPE).communicate()
+        try:
+            result = subprocess.Popen(["/usr/bin/ffmpeg", "-version"], stdout=subprocess.PIPE).communicate()
+        except Exception as error:
+            self.error = str(error)
+            return
+            
         if len(result[0]) > 0:
             text = result[0].decode("utf-8")
             m = re.search("[0-9].[0-9]+", text)
