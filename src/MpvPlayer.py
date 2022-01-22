@@ -18,20 +18,21 @@ from PyQt5.QtCore import pyqtSignal
 import FFMPEGTools
 import sys,time
 
+
 try:
     from PIL.ImageQt import ImageQt #Not there by default...
 except ImportError:
     print ("PIL lib not found")
     app = QApplication(sys.argv)
-    QtWidgets.QMessageBox.critical(None, "PIL lib","python PIL must be installed to run VideoCut.")
+    QtWidgets.QMessageBox.critical(None, "PIL lib",'"python pillow" must be installed to run VideoCut.')
     sys.exit(1)    
 
 try:
     from lib.mpv import MPV
-except ImportError:
+except:
     print (("MPV lib not found"))  
     app = QApplication(sys.argv)
-    QtWidgets.QMessageBox.critical(None, "MPV lib","libmpv must be installed to run VideoCut.")
+    QtWidgets.QMessageBox.critical(None, "MPV lib",'"mpv" must be installed to run VideoCut.')
     sys.exit(1)    
 
 Log=FFMPEGTools.Log
@@ -54,7 +55,9 @@ class VideoWidget(QtWidgets.QFrame):
     def updateUI(self,frameNumber,framecount,timeinfo):
         self.trigger.emit(frameNumber,framecount,timeinfo)
 
+
 class MpvPlayer():
+    ERR_IDS=["No video or audio streams selected."]
     def __init__(self):
         self.mediaPlayer =None
         self.framecount=None
@@ -67,6 +70,7 @@ class MpvPlayer():
         self.isReadable=False
         self.play_func=None
         self._lastDispatch=0.0
+        self.lastError=""
     
     def initPlayer(self,container):
         self.mediaPlayer = MPV(wid=str(int(container.winId())),#these are all options, can be accessed with mediaPlayer[option] (props with mp.prop)
@@ -97,7 +101,7 @@ class MpvPlayer():
             cache='yes',
             demuxer_seekable_cache='yes',
             demuxer_max_back_bytes ='10000MiB',
-            #demuxer_max_bytes ='10MiB',
+            #demuxer_max_bytes ='10000MiB',
             #demuxer_backward_playback_step=180,
             demuxer_cache_wait='no', #if yes remote files take too long...
             volume=100
@@ -106,26 +110,32 @@ class MpvPlayer():
         self._hookEvents()
         return self.mediaPlayer 
     
-    def _passLog(self,loglevel, component, message):
-        msg='{}: {}'.format(component, message)
-        Log.logError(msg)
     
     def open(self,filePath):
         try:     
-            #self.mediaPlayer.register_event_callback(self._oncallback)
+            self.lastError=""
+            #Very verbose: self.mediaPlayer.register_event_callback(self._oncallback)
             self.mediaPlayer.loadfile(filePath)
             self._getReady()
-            print("player init")
         except Exception as ex:
             Log.logException("Open mpv file")
             print(ex)
+
     
     def _oncallback(self,callback):
-        print("callback:",callback)
+        print("callback:",callback)#.event_id,">",callback.event.level)
+        print(callback["event"])
         
     def close(self):
         if self.mediaPlayer:
             self.mediaPlayer.quit()
+   
+    #todo: same with tweaks?
+    def changeSettings(self,key,value):
+        if self.mediaPlayer:
+            if key=="subtitle":
+                self.mediaPlayer.sid=int(value)
+                
         
     def getCurrentFrameNumber(self):
         return round(self._timePos*self.fps,0)
@@ -147,10 +157,10 @@ class MpvPlayer():
             return
         step = frameNumber - self.getCurrentFrameNumber()
         if abs(step) < 20: #mpv hack: mpegts small distances
-            #self.__seekPrecise(step)
             self.seekStep(step)
             return
         secs = self.calcPosition(frameNumber)
+        #print("seek secs: %.3f %f"%(secs,frameNumber))
         tp = self.timePos()
         #print("seek to pos: %f [%f] fn:%d currFn:%d"%(secs,tp,frameNumber,self.getCurrentFrameNumber()))
         self.mediaPlayer.seek(secs,"absolute+exact")
@@ -286,7 +296,9 @@ class MpvPlayer():
     def _getReady(self):
         self.mediaPlayer.observe_property("estimated-vf-fps", self._onReadyWait)
         with self.seekLock:  
-            self.isReadable=self.seekLock.wait(timeout=15)
+            res = self.seekLock.wait(timeout=15)#networking=15
+            broken = self.lastError in self.ERR_IDS
+            self.isReadable=res and not broken 
     
     def _onReadyWait(self,name,val):
         if val is not None:
@@ -295,7 +307,13 @@ class MpvPlayer():
                     Log.logInfo("fps detected: %.5f"%(val))
                     self.setFPS(val)
                     self.seekLock.notify()
-                    
+    
+    def _passLog(self,loglevel, component, message):
+        msg='{}: {}'.format(component, message)
+        Log.logError(msg)
+        with self.seekLock:
+            self.lastError=message
+            self.seekLock.notifyAll()
                     
                 
     def timePos(self):
@@ -307,7 +325,7 @@ class MpvPlayer():
     def connectTo(self,func):
         self._frameInfoFunc=func
     
-    #hack for transport streams
+    #tweak for transport streams
     def tweakTansportStreamSettings(self,isInterlaced):
         Log.logInfo("Transport stream. Setting seek offset to 1.5 and interlacing: %d"%(isInterlaced))
         self.mediaPlayer.hr_seek_demuxer_offset=1.5#Solution for mpegts seek
@@ -316,13 +334,21 @@ class MpvPlayer():
  
     def tweakUHD(self):
         Log.logInfo("UHD, set stream size")
-        self.mediaPlayer.stream_buffer_size='256MiB' 
-        #self.mediaPlayer.hr_seek_demuxer_offset=2.5 
-        #self.mediaPlayer.demuxer_backward_playback_step=1024        
-        #self.mediaPlayer.demuxer_lavf_probescore=100   
-        #self.mediaPlayer.demuxer_lavf_probesize=1000
-        #self.mediaPlayer.demuxer_lavf_probe_info='yes'
-          
+        self.mediaPlayer.stream_buffer_size='255MiB' 
+ 
+    def togglePlay(self):
+        if self.mediaPlayer is None:
+            return False
+        if self.mediaPlayer.eof_reached:
+            return False
+        
+        playing = self.mediaPlayer.pause #property
+        if playing:
+            self.mediaPlayer["mute"]="no" #option
+        else:
+            self.mediaPlayer["mute"]="yes"
+        self.mediaPlayer.pause=not playing
+        return playing        
  
     def mpvVersion(self):
         return self.mediaPlayer.mpv_version
@@ -332,6 +358,7 @@ class MpvPlayer():
         self.play_func=func
         
     def syncToStart(self):
+        self.seek(0)
         self._onTimePos("timepos", self.timePos())
 
 class MpvPlugin():
@@ -340,6 +367,7 @@ class MpvPlugin():
         self.player=None
         self.iconSize=iconSize
         self.controller=None #VCControl
+        self.sliderThread=SliderThread(self.onSeek)
     
     def initPlayer(self,filePath, streamData):
         import locale
@@ -363,7 +391,12 @@ class MpvPlugin():
     
     def closePlayer(self):
         if self.player:
-            self.player.close()      
+            self.player.close() 
+            self.player=None
+        
+    def shutDown(self):
+        self.closePlayer()
+        self.sliderThread.stop()
     
     def createWidget(self,parent):
         self.mpvWidget=VideoWidget(parent)
@@ -384,6 +417,13 @@ class MpvPlugin():
             #set: cutEntry.frameNumber=self.player.getCurrentFrameNumber()    
         cutEntry.timePosMS=self.player.timePos()*1000 #Beware +1!
         cutEntry.pix = self._makeThumbnail(pilImage)
+    
+    def info(self):
+        data={}
+        if self.player is not None:
+            data["Mpv version"] = self.player.mpvVersion()
+            data["Mpv dur"]=str(self.player.duration)
+        return data
     
     def _makeThumbnail(self,qImage):
         pix = QtGui.QPixmap.fromImage(qImage)
@@ -428,39 +468,75 @@ class MpvPlugin():
         #self._showPos()
 
     #slider    
-    def enqueueFrame(self,fn): #Slider stuff
-        self.player.seek(fn)
+    def enqueueFrame(self,frameNumber): #Slider stuff
+        self.sliderThread.seekTo(frameNumber)
+        #self.player.seek(frameNumber)
         #self._showPos()
 
     #spinbutton    
     def setFrameDirect(self,frameNumber):
-        self.player.seek(frameNumber)
-        #self.player.updateInfo(frameNumber) #intended hack for spin button
-                
+        #self.player.seek(frameNumber) #direct in Main thread
+        self.sliderThread.seekTo(int(frameNumber)) #pass it to slider thread
         
     #dial
     def onDial(self,pos):
         self.player.seekStep(pos)
         #self._showPos()
 
+    def onSeek(self,frameNumber):
+        if self.player:
+            self.player.seek(frameNumber) 
+        #return self.player.getCurrentFrameNumber()
+
     def toggleVideoPlay(self):
-       
-        playing = self.player.mediaPlayer.pause #property
-        if playing:
-            self.player.mediaPlayer["mute"]="no" #option
-        else:
-            self.player.mediaPlayer["mute"]="yes"
-        self.player.mediaPlayer.pause=not playing
-        return playing
+        if self.player is None:
+            return False
+        return self.player.togglePlay()
+    
+    def changeSettings(self,key,value):
+        if self.player is not None:
+            self.player.changeSettings(key,value)                
     
     def markStopPlay(self,boolval):
         #MPVEventHandlerThread-pass it over to the main thread.
         #correct: self.mpvWidget.triggerPlayerControls(boolval)
         self.controller.syncVideoPlayerControls(boolval)
         
-    
 
-    '''
-    def _showPos(self):
-        self.player.updateInfo()
-    '''    
+
+#takes the requests and only sends the actual framenumber to the player - makes the slider faster and the queue lighter        
+class SliderThread(QtCore.QThread):
+    def __init__(self,func):
+        QtCore.QThread.__init__(self)
+        self.delay=0
+        self.condition = QtCore.QWaitCondition()
+        self.mutex = QtCore.QMutex()
+        self.func=func #function will be executed here, not in main thread
+        self.pos=0
+        #self.current=0
+        self.__running=True
+        self.start()
+        
+        
+    def run(self):
+        while self.__running:
+            curr=-1
+            while self.pos != curr:
+                curr=self.pos
+                self.func(self.pos)
+
+            self.__wait() #wait until needed
+    
+    def __wait(self):
+        self.mutex.lock()
+        self.condition.wait(self.mutex)
+        self.mutex.unlock()
+    
+    def stop(self):
+        self.__running=False
+        self.condition.wakeOne()
+    
+    def seekTo(self,fn):
+        self.pos = fn
+        self.condition.wakeOne()#wake up the long wait
+        

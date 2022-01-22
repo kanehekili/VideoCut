@@ -433,6 +433,13 @@ class CvPlugin():
         if self.player:
             self.player.close()
         self.player=None        
+   
+    def changeSettings(self,key,value):
+        pass
+    
+    def shutDown(self):
+        self.closePlayer()
+        #TODO: terminate slider thread when fixed
 
     def validate(self):
         if self.player:
@@ -469,6 +476,8 @@ class CvPlugin():
     def showBanner(self):
         self.cvWidget.showFrame(None)
     
+    def info(self):
+        return cvInfo
     
     def _initSliderThread(self):
         if self.sliderThread is not None:

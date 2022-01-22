@@ -7,6 +7,7 @@
 		<property name="icons" value="${rootDir}/icons"/>
 		<property name="data" value="${rootDir}/data"/>
 		<property name="ffmpeg" value="${rootDir}/ffmpeg"/>
+		<property name="mpv" value="${rootDir}/lib"/>
 		<property name="aurTarget" value="AUR"/>
 		<delete dir="${stage}"/>
 		<delete dir="${aurTarget}"/>
@@ -15,6 +16,7 @@
 		<mkdir dir="${icons}"/>
 		<mkdir dir="${data}"/>
 		<mkdir dir="${ffmpeg}"/>
+		<mkdir dir="${mpv}"/>
 		<mkdir dir="${aurTarget}"/>
 
 		<property name="source" value="../src"/>
@@ -23,6 +25,7 @@
 		<property name="aurSource" value="AUR-template"/>
 		<property name="srcffmpeg" value="${source}/ffmpeg"/>
 		<property name="srcdata" value="${source}/data"/>
+		<property name="srcmpv" value="${source}/lib"/>
 		
 		<copy todir="${rootDir}">
 			<fileset file="*.desktop">
@@ -46,11 +49,17 @@
 			<fileset dir="${srcffmpeg}">
 			</fileset>
 		</copy>		
+		<copy todir="${mpv}">
+			<fileset file="${srcmpv}\mpv.py"/>
+		</copy>		
+
 		<chmod file="${ffmpeg}/bin/V3/remux5" perm="uo+rwx"/>
 		<chmod file="${ffmpeg}/bin/V4/remux5" perm="uo+rwx"/>
 
 		<copy todir="${rootDir}">
-			<fileset file="${source}/FFMPEGTools.py" />
+			<fileset file="${source}/*.py" >
+			   <exclude name="VideoCut.py"/>
+			</fileset>
 		</copy>	
 				
 		<copy todir="${rootDir}">

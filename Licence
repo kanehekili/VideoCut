@@ -11,7 +11,8 @@
     You should have received a copy of the GNU General Public License
     along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-    In addition the code uses opencv and ffmpg:
+    In addition the code uses opencv,mpv and ffmpg:
 
     *http://opencv.org/license.html
     *https://www.ffmpeg.org/legal.html
+    *https://github.com/mpv-player/mpv/blob/master/LICENSE.GPL

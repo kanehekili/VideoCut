@@ -1,7 +1,17 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-# 2014-2020 kanehekili (mat.wegmann@gmail.com)
+# copyright (c) 2022 kanehekili (mat.wegmann@gmail.com)
+# This program is free software: you can redistribute it and/or modify it under the terms of the GNU General Public License,
+# as published by the Free Software Foundation, either version 2 of the License, or (at your option) any
+# later version.
 #
+# This program is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied
+# warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the  GNU General Public License for more
+# details.
+#
+# You should have received a copy of the  GNU General Public License along with this program.  If not, see
+# <http://www.gnu.org/licenses/>.
+
 
 import sys, traceback, math, getopt
 
@@ -345,10 +355,14 @@ class LayoutWindow(QWidget):
         self.ui_Dial.setMaximum(round(resolution / 2))
 
     #pos correction from somewhere else (edit or dial) -no need to trigger anything
-    def syncSliderPos(self,pos): #try self.ui_Slider.value()?->bits overconsumption error & fail
-        self.ui_Slider.blockSignals(True)
-        self.ui_Slider.setSliderPosition(pos)
-        self.ui_Slider.blockSignals(False)
+    def syncSliderPos(self,pos): 
+        if pos == self.ui_Slider.value():
+            return
+        if not self.ui_Slider.isSliderDown():
+            self.ui_Slider.blockSignals(True)
+            self.ui_Slider.setSliderPosition(pos)
+            self.ui_Slider.blockSignals(False)
+            
     
     def setSliderTicks(self, ticks):
         self.ui_Slider.setSingleStep(ticks)
@@ -601,7 +615,7 @@ class MainFrame(QtWidgets.QMainWindow):
         #TODO good place?
         
         widgets.ui_VideoFrame.trigger.connect(self._videoController._onUpdateInfo)
-        
+        self.settings.trigger.connect(self._videoController.onSettingsChanged)
         
         # connect the labels to their dialogs
 
@@ -704,6 +718,9 @@ class MainFrame(QtWidgets.QMainWindow):
     def saveVideo(self):
         initalPath = self._videoController.getSourceFile()#The original filename...
         targetPath = self._videoController.getTargetFile()
+        if not targetPath:
+            self.showWarning("Can't process file!")
+            return
         extn = self._videoController.getAllowedExtensions()
         fileFilter = "Video Files (%s);;All Files(*.*)" % extn
         result = QtWidgets.QFileDialog.getSaveFileName(parent=self, directory=targetPath, filter=fileFilter, caption="Save Video");
@@ -750,15 +767,16 @@ class MainFrame(QtWidgets.QMainWindow):
             entries = []
             entries.append("""<br><\br><table border=0 cellspacing="3",cellpadding="2">""")
             #TODO -check the cvInfos (CvPlayer)
-            '''
-            for key, value in cvInfo.items():
+            
+            #for key, value in cvInfo.items():
+            for key, value in VideoPlugin.info().items():
                 entries.append("<tr border=1><td><b>")
                 entries.append(key)
                 entries.append(":</b></td><td> ")
                 entries.append(value)
                 entries.append("</td></tr>")
             entries.append("</table>");
-            '''
+            
             text2 = ''.join(entries)
                                         
         except:
@@ -835,7 +853,7 @@ class MainFrame(QtWidgets.QMainWindow):
         return dlg;
     
     def closeEvent(self,event):
-        VideoPlugin.closePlayer()
+        self._videoController.shutDown()
         try:
             super(MainFrame, self).closeEvent(event)
         except:
@@ -873,13 +891,16 @@ class LanguageModel():
 '''
 
 
-class SettingsModel():
-
+class SettingsModel(QtCore.QObject):
+    trigger = pyqtSignal(object)
+    
     def __init__(self, mainframe):
         # keep flags- save them later
+        super(SettingsModel, self).__init__()
         self.fastRemux = vc_config.getBoolean("useRemux",True)
         self.reencoding = vc_config.getBoolean("recode",False)
         self.mainFrame = mainframe
+        self.showSubid=vc_config.getInt("subtitles",0)  #id if subtitle should be presented. mpv only
     
     def update(self):
         cutmode = "Fast"
@@ -901,7 +922,9 @@ class SettingsModel():
             vc_config.set("recode", "True")
         else:
             vc_config.set("recode", "False")
+        vc_config.set("subtitles",str(self.showSubid))
         vc_config.store()
+        self.trigger.emit(self)
         
     def getPreferedLanguageCodes(self):
         lang = vc_config.get("LANG")
@@ -910,6 +933,9 @@ class SettingsModel():
         else:
             lang = json.loads(lang)
         return lang
+
+    def processSubtitles(self):
+        return self.showSubid>0
 
     def setPreferedLanguageCodes(self, langList):
         vc_config.set("LANG", json.dumps(langList))
@@ -947,6 +973,10 @@ class SettingsDialog(QtWidgets.QDialog):
         frame2.setFrameStyle(QtWidgets.QFrame.Box | QtWidgets.QFrame.Sunken)
         frame2.setLineWidth(1)
        
+        #frame3 = QtWidgets.QFrame()
+        #frame3.setFrameStyle(QtWidgets.QFrame.Box | QtWidgets.QFrame.Sunken)
+        #frame3.setLineWidth(1)
+       
         encodeBox = QtWidgets.QVBoxLayout(frame1)
         self.check_reencode = QtWidgets.QCheckBox("Reencode (Slow!)")
         self.check_reencode.setToolTip("Force exact cut. Makes it real slow!")
@@ -957,11 +987,19 @@ class SettingsDialog(QtWidgets.QDialog):
         self.exRemux.setToolTip("Uses the fast remux code instead of ffmpeg commandline")
         self.exRemux.setChecked(self.model.fastRemux)
         self.exRemux.stateChanged.connect(self.on_fastRemuxChanged)
-        
+
+        self.showSub = QtWidgets.QCheckBox("Show subtitles")
+        self.showSub.setToolTip("Toggle show subtitles (mpv only)")
+        self.showSub.setChecked(self.model.showSubid>0)
+        self.showSub.stateChanged.connect(self._onSubChanged)                 
+
         encodeBox.addWidget(self.check_reencode)
-       
-        expoBox = QtWidgets.QVBoxLayout(frame2)
-        expoBox.addWidget(self.exRemux)
+        encodeBox.addWidget(self.exRemux)
+        #expoBox = QtWidgets.QVBoxLayout(frame2)
+        #expoBox.addWidget(self.exRemux)
+        
+        subBox= QtWidgets.QVBoxLayout(frame2)
+        subBox.addWidget(self.showSub)
         
         outBox.addLayout(versionBox)
         outBox.addWidget(frame1)
@@ -981,7 +1019,15 @@ class SettingsDialog(QtWidgets.QDialog):
         
     def on_fastRemuxChanged(self, isFastRemux):
         self.model.fastRemux = QtCore.Qt.Checked == isFastRemux
-        self.model.update()    
+        self.model.update() 
+    
+    def _onSubChanged(self,showsub):
+        if showsub:
+            val=1
+        else:
+            val=0
+        self.model.showSubid=val
+        self.model.update()       
 
         
 class LanguageSettingsDialog(QtWidgets.QDialog):
@@ -1191,8 +1237,8 @@ class VideoControl(QtCore.QObject):
             self.setFile(self._currentFile)
             
     def _initTimer(self):
-        self._dx=DialThread(self._dxDialFrame)#exec in dial thread
-        #self._dx.triggered.connect(self._dxDialFrame) #if in main thread-blocks any input
+        self._dialThread=DialThread(self._dxDialFrame)#exec in dial thread
+        #self._dialThread.triggered.connect(self._dxDialFrame) #if in main thread-blocks any input
    
     #Why use soureextension? This may not be the original one.
     def getSourceFile(self):
@@ -1212,7 +1258,11 @@ class VideoControl(QtCore.QObject):
     def getTargetFile(self):
         if self.streamData is not None:
             ext = self.streamData.getTargetExtension()
+            if ext is None:
+                return None 
             target= self.currentPath + "." + ext
+            if target is None:
+                return None 
             if self._currentFile == target:
                 target= self.currentPath + "-cut." + ext
             return target 
@@ -1254,7 +1304,7 @@ class VideoControl(QtCore.QObject):
             self.gui.enableControls(True)
             self.gui.enableActions(True)
             
-
+            self.onSettingsChanged(self.gui.settings)
             self.gui.updateWindowTitle(OSTools().getFileNameOnly(filePath))
             self._initVideoViews()
         except:
@@ -1433,7 +1483,7 @@ class VideoControl(QtCore.QObject):
     FFMPEG cutting API
     '''    
     def __makeCuts(self, srcPath, targetPath, spanns, settings):
-        config = CuttingConfig(srcPath, targetPath, settings.getPreferedLanguageCodes())
+        config = CuttingConfig(srcPath, targetPath, settings.getPreferedLanguageCodes(),settings.processSubtitles())
         config.streamData = self.streamData
         config.reencode = settings.reencoding
         config.messenger = self.statusbar()
@@ -1454,7 +1504,7 @@ class VideoControl(QtCore.QObject):
     new VCCutter API
     '''
     def __directCut(self, srcPath, targetPath, spanns, settings):
-        config = CuttingConfig(srcPath, targetPath, settings.getPreferedLanguageCodes())
+        config = CuttingConfig(srcPath, targetPath, settings.getPreferedLanguageCodes(),settings.processSubtitles())
         config.streamData = self.streamData
         config.messenger = self.statusbar()
         config.reencode = settings.reencoding
@@ -1493,33 +1543,21 @@ class VideoControl(QtCore.QObject):
     
     # connected to the dial
     def dialChanged(self, pos):
-        self._dialStep=pos
         if pos == 0:
-            self._dx.dialStep(0,0)
+            self._dialThread.dialStep(0,0)
             return
 
         res = math.exp((-0.2*abs(pos) +7.0)/ 3.0)
         steps = math.copysign(1, pos)*math.ceil(abs(pos)/5)
         ts=round(res*20)
-        self._dx.dialStep(int(ts),steps)
+        self._dialThread.dialStep(int(ts),steps)
  
-    #test by dialThread-via "func" runs in dummy thread, via signal in main
+    #called by dialThread-via "func" runs in dial thread, (via signal in main)
     def _dxDialFrame(self,pos):
         QApplication.processEvents()
         VideoPlugin.onDial(pos)
     
     
-    #called by plugin: self.updateUI.emit(frameNumber,self.player.framecount,timeinfo)
-    def _onUpdateInfo(self,frameNbr,frameCount,timeMS):
-        s = int(timeMS / 1000)
-        ms = int(timeMS % 1000)
-        ts = '{:02}:{:02}:{:02}.{:03}'.format(s // 3600, s % 3600 // 60, s % 60, ms)
-        out = "<b>Frame:</b> %08d of %d <b>Time:</b> %s " % (frameNbr, int(frameCount) , ts)
-        sliderPos = int(frameNbr * LayoutWindow.SLIDER_RESOLUTION / frameCount)
-        self.gui.showInfo(out)
-        self.gui.syncSpinButton(frameNbr) 
-        self.gui.syncSliderPos(sliderPos)
-        
     def takeScreenShot(self):
         if self.player is None:
             return;
@@ -1535,10 +1573,28 @@ class VideoControl(QtCore.QObject):
         self.gui.setVideoPlayerControls(isPlaying)
         return isPlaying
  
+    def shutDown(self):
+        VideoPlugin.shutDown()
+        self._dialThread.stop()
+ 
+    #callback settings
+    def onSettingsChanged(self,settingsModel):
+        VideoPlugin.changeSettings("subtitle",settingsModel.showSubid)
 
     '''
     plugin callbacks
     '''
+    #called by plugin: self.updateUI.emit(frameNumber,self.player.framecount,timeinfo)
+    def _onUpdateInfo(self,frameNbr,frameCount,timeMS):
+        s = int(timeMS / 1000)
+        ms = int(timeMS % 1000)
+        ts = '{:02}:{:02}:{:02}.{:03}'.format(s // 3600, s % 3600 // 60, s % 60, ms)
+        out = "<b>Frame:</b> %08d of %d <b>Time:</b> %s " % (frameNbr, int(frameCount) , ts)
+        sliderPos = int(frameNbr * LayoutWindow.SLIDER_RESOLUTION / frameCount)
+        self.gui.showInfo(out)
+        self.gui.syncSpinButton(frameNbr) 
+        self.gui.syncSliderPos(sliderPos)
+                
     def syncVideoPlayerControls(self,enabled):
         print("stop:",threading.currentThread().name)
         self.gui.setVideoPlayerControls(enabled)
@@ -1623,17 +1679,17 @@ class DialThread(QtCore.QThread):
         self.mutex = QtCore.QMutex()
         self.func=func #function will be executed here, not in main thread
         self.step=0
+        self.__running=True
         self.start()
         
     def run(self):
-        while True:
+        while self.__running:
             if self.delay > 0.0:
                 #self.triggered.emit(self.step)#would pass execution to the main thread->massive afterrun
                 self.func(self.step) #Pro: no queue build up
                 self.msleep(self.delay)#any other sleep breaks!
             else:
                 self.__wait() #wait until needed
-
     
     def __wait(self):
         self.mutex.lock()
@@ -1641,7 +1697,8 @@ class DialThread(QtCore.QThread):
         self.mutex.unlock()
     
     def stop(self):
-        pass
+        self.__running=False
+        self.condition.wakeOne()
     
     def dialStep(self,delay,step):
         self.step=step

@@ -13,8 +13,8 @@ sudo ln -s /opt/videocut/VideoCut.py /usr/bin/VideoCut
 
 echo "######################################################################"
 echo "#                  Ensure you have installed:                        #"                     
-echo "#    debian/ubuntu/mint: python3-pyqt5 ffmpeg python3-opencv         #"
-echo "#    arch &derivates:    python-pyqt5 ffmpeg python-opencv           #"
+echo "#    debian/ubuntu/mint: python3-pyqt5 ffmpeg python3-pil libmpv1    #"
+echo "#    arch &derivates:    python-pyqt5 ffmpeg python-pillow mpv       #"
 echo "######################################################################"
 
 echo "App installed."

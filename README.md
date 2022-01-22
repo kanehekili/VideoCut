@@ -1,25 +1,34 @@
 # VideoCut
-Version 1.3.2
+Version 2.0.0
 
-![Download](https://github.com/kanehekili/VideoCut/releases/download/1.3.3/videocut1.3.3.tar)
+![Download](https://github.com/kanehekili/VideoCut/releases/download/2.0.0/videocut2.0.0.tar)
 
-MP2/MP4 Cutter for Linux on base of OpenCV and ffmpeg. Cutting is lossless, the target file will not be reencoded. 
+MP2/MP4 Cutter for Linux on base of mpv and ffmpeg. Cutting is lossless, the target file will not be reencoded. 
 
 It can be used for cutting out certain parts of the film. Has been written in conjunction with the MDVB Recorder for removing ads. Handles avi,mkv,webm,vc1,mp2,mp4 (PS or TS). Other formats not tested but possible.
 
 Lossless cutting implies not to reencode (decode/encode) the frames. So cutting can only be done at "I-Frames". The library searches for the closest Frame at the given cutting point.
 
+Reencoding is possible for exact cutting as well as converting to different containers and codecs.  
+
 The current version is written in python3 and uses the qt5 widget kit.  
 ### Prerequisites
-* python3
-* OpenCV 2.4 or OPENCV 3 (must be build with ffmpeg)
+* Arch: python3, python-pillow and mpv
+* Debian/Mint/Ubuntu: python3 python3-pil libmpv1 (no-recommends)
+* Fedora: python3-pillow-qt and mpv-libs.x86_64
 * ffmpeg > 3.X or 4.0.X
 * python3-pyqt5
-* hdf5 (Arch only)
+* optional:(legacy) OpenCV 2.4 or OPENCV 3 (must be build with ffmpeg)
 
-#### Install dependencies on Linux Mint or Ubuntu (tested from 16.04 to 20.04)
+
+#### Install dependencies on Linux Mint or Ubuntu (tested from 16.04 to 21.10)
 ```
-sudo apt-get install python3-pyqt5 ffmpeg python3-opencv
+sudo apt –no-install-recommends install python3-pyqt5 ffmpeg python3-pil libmpv1
+```
+
+#### Install dependencies on Fedora
+```
+sudo dnf python3-qt5 ffmpeg python3-pillow-qt mpv-libs.x86_64
 ```
 
 #### Set GTK Theme for this QT application
@@ -36,23 +45,30 @@ and logout/login (or reboot)
 ### Features
 Cuts an mpg file into parts and joins them afterwards. All commands can be reached via the toolbar.
 
-![Screenshot](https://github.com/kanehekili/VideoCut/blob/master/Videocut.png)
+![Screenshot](https://github.com/kanehekili/VideoCut/blob/master/Videocut2.png)
 
 The cutout parts will be joined without beeing recoded - the quality stays the same
+
+The frame type (IBP) will be shown at the upper left corner. Subtitles can be displayed (Settings)
+
+Instead of using the ffmpeg command line, Videocut offers its own muxer, which is based on the libavcodec libs. It provides better cuttings results and less artifacts than  ffmpeg.  This is set by default, but can be changed to the ffmpeg command line interface via the "Settings" dialog. 
+
+Videocut supports subtitle cut. This is work in progress. 
+
 ### Limitations
-Using ffmpeg as cutting/joining tool. Some older versions of ffmpeg seem to have problems with syncing audio on avchd (mp4 TS) streams.
+Using ffmpeg as cutting/joining tool some of the older versions of ffmpeg seem to have problems with syncing audio on avchd (mp4 TS) streams. (see Videocut muxer)
 
 Only ffmpeg and libavformat versions >=3.1 are supported. 
 
-OpenCV:  it is necessary to get a version that has been compiled with ffmpeg
-
 :boom: Be aware that this tool does not cut exact on frame - except you reencode the whole film.
+
+:boom: Subtitles come in differents flavours: Image and text. A conversion from image subs to text subs is not supported.
 
 ### Virtualenv or conda 
 The fast remux binary doesn't run in a virtual environment, since the ffmpeg libraries used are not available. The ffmpeg blob could be used, if it would be on the /usr/bin path on the host system. Cross OS binary calls tend be a lot slower that in the native environment - so this software is limited to Linux (native or virtualized)
 
 ### Subtitles
-Finalized in Version 1.3.0.  Not all containers (e.g. mp4) accept subtitles. A AVCH (h264 TS) Stream with DVB_SUB codec cannot be converted into mp4, so your miles may vary if you change the output container (defined by the file extension)
+Finalized in Version 1.3.0, improved in Version 2.0.0.  Not all containers (e.g. mp4) accept subtitles. A AVCH (h264 TS) Stream with DVB_SUB codec cannot be converted into mp4, so your miles may vary if you change the output container (defined by the file extension)
 
 For DVB transport stream you should keep the ".m2t" ending, mkv containers shouldn't be changed either. See [here](https://en.wikipedia.org/wiki/Comparison_of_video_container_formats) for a overview of containers.
 
@@ -75,7 +91,7 @@ For DVB transport stream you should keep the ".m2t" ending, mkv containers shoul
 * The app should be appear in a menu or "Actvities"
 * Can be openend by selecting a video file & Open with...
 * In the terminal can be started via `VideoCut`
-* python qt5, opencv and ffmpeg are required
+* python qt5, mpv and ffmpeg are required
 * you may now remove that download directory.
 * logs can be found in the user home ".config/VideoCut" folder
 
@@ -85,18 +101,22 @@ For DVB transport stream you should keep the ".m2t" ending, mkv containers shoul
 
 ### Still on my list:
 * Exact frame cut - see comment below 
-* Kicking out opencv using SDL and the libavcodec libraries.
+* Differentiate between I-Fames and IDR-Frames
 * Make debs packages for debian/ubuntu
 * Multi language support
 
-### Using remux instead of ffmpeg
-remux5 is a c binary based on ffmpeg, but uses an integrated approach to cut and join videos. It seems to be more precise than the ffmpeg API. It is activated by default. To activate FFMPEG, use the "coggs" icon (or click on the green labels) and deselect "VideoCut Muxer".
-
-Please note that excat cut (i.e. transcoding) is available for remux5. Its an optimized library based on libav.
-In most cases this lib is faster than native ffmpeg, the cuts are exact when using the "Exact cut" option. Runs on all threads available. 
+### Using ffmpeg instead of Videocut muxer
+remux5 is a c binary based on the libavcodec library, but uses an integrated approach to cut and join videos. It seems to be more precise than the ffmpeg API. It supports reencoding as well. It is activated by default and runs on all threads available. To activate FFMPEG, use the "coggs" icon (or click on the green labels) and deselect "VideoCut Muxer".
 
 ### Exact frame cut for one GOP only?
 Can't be really implemented with the ffmpeg ABI. The transcoded part will have different coding parameters than the rest of the stream. A decoder cannot handle that change. On the other hand there is no way to transcode the GOP with the exact parameters of the original stream, since only a subset of h264 paramenters are accepted by the ffmpeg ABI. 
+
+### Legacy Opencv
+Since Videocut ran with OpenCV for many years it is still available. If needed it has to be downloaded 
+* python3-opencv
+* hdf5 (Arch only)
+
+Replace the "True" to "False" in line 51 of Videocut.py.
 
 ### Changes 
 08.07.2016
@@ -184,3 +204,8 @@ Can't be really implemented with the ffmpeg ABI. The transcoded part will have d
 25.11.2021
 * ISO Code refactoring
 * Bugfixing UI/Errorhandling
+
+21.01.2022
+* Replaced OpenCV with mpv for visualizing
+* Show frame info and subtitles (inspired by @ https://github.com/lxs602)
+* Reworked the ffmpeg API & improved some more subtitle features
