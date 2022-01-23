@@ -1,7 +1,7 @@
 '''
 Created on Dec 10, 2021
 Opencv related stuff
-@author: matze
+@author: kanehekili
 '''
 
 from PyQt5.QtWidgets import QApplication

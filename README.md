@@ -9,7 +9,9 @@ It can be used for cutting out certain parts of the film. Has been written in co
 
 Lossless cutting implies not to reencode (decode/encode) the frames. So cutting can only be done at "I-Frames". The library searches for the closest Frame at the given cutting point.
 
-Reencoding is possible for exact cutting as well as converting to different containers and codecs.  
+Reencoding is possible for exact cutting as well as converting to different containers and codecs. 
+
+VideoCut supports the cutting of subtitles when "Show subtitles"  in the settings dialog is enabled. This flag will display the "first" subtitles stream and will cut all subtitles that have been defined in the "language" dialog.
 
 The current version is written in python3 and uses the qt5 widget kit.  
 ### Prerequisites
@@ -19,17 +21,6 @@ The current version is written in python3 and uses the qt5 widget kit.
 * ffmpeg > 3.X or 4.0.X
 * python3-pyqt5
 * optional:(legacy) OpenCV 2.4 or OPENCV 3 (must be build with ffmpeg)
-
-
-#### Install dependencies on Linux Mint or Ubuntu (tested from 16.04 to 21.10)
-```
-sudo apt –no-install-recommends install python3-pyqt5 ffmpeg python3-pil libmpv1
-```
-
-#### Install dependencies on Fedora
-```
-sudo dnf python3-qt5 ffmpeg python3-pillow-qt mpv-libs.x86_64
-```
 
 #### Set GTK Theme for this QT application
 If you are running a DE with GTK/Gnome (as opposed to LXQT or KDE) you need to tweak your system:
@@ -64,6 +55,8 @@ Only ffmpeg and libavformat versions >=3.1 are supported.
 
 :boom: Subtitles come in differents flavours: Image and text. A conversion from image subs to text subs is not supported.
 
+:boom: Will not work on wayland. The mpv window behaves strangely
+
 ### Virtualenv or conda 
 The fast remux binary doesn't run in a virtual environment, since the ffmpeg libraries used are not available. The ffmpeg blob could be used, if it would be on the /usr/bin path on the host system. Cross OS binary calls tend be a lot slower that in the native environment - so this software is limited to Linux (native or virtualized)
 
@@ -72,14 +65,41 @@ Finalized in Version 1.3.0, improved in Version 2.0.0.  Not all containers (e.g.
 
 For DVB transport stream you should keep the ".m2t" ending, mkv containers shouldn't be changed either. See [here](https://en.wikipedia.org/wiki/Comparison_of_video_container_formats) for a overview of containers.
 
-### Install VideoCut via AUR (Arch Linux /Manjaro only)
-* Use pamac or other GUI tools, search for "videocut", click install
+##Install
+
+#### Install via ppa on Linux Mint or Ubuntu (focal/Mint20 only)
+```
+sudo add-apt-repository ppa:jentiger-moratai/mediatools
+sudo pat update
+sudo apt install --no-install-recommends install videocut
+```
+(--no-install-recommends will install only what is required)
+Select video and open it with "Open with ->VideoCut", oder via terminal "VideoCut"
+
+Remove with:
+`sudo apt remove videocut`
+
+#### Install VideoCut via AUR (Arch Linux /Manjaro only)
+* Use pamac or other GUI tools, search for "videocut" in AUR, click install
 * Manually :
     * Download [PKGBUILD ](https://aur.archlinux.org/cgit/aur.git/snapshot/videocut.tar.gz)
     * unpack it and go into the "videocut" folder
     * execute `makepkg -s`
-    * excute `sudo pacman -U videocut-1.x.x.x-1-x86_64.pkg.tar.zst` 
+    * excute `sudo pacman -U videocut-2.x.x.x-1-x86_64.pkg.tar.zst` 
     * uninstall via `sudo pacman -Rs videocut`
+
+Select video and open it with "Open with ->VideoCut", oder via terminal "VideoCut"
+
+
+#### Install dependencies manually on Linux Mint or Ubuntu (tested from 16.04 to 21.10)
+```
+sudo apt –no-install-recommends install python3-pyqt5 ffmpeg python3-pil libmpv1
+```
+
+#### Install dependencies on Fedora
+```
+sudo dnf python3-qt5 ffmpeg python3-pillow-qt mpv-libs.x86_64
+```
 
 ### How to install with a terminal
 * Install dependencies (see prerequisites)
@@ -102,7 +122,6 @@ For DVB transport stream you should keep the ".m2t" ending, mkv containers shoul
 ### Still on my list:
 * Exact frame cut - see comment below 
 * Differentiate between I-Fames and IDR-Frames
-* Make debs packages for debian/ubuntu
 * Multi language support
 
 ### Using ffmpeg instead of Videocut muxer

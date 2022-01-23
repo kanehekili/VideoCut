@@ -9,6 +9,9 @@
 		<property name="ffmpeg" value="${rootDir}/ffmpeg"/>
 		<property name="mpv" value="${rootDir}/lib"/>
 		<property name="aurTarget" value="AUR"/>
+		<property name="debTarget" value="debian/DEB"/>
+		<property name="ubu1Target" value="${debTarget}/videocut_${version}-1-${ubu1}"/>
+		<property name="ubu2Target" value="${debTarget}/videocut_${version}-1-${ubu2}"/>
 		<delete dir="${stage}"/>
 		<delete dir="${aurTarget}"/>
 		<mkdir dir="${stage}"/>
@@ -18,7 +21,8 @@
 		<mkdir dir="${ffmpeg}"/>
 		<mkdir dir="${mpv}"/>
 		<mkdir dir="${aurTarget}"/>
-
+		<mkdir dir="${ubu1Target}"/>
+		<mkdir dir="${ubu2Target}"/>
 		<property name="source" value="../src"/>
 		<property name="srcIcons" value="${source}/icons"/>
 
@@ -26,6 +30,8 @@
 		<property name="srcffmpeg" value="${source}/ffmpeg"/>
 		<property name="srcdata" value="${source}/data"/>
 		<property name="srcmpv" value="${source}/lib"/>
+		<property name="debSource" value="debian"/>
+		
 		
 		<copy todir="${rootDir}">
 			<fileset file="*.desktop">
@@ -96,5 +102,83 @@
 		<exec dir="${aurTarget}" executable="makepkg" output="${aurTarget}/.SRCINFO" os="Linux">
 		 <arg value="--printsrcinfo"/> 
 		</exec>
+		
+		<!-- DEBBUILD ubu1-->
+		<copy todir="${ubu1Target}">
+			<fileset dir="debian/videocut-template"/>
+			<filterset>
+				<filter token="ubu" value="${ubu1}"/>
+				<filter token="xxx" value="${version}"/>
+			</filterset>			
+			
+		</copy>
+		<mkdir dir="${ubu1Target}/addons"/>
+		<mkdir dir="${ubu1Target}/debian"/>
+		<mkdir dir="${ubu1Target}/src"/>
+		<mkdir dir="${ubu1Target}/src/ffmpeg/bin/V4"/>
+		<copy todir="${ubu1Target}/src/icons">
+			<fileset dir="${srcIcons}">
+			</fileset>
+		</copy>		
+		<copy todir="${ubu1Target}/src/data">
+			<fileset file="${srcdata}\countryIso639.json"/>
+		</copy>	
+		<copy todir="${ubu1Target}/src/ffmpeg/src">
+			<fileset file="${srcffmpeg}/src/remux5.c"/>
+		</copy>				
+		<copy todir="${ubu1Target}/src/lib">
+			<fileset file="${srcmpv}\mpv.py"/>
+		</copy>		
+		<copy todir="${ubu1Target}/src">
+			<fileset file="${source}/*.py" />
+			<filterset>
+			    <filter token="xxx" value="${version}"/>
+			</filterset>
+		</copy>
+		<copy todir="${ubu1Target}/addons">
+			<fileset file="*.desktop"/>
+		</copy>
+		<copy todir="${ubu1Target}">
+		    <fileset file="${srcffmpeg}/src/makefile"/>
+		</copy>
+		<!-- DEBBUILD ubu2-->
+		<copy todir="${ubu2Target}">
+			<fileset dir="debian/videocut-template"/>
+			<filterset>
+				<filter token="ubu" value="${ubu2}"/>
+				<filter token="xxx" value="${version}"/>
+			</filterset>			
+			
+		</copy>
+		<mkdir dir="${ubu2Target}/addons"/>
+		<mkdir dir="${ubu2Target}/debian"/>
+		<mkdir dir="${ubu2Target}/src"/>
+		<mkdir dir="${ubu2Target}/src/ffmpeg/bin/V4"/>
+		<copy todir="${ubu2Target}/src/icons">
+			<fileset dir="${srcIcons}">
+			</fileset>
+		</copy>		
+		<copy todir="${ubu2Target}/src/data">
+			<fileset file="${srcdata}\countryIso639.json"/>
+		</copy>	
+		<copy todir="${ubu2Target}/src/ffmpeg/src">
+			<fileset file="${srcffmpeg}/src/remux5.c"/>
+		</copy>				
+		<copy todir="${ubu2Target}/src/lib">
+			<fileset file="${srcmpv}\mpv.py"/>
+		</copy>		
+		<copy todir="${ubu2Target}/src">
+			<fileset file="${source}/*.py" />
+			<filterset>
+			    <filter token="xxx" value="${version}"/>
+			</filterset>
+		</copy>
+		<copy todir="${ubu2Target}/addons">
+			<fileset file="*.desktop"/>
+		</copy>
+		<copy todir="${ubu2Target}">
+		    <fileset file="${srcffmpeg}/src/makefile"/>
+		</copy>
+				
 	</target>
 </project>	
