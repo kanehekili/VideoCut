@@ -1,0 +1,9 @@
+Format: http://www.debian.org/doc/packaging-manuals/copyright-format/1.0/
+Upstream-Name: videocut
+Upstream-Contact: kanehekili, <mat.wegmann@gmail.com>
+
+Files: *
+Copyright: 2022, kanehekili, <mat.wegmann@gmail.com>
+License: GPL-2+ and MIT
+ Full text of licence can be found in /usr/share/common-licenses
+

@@ -9,11 +9,15 @@
 		<property name="ffmpeg" value="${rootDir}/ffmpeg"/>
 		<property name="mpv" value="${rootDir}/lib"/>
 		<property name="aurTarget" value="AUR"/>
-		<property name="debTarget" value="debian/DEB"/>
-		<property name="ubu1Target" value="${debTarget}/videocut_${version}-1-${ubu1}"/>
-		<property name="ubu2Target" value="${debTarget}/videocut_${version}-1-${ubu2}"/>
+		<property name="debTarget" value="DEB"/>
+		<property name="ubu1Build" value="videocut_${version}-${pkgrelease}-${ubu1}"/>
+		<property name="ubu2Build" value="videocut_${version}-${pkgrelease}-${ubu2}"/>		
+		<property name="ubu1Target" value="${stage}/${ubu1Build}"/>
+		<property name="ubu2Target" value="${stage}/${ubu2Build}"/>		
+
 		<delete dir="${stage}"/>
 		<delete dir="${aurTarget}"/>
+		<delete dir="${debTarget}"/>
 		<mkdir dir="${stage}"/>
 		<mkdir dir="${rootDir}"/>
 		<mkdir dir="${icons}"/>
@@ -21,6 +25,7 @@
 		<mkdir dir="${ffmpeg}"/>
 		<mkdir dir="${mpv}"/>
 		<mkdir dir="${aurTarget}"/>
+		<mkdir dir="${debTarget}"/>
 		<mkdir dir="${ubu1Target}"/>
 		<mkdir dir="${ubu2Target}"/>
 		<property name="source" value="../src"/>
@@ -30,8 +35,6 @@
 		<property name="srcffmpeg" value="${source}/ffmpeg"/>
 		<property name="srcdata" value="${source}/data"/>
 		<property name="srcmpv" value="${source}/lib"/>
-		<property name="debSource" value="debian"/>
-		
 		
 		<copy todir="${rootDir}">
 			<fileset file="*.desktop">
@@ -88,7 +91,6 @@
 			<arg value="--directory=${stage}"/>
 			<arg value="videocut"/>
 		</exec>
-		<delete dir="${stage}"/>
 		
 		<!-- PKBUILD -->
 		<checksum file="videocut${version}.tar" property="aurMD5"/>
@@ -97,21 +99,28 @@
 			<filterset>
 				<filter token="md5sum" value="${aurMD5}"/>
 				<filter token="xxx" value="${version}"/>
+				<filter token="xpkgrelx" value="${pkgrelease}"/>
 			</filterset>
 		</copy>		
 		<exec dir="${aurTarget}" executable="makepkg" output="${aurTarget}/.SRCINFO" os="Linux">
 		 <arg value="--printsrcinfo"/> 
 		</exec>
+
+		<tstamp>
+    	 	<format property="time.stamp" pattern="EEE, d LLL yyyy HH:mm:ss"/>
+		</tstamp>
 		
 		<!-- DEBBUILD ubu1-->
 		<copy todir="${ubu1Target}">
-			<fileset dir="debian/videocut-template"/>
+			<fileset dir="DEB-template"/>
 			<filterset>
 				<filter token="ubu" value="${ubu1}"/>
 				<filter token="xxx" value="${version}"/>
+				<filter token="xpkgrelx" value="${pkgrelease}"/>
+				<filter token="xtsx" value="${time.stamp}"/>				
 			</filterset>			
-			
 		</copy>
+		
 		<mkdir dir="${ubu1Target}/addons"/>
 		<mkdir dir="${ubu1Target}/debian"/>
 		<mkdir dir="${ubu1Target}/src"/>
@@ -135,18 +144,31 @@
 			    <filter token="xxx" value="${version}"/>
 			</filterset>
 		</copy>
+		
+		<chmod file="${ubu1Target}/src/VideoCut.py" perm="ug+rwx"/>
+		
 		<copy todir="${ubu1Target}/addons">
 			<fileset file="*.desktop"/>
 		</copy>
 		<copy todir="${ubu1Target}">
 		    <fileset file="${srcffmpeg}/src/makefile"/>
 		</copy>
+		<exec executable="tar" output="/dev/null" os="Linux">
+			<arg value="-cp"/>
+			<arg value="--file=${debTarget}/${ubu1Build}.tar"/>
+			<arg value="--directory=${stage}"/>
+			<arg value="${ubu1Build}"/>
+		</exec>
+		
+		
 		<!-- DEBBUILD ubu2-->
 		<copy todir="${ubu2Target}">
-			<fileset dir="debian/videocut-template"/>
+			<fileset dir="DEB-template"/>
 			<filterset>
 				<filter token="ubu" value="${ubu2}"/>
 				<filter token="xxx" value="${version}"/>
+				<filter token="xpkgrelx" value="${pkgrelease}"/>
+				<filter token="xtsx" value="${time.stamp}"/>				
 			</filterset>			
 			
 		</copy>
@@ -173,12 +195,20 @@
 			    <filter token="xxx" value="${version}"/>
 			</filterset>
 		</copy>
+		<chmod file="${ubu2Target}/src/VideoCut.py" perm="ug+rwx"/>
 		<copy todir="${ubu2Target}/addons">
 			<fileset file="*.desktop"/>
 		</copy>
 		<copy todir="${ubu2Target}">
 		    <fileset file="${srcffmpeg}/src/makefile"/>
 		</copy>
-				
+		<exec executable="tar" output="/dev/null" os="Linux">
+			<arg value="-cp"/>
+			<arg value="--file=${debTarget}/${ubu2Build}.tar"/>
+			<arg value="--directory=${stage}"/>
+			<arg value="${ubu2Build}"/>
+		</exec>	
+		
+		<delete dir="${stage}"/>		
 	</target>
 </project>	

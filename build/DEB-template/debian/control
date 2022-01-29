@@ -1,0 +1,15 @@
+Source: videocut
+Maintainer: kanehekili <mat.wegmann@gmail.com>
+Section: video
+Priority: optional
+Build-Depends: python3, debhelper, python3-pyqt5, libc6-dev, libavcodec-dev, libavformat-dev
+Standards-Version: 2.0.0
+
+
+
+Architecture: all
+Depends: python3, ffmpeg, python3-pyqt5, python3-pil, libmpv1, ${shlibs:Depends}, ${misc:Depends}
+Description: Fast and lossless videocutter for mp2,mp4,mkv,av-1 and more 
+Section: video
+Package: videocut
+Priority: optional
