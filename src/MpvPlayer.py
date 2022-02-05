@@ -71,6 +71,7 @@ class MpvPlayer():
         self.play_func=None
         self._lastDispatch=0.0
         self.lastError=""
+        self._readyMsgCount=0
     
     def initPlayer(self,container):
         self.mediaPlayer = MPV(wid=str(int(container.winId())),#these are all options, can be accessed with mediaPlayer[option] (props with mp.prop)
@@ -222,9 +223,7 @@ class MpvPlayer():
             
         self.mediaPlayer.observe_property("time-pos",self._onTimePos) #messes up timing!
         self.mediaPlayer.observe_property("eof-reached",self._onPlayEnd)
-        #self.mediaPlayer.observe_property("estimated-vf-fps",self._onFps)    
         #mostly wrong: self.mediaPlayer.observe_property("estimated-frame-count",self._onFramecount)
-        self.mediaPlayer.observe_property("duration",self._onDuration)
         self.mediaPlayer.observe_property("video-frame-info",self._onFrameInfo)
             
     def _onPropertyChange(self,name,pos):
@@ -295,25 +294,31 @@ class MpvPlayer():
             
     def _getReady(self):
         self.mediaPlayer.observe_property("estimated-vf-fps", self._onReadyWait)
+        self.mediaPlayer.observe_property("duration", self._onReadyWait)
         with self.seekLock:  
-            res = self.seekLock.wait(timeout=15)#networking=15
+            res = self.seekLock.wait(timeout=15.0)#networking=15
             broken = self.lastError in self.ERR_IDS
             self.isReadable=res and not broken 
     
     def _onReadyWait(self,name,val):
         if val is not None:
             with self.seekLock:
-                    self.mediaPlayer.unobserve_property("estimated-vf-fps",self._onReadyWait)
-                    Log.logInfo("fps detected: %.5f"%(val))
-                    self.setFPS(val)
-                    self.seekLock.notify()
+                    self.mediaPlayer.unobserve_property(name,self._onReadyWait)
+                    if name == "estimated-vf-fps":
+                        self.setFPS(val)
+                    else:
+                        self._onDuration(name, val)
+                    self._readyMsgCount+=1
+                    if self._readyMsgCount == 2:
+                        self.seekLock.notify()
     
     def _passLog(self,loglevel, component, message):
         msg='{}: {}'.format(component, message)
         Log.logError(msg)
         with self.seekLock:
             self.lastError=message
-            self.seekLock.notifyAll()
+            if "file" in message:
+                self.seekLock.notifyAll()
                     
                 
     def timePos(self):
@@ -439,25 +444,34 @@ class MpvPlugin():
         ff_FrameCount = round(ff_fps*duration)
         isUHD = float(videoInfo.getWidth())>3000.0
         interlaced = videoInfo.isInterlaced()
+        frameCount= self.player.framecount
+        if not frameCount:
+            frameCount=0
+        fps=self.player.fps
+        if not fps:
+            fps=1.0
         #rot = streamData.getRotation()
         #ratio = streamData.getAspectRatio()
-        Log.logInfo("Analyze MPV frameCount:%d fps:%.3f /FFMPEG frameCount:%d fps:%.3f, interlaced:%d"%(self.player.framecount,self.player.fps,ff_FrameCount,ff_fps,interlaced))   
+        Log.logInfo("Analyze MPV frameCount:%d fps:%.3f /FFMPEG frameCount:%d fps:%.3f, interlaced:%d"%(frameCount,fps,ff_FrameCount,ff_fps,interlaced))   
         
-        fps_check= abs((self.player.fps/ff_fps)-1)
+        fps_check= abs(self._secureDiv(self.player.fps,ff_fps)-1)
         #if fps_check >0.1:
         Log.logInfo("Setting FPS into MPV, ratio: %.3f setting fps %.3f"%(fps_check,ff_fps))
         self.player.setFPS(ff_fps)
             
-        fcCheck= (self.player.framecount/ff_FrameCount)
+        fcCheck= self._secureDiv(self.player.framecount,ff_FrameCount)
         if fcCheck < 0.9 or fcCheck > 1.1:
             Log.logInfo("Irregular count, ratio: %.3f, setting framecount %d"%(fcCheck,ff_FrameCount))
-            self.player.framecount=ff_FrameCount    
+            self.player.framecount=max(1,ff_FrameCount)    
             
         #Transport stream handling:
         if streamData.isTransportStream():
             self.player.tweakTansportStreamSettings(interlaced)  
         if isUHD:
             self.player.tweakUHD()   
+
+    def _secureDiv(self,nominator,denominator):
+        return nominator / denominator if denominator else 0
 
     def showBanner(self):
         self.initPlayer("icons/film-clapper.png",None)

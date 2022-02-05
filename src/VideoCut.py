@@ -46,7 +46,7 @@ if not saneCheck.confirmFFmpegInstalled():
         ("FFMPEG must be installed to run VideoCut."))
     sys.exit(1)
 
-    
+'''    
 #Select a VideoPlugin here
 _mpv=True
 if _mpv:
@@ -56,8 +56,17 @@ else:
     #retained for testing - OpenCV is not precise enough
     from CvPlayer import CvPlugin
     VideoPlugin=CvPlugin(SIZE_ICON) #TODO not the right place!
+'''
 
-#VideoPlugin.Log=Log
+def setUpVideoPlugin(mpv):
+    if mpv:
+        from MpvPlayer import MpvPlugin 
+        return MpvPlugin(SIZE_ICON)
+    else:
+        #retained for testing - OpenCV is not precise enough
+        from CvPlayer import CvPlugin
+        return CvPlugin(SIZE_ICON) #TODO not the right place!    
+
 
 def getAppIcon():
     return QtGui.QIcon('icons/movie-icon.png')
@@ -234,7 +243,8 @@ class VCSpinbox(QtWidgets.QSpinBox):
         
 # widget that contains the widgets
 class LayoutWindow(QWidget):
-    SLIDER_RESOLUTION = 1000
+    #SLIDER_RESOLUTION = 1000
+    SLIDER_RESOLUTION = 1000*1000
     DIAL_RESOLUTION = 50 
 
     def __init__(self,parent=None):
@@ -1308,7 +1318,6 @@ class VideoControl(QtCore.QObject):
             self.gui.updateWindowTitle(OSTools().getFileNameOnly(filePath))
             self._initVideoViews()
         except:
-            print ("Error -see log")
             Log.logException("Error 2")
             if not OSTools().fileExists(filePath):
                 self.lastError = "File not found"
@@ -1379,6 +1388,7 @@ class VideoControl(QtCore.QObject):
             cutList = XMLAccessor(self.currentPath).readXML()
         except Exception as error:
             print(error)
+            Log.logException("Error restore:")  
             return  
         for cut in cutList:
             mode = VideoCutEntry.MODE_STOP
@@ -1518,10 +1528,9 @@ class VideoControl(QtCore.QObject):
     # we want 1 minute per single step
     def __initSliderTicks(self):
         _fps = self.fps()
-        if self.player.framecount > 0:
+        if self.player.framecount > 1:
             ratio = round(LayoutWindow.SLIDER_RESOLUTION * 60 * _fps / self.player.framecount, 1)
             self.gui.setSliderTicks(round(ratio))
-            #self.gui.setDialResolution(_fps)
             self.gui.setGotoMaximum(int(self.player.framecount))
         
     # connected to slider-called whenever position is changed.
@@ -1590,13 +1599,15 @@ class VideoControl(QtCore.QObject):
         ms = int(timeMS % 1000)
         ts = '{:02}:{:02}:{:02}.{:03}'.format(s // 3600, s % 3600 // 60, s % 60, ms)
         out = "<b>Frame:</b> %08d of %d <b>Time:</b> %s " % (frameNbr, int(frameCount) , ts)
-        sliderPos = int(frameNbr * LayoutWindow.SLIDER_RESOLUTION / frameCount)
+        if not frameCount:
+            sliderPos=0
+        else:
+            sliderPos = int(frameNbr * LayoutWindow.SLIDER_RESOLUTION / frameCount)
         self.gui.showInfo(out)
         self.gui.syncSpinButton(frameNbr) 
         self.gui.syncSliderPos(sliderPos)
                 
     def syncVideoPlayerControls(self,enabled):
-        print("stop:",threading.currentThread().name)
         self.gui.setVideoPlayerControls(enabled)
 
 
@@ -1754,10 +1765,12 @@ def parseOptions(args):
                 res["mpv"]=False
         else:
             print("Undef:",o) 
+    return res
                                            
 def main():
     try:
         global WIN
+        global VideoPlugin
         global vc_config
         OSTools().setCurrentWorkingDirectory()
         #Log.logInfo('*** start in %s***' % OSTools().getWorkingDirectory())        
@@ -1768,6 +1781,9 @@ def main():
         #parseOptions(argv)
         app = QApplication(argv)
         app.setWindowIcon(getAppIcon())
+        res=parseOptions(argv)
+        VideoPlugin=setUpVideoPlugin(res["mpv"])
+        
         if len(argv) == 1:
             WIN = MainFrame(app)  # keep python reference!
         else:

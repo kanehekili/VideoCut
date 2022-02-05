@@ -1,7 +1,7 @@
 # VideoCut
-Version 2.0.0
+Version 2.0.1
 
-![Download](https://github.com/kanehekili/VideoCut/releases/download/2.0.0/videocut2.0.0.tar)
+![Download](https://github.com/kanehekili/VideoCut/releases/download/2.0.1/videocut2.0.1.tar)
 
 MP2/MP4 Cutter for Linux on base of mpv and ffmpeg. Cutting is lossless, the target file will not be reencoded. 
 
@@ -228,3 +228,6 @@ Replace the "True" to "False" in line 51 of Videocut.py.
 * Replaced OpenCV with mpv for visualizing
 * Show frame info and subtitles (inspired by @ https://github.com/lxs602)
 * Reworked the ffmpeg API & improved some more subtitle features
+
+05.02.2022
+* Fixed failures on files recognition & analysis on NFS/Samba drives 
