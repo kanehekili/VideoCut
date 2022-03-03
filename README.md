@@ -1,7 +1,7 @@
 # VideoCut
-Version 2.0.1
+Version 2.0.2
 
-![Download](https://github.com/kanehekili/VideoCut/releases/download/2.0.1/videocut2.0.1.tar)
+![Download](https://github.com/kanehekili/VideoCut/releases/download/2.0.2/videocut2.0.2.tar)
 
 MP2/MP4 Cutter for Linux on base of mpv and ffmpeg. Cutting is lossless, the target file will not be reencoded. 
 
@@ -49,13 +49,15 @@ Videocut supports subtitle cut. This is work in progress.
 ### Limitations
 Using ffmpeg as cutting/joining tool some of the older versions of ffmpeg seem to have problems with syncing audio on avchd (mp4 TS) streams. (see Videocut muxer)
 
-Only ffmpeg and libavformat versions >=3.1 are supported. 
+:boom: Only ffmpeg and libavformat versions >=3.1 are supported. 
 
 :boom: Be aware that this tool does not cut exact on frame - except you reencode the whole film.
 
 :boom: Subtitles come in differents flavours: Image and text. A conversion from image subs to text subs is not supported.
 
 :boom: Will not work on wayland. The mpv window behaves strangely
+
+:boom: libmpv must have version >0.30
 
 ### Virtualenv or conda 
 The fast remux binary doesn't run in a virtual environment, since the ffmpeg libraries used are not available. The ffmpeg blob could be used, if it would be on the /usr/bin path on the host system. Cross OS binary calls tend be a lot slower that in the native environment - so this software is limited to Linux (native or virtualized)
@@ -65,12 +67,15 @@ Finalized in Version 1.3.0, improved in Version 2.0.0.  Not all containers (e.g.
 
 For DVB transport stream you should keep the ".m2t" ending, mkv containers shouldn't be changed either. See [here](https://en.wikipedia.org/wiki/Comparison_of_video_container_formats) for a overview of containers.
 
+### Audio
+MPV supports audio streams while playing. Unfortunately it relies on the audio stream while seeking (precise) thus rendering exact seeking sometimes difficult due to problems decoding it. So audio is turned of (not just muted) while seeking. This sometimes leads to audio dropouts while playing the video im mpv (not on the cut film!)
+
 ##Install
 
 #### Install via ppa on Linux Mint or Ubuntu (focal/Mint20 only)
 ```
 sudo add-apt-repository ppa:jentiger-moratai/mediatools
-sudo pat update
+sudo apt update
 sudo apt install --no-install-recommends install videocut
 ```
 (--no-install-recommends will install only what is required)
@@ -135,7 +140,7 @@ Since Videocut ran with OpenCV for many years it is still available. If needed i
 * python3-opencv
 * hdf5 (Arch only)
 
-Replace the "True" to "False" in line 51 of Videocut.py.
+Create a .desktop file with the line "Exec= python3 .../VideoCut.py -p cv %f". Opencv will not be displaying subtitles nor frametypes.
 
 ### Changes 
 08.07.2016
@@ -231,3 +236,6 @@ Replace the "True" to "False" in line 51 of Videocut.py.
 
 05.02.2022
 * Fixed failures on files recognition & analysis on NFS/Samba drives 
+
+03.03.2022
+* remux fix for A/V offset. MPV VC1 support

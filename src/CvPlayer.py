@@ -557,6 +557,8 @@ class CvPlugin():
             self._vPlayer = None
         return False
 
+    def hasVideoOffset(self):
+        return True #hook for remux5 zeroTime
     '''
     callbacks
      self.controller.syncVideoPlayerControls(isplaying)

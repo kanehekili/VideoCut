@@ -10,8 +10,8 @@
 		<property name="mpv" value="${rootDir}/lib"/>
 		<property name="aurTarget" value="AUR"/>
 		<property name="debTarget" value="DEB"/>
-		<property name="ubu1Build" value="videocut_${version}-${pkgrelease}-${ubu1}"/>
-		<property name="ubu2Build" value="videocut_${version}-${pkgrelease}-${ubu2}"/>		
+		<property name="ubu1Build" value="videocut_${version}+${pkgrelease}~${ubu1}"/>
+		<property name="ubu2Build" value="videocut_${version}+${pkgrelease}~${ubu2}"/>		
 		<property name="ubu1Target" value="${stage}/${ubu1Build}"/>
 		<property name="ubu2Target" value="${stage}/${ubu2Build}"/>		
 

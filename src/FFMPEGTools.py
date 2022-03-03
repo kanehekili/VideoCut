@@ -776,6 +776,9 @@ class FFStreamProbe():
     def isH264(self):
         return "h264" == self.getVideoStream().getCodec()
     
+    def isVC1(self):
+        return "vc1" == self.getVideoStream().getCodec()
+    
     
     '''
     subtitles
@@ -1210,7 +1213,7 @@ class VideoFrameInfo():
         
 class CuttingConfig():
 
-    def __init__(self, srcfilePath, targetPath, audioTracks,subsOn):
+    def __init__(self, srcfilePath, targetPath, audioTracks,subsOn,zTime=None):
         ''' Sets an object that understands say(aText)'''
         self.messenger = None
         self.reencode = False
@@ -1219,6 +1222,7 @@ class CuttingConfig():
         self.targetPath = targetPath
         self.languages = audioTracks
         self.subtitlesOn=subsOn #to make ffmpeg concat possible
+        self.calcZeroTime=zTime
 
     def supportSubtitles(self):
         return self.streamData.hasSubtitles() and self.subtitlesOn
@@ -1654,11 +1658,14 @@ class VCCutter():
         cmd = [self.bin, "-i", self.config.srcfilePath, "-s", timeString]
         if self.config.reencode:
             cmd = cmd + ["-r"]
+        if self.config.calcZeroTime:
+            cmd = cmd + ["-z"]
         lang = self._buildLanguageMapping()
         if len(lang) > 0:
             codes = ",".join(lang) 
             cmd = cmd + ["-l", codes]
-        cmd = cmd + [self.config.targetPath]            
+        cmd = cmd + [self.config.targetPath]    
+                
         print(cmd)
         log("cut file:", cmd)
         try:

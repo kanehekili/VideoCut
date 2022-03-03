@@ -1514,7 +1514,8 @@ class VideoControl(QtCore.QObject):
     new VCCutter API
     '''
     def __directCut(self, srcPath, targetPath, spanns, settings):
-        config = CuttingConfig(srcPath, targetPath, settings.getPreferedLanguageCodes(),settings.processSubtitles())
+        zTime=VideoPlugin.hasVideoOffset()
+        config = CuttingConfig(srcPath, targetPath, settings.getPreferedLanguageCodes(),settings.processSubtitles(),zTime)
         config.streamData = self.streamData
         config.messenger = self.statusbar()
         config.reencode = settings.reencoding
@@ -1751,8 +1752,11 @@ def parseOptions(args):
     res={}
     res["mpv"]=True
     res["log"]="debug"
+    res["file"]=None
     try:
         opts,args=getopt.getopt(args[1:], "l:p:", ["log=","player="])
+        if len(args)==1:
+            res["file"]=args[0]
     except getopt.GetoptError as err:
         print(err)
         sys.exit(2)
@@ -1783,11 +1787,11 @@ def main():
         app.setWindowIcon(getAppIcon())
         res=parseOptions(argv)
         VideoPlugin=setUpVideoPlugin(res["mpv"])
-        
-        if len(argv) == 1:
+        fn =res["file"]
+        if fn is None:
             WIN = MainFrame(app)  # keep python reference!
         else:
-            WIN = MainFrame(app,argv[-1])  
+            WIN = MainFrame(app,fn)  
         app.exec_()
         Log.logClose()
     except:

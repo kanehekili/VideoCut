@@ -76,25 +76,29 @@ class MpvPlayer():
     def initPlayer(self,container):
         self.mediaPlayer = MPV(wid=str(int(container.winId())),#these are all options, can be accessed with mediaPlayer[option] (props with mp.prop)
             #vo='x11', # You may not need this -vo=gpu is default
+            hwdec="auto-safe", 
+            #video_sync="display-desync", #no effect on mkv/vc1
             log_handler=self._passLog,
             loglevel='error',
             input_vo_keyboard=False,  #We'll take the qt events
             pause=True,
             mute='yes',
+            framedrop="vo",
+            audio="no", #this improves seeking
+            #initial_audio_sync="no", check this as an alternative
             keep_open="always",
             #rebase_start_time='yes',  #default, no will show the real time
             #hr_seek_framedrop='yes',  #default, no=still no backwards seek on mts
             #stream_buffer_size='256MiB',#Works for uhd (dimensions>1920xx)
-            hr_seek='yes',            #yes ok on slider search
             #deinterlace="yes",        #needed for m2t if interlaced...
             #index="recreate",         #test for m2t
             #demuxer_lavf_probescore=100, #not working with mpg
             demuxer_lavf_analyzeduration=100.0,
             #demuxer_backward_playback_step=1024, #no help
             #video_sync="display-desync", #no help
-            hr_seek_framedrop="no",
             #demuxer_lavf_probesize=1000, #won't load any mpg2 stream
             #demuxer_lavf_probe_info='yes',#not working on m2ts either
+            hr_seek='yes',            #yes for slider search
             hr_seek_demuxer_offset=self._demuxOffset, #offset too large (2.1) will slow everything down, only if hr_seek is true
             #video_aspect_override="16:9, #works,but not necessary
             #demuxer_lavf_hacks='yes', #test for m2t -no won't help 
@@ -111,6 +115,18 @@ class MpvPlayer():
         self._hookEvents()
         return self.mediaPlayer 
     
+    
+    def _hookEvents(self):
+        observe=[]#"seeking","time-pos"...
+        #ignore=["mouse-pos",""]
+        #observe = [p for p in self.mediaPlayer.property_list if p not in ignore]
+        for prop in observe:
+            self.mediaPlayer.observe_property(prop, self._onPropertyChange)
+            
+        self.mediaPlayer.observe_property("time-pos",self._onTimePos) #messes up timing!
+        self.mediaPlayer.observe_property("eof-reached",self._onPlayEnd)
+        #mostly wrong: self.mediaPlayer.observe_property("estimated-frame-count",self._onFramecount)
+        self.mediaPlayer.observe_property("video-frame-info",self._onFrameInfo)
     
     def open(self,filePath):
         try:     
@@ -139,14 +155,14 @@ class MpvPlayer():
                 
         
     def getCurrentFrameNumber(self):
-        return round(self._timePos*self.fps,0)
+        return round(self.timePos()*self.fps,0)
     
     def validate(self):
         pass #ffmpeg can read it ..
 
     #take the current time and add/subtract a number of frames and return the "absolute" new time
     def calcOffset(self,frameOffset):
-        nxt=self._timePos+(frameOffset/self.fps)
+        nxt=self.timePos()+(frameOffset/self.fps)
         return nxt
 
     def calcPosition(self,frameNumber):
@@ -215,17 +231,6 @@ class MpvPlayer():
         self.mediaPlayer.screenshot_to_file(path,includes="video")
         return True
         
-    def _hookEvents(self):
-        observe=[]#"seeking","time-pos"...
-        #observe = self.mediaPlayer.property_list
-        for prop in observe:
-            self.mediaPlayer.observe_property(prop, self._onPropertyChange)
-            
-        self.mediaPlayer.observe_property("time-pos",self._onTimePos) #messes up timing!
-        self.mediaPlayer.observe_property("eof-reached",self._onPlayEnd)
-        #mostly wrong: self.mediaPlayer.observe_property("estimated-frame-count",self._onFramecount)
-        self.mediaPlayer.observe_property("video-frame-info",self._onFrameInfo)
-            
     def _onPropertyChange(self,name,pos):
         print("        >",name,":",pos)
     
@@ -266,6 +271,11 @@ class MpvPlayer():
                 self._lastDispatch=now
             frameNumber=self.getCurrentFrameNumber()
             '''
+            s = int(val*1000/1000)
+            ms = int(val*1000 % 1000)
+            ts = '{:02}:{:02}:{:02}.{:03}'.format(s // 3600, s % 3600 // 60, s % 60, ms)
+            print("TS:",val," fn:",frameNumber," real time:",ts," calc:",self.timePos())
+            
             xfps = self.fps
             if xfps is None:
                 xfps=-1.0
@@ -322,7 +332,7 @@ class MpvPlayer():
                     
                 
     def timePos(self):
-        return self._timePos+1/self.fps
+        return self._timePos-1/self.fps
        
     def isValid(self):
         return self.mediaPlayer.seekable
@@ -341,6 +351,10 @@ class MpvPlayer():
         Log.logInfo("UHD, set stream size")
         self.mediaPlayer.stream_buffer_size='255MiB' 
  
+    def tweakVC1(self):
+        Log.logInfo("VC1 codec -set hw_codecs")
+        self.mediaPlayer.hwdec_codecs="vc1"       
+ 
     def togglePlay(self):
         if self.mediaPlayer is None:
             return False
@@ -349,9 +363,11 @@ class MpvPlayer():
         
         playing = self.mediaPlayer.pause #property
         if playing:
+            self.mediaPlayer.audio="auto"
             self.mediaPlayer["mute"]="no" #option
         else:
             self.mediaPlayer["mute"]="yes"
+            self.mediaPlayer.audio="no"
         self.mediaPlayer.pause=not playing
         return playing        
  
@@ -468,7 +484,9 @@ class MpvPlugin():
         if streamData.isTransportStream():
             self.player.tweakTansportStreamSettings(interlaced)  
         if isUHD:
-            self.player.tweakUHD()   
+            self.player.tweakUHD() 
+        if streamData.isVC1():
+            self.player.tweakVC1()  
 
     def _secureDiv(self,nominator,denominator):
         return nominator / denominator if denominator else 0
@@ -516,7 +534,8 @@ class MpvPlugin():
         #correct: self.mpvWidget.triggerPlayerControls(boolval)
         self.controller.syncVideoPlayerControls(boolval)
         
-
+    def hasVideoOffset(self):
+        return False #hook for remux5 zeroTime
 
 #takes the requests and only sends the actual framenumber to the player - makes the slider faster and the queue lighter        
 class SliderThread(QtCore.QThread):
