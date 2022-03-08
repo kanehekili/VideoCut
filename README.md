@@ -1,7 +1,7 @@
 # VideoCut
-Version 2.0.2
+Version 2.0.3
 
-![Download](https://github.com/kanehekili/VideoCut/releases/download/2.0.2/videocut2.0.2.tar)
+![Download](https://github.com/kanehekili/VideoCut/releases/download/2.0.3/videocut2.0.3.tar)
 
 MP2/MP4 Cutter for Linux on base of mpv and ffmpeg. Cutting is lossless, the target file will not be reencoded. 
 
@@ -239,3 +239,6 @@ Create a .desktop file with the line "Exec= python3 .../VideoCut.py -p cv %f". O
 
 03.03.2022
 * remux fix for A/V offset. MPV VC1 support
+
+06.03.2022
+* adapted remux5 for ffmpeg version 5.0

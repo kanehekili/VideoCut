@@ -1728,8 +1728,9 @@ class VCCutter():
                 aLine= text.rstrip()
                 print ("<" + aLine )  
                 if "Err:" in aLine:
-                    log(">", aLine) 
-                    self.warn(aLine);
+                    log(">", aLine)
+                    if not "muxing" in aLine: 
+                        self.warn(aLine);
             return False
         else:
             return True 
@@ -1778,10 +1779,7 @@ class FFmpegVersion():
             g1 = m.group(0)
             print(g1)
             self.version = float(g1)
-            if self.version > 5.0:
-                self.version = 4.1; 
-            
-            log("FFmepg Version:", self.version)
+            log("FFmepg Version:", float(g1))
 
 
 class FFmpegPicture():
