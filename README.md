@@ -1,7 +1,7 @@
 # VideoCut
-Version 2.0.3
+Version 2.0.4
 
-![Download](https://github.com/kanehekili/VideoCut/releases/download/2.0.3/videocut2.0.3.tar)
+![Download](https://github.com/kanehekili/VideoCut/releases/download/2.0.4/videocut2.0.4.tar)
 
 MP2/MP4 Cutter for Linux on base of mpv and ffmpeg. Cutting is lossless, the target file will not be reencoded. 
 
@@ -58,6 +58,8 @@ Using ffmpeg as cutting/joining tool some of the older versions of ffmpeg seem t
 :boom: Will not work on wayland. The mpv window behaves strangely
 
 :boom: libmpv must have version >0.30
+
+:boom: hevc codecs can be reencoded into an mp4 container but not remuxed - neither remux nor ffmpeg work can "copy" that codec. 
 
 ### Virtualenv or conda 
 The fast remux binary doesn't run in a virtual environment, since the ffmpeg libraries used are not available. The ffmpeg blob could be used, if it would be on the /usr/bin path on the host system. Cross OS binary calls tend be a lot slower that in the native environment - so this software is limited to Linux (native or virtualized)
@@ -242,3 +244,8 @@ Create a .desktop file with the line "Exec= python3 .../VideoCut.py -p cv %f". O
 
 06.03.2022
 * adapted remux5 for ffmpeg version 5.0
+
+25.03.2022
+* Improved seeking of mpeg2(ts) streams
+* VC1 codec IDR frame recognition
+* AV1 codec enhancements

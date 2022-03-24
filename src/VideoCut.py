@@ -273,8 +273,8 @@ class LayoutWindow(QWidget):
         self.ui_Dial.setWrapping(False)
         self.ui_Dial.setNotchTarget(5.0)
         self.ui_Dial.setToolTip("Fine tuning")
+        #styles don't work:
         #no gradients: self.ui_Dial.setStyleSheet("QDial { background-color: qradialgradient(cx:0, cy:0, radius: 1,fx:0.5, fy:0.5, stop:0 white, stop:1 green); }")
-        self.ui_Dial.setStyleSheet("QDial { background-color: #0a0a0a;color:inherit; }")
         self.setDialResolution(self.DIAL_RESOLUTION)
 
         self.ui_GotoField = VCSpinbox(self)
@@ -1416,7 +1416,8 @@ class VideoControl(QtCore.QObject):
     
     def gotoCutIndex(self, index):
         cut = self.videoCuts[index]
-        self.__dispatchShowFrame(cut.frameNumber)
+        #self.__dispatchShowFrame(cut.frameNumber)
+        self._gotoFrame(cut.frameNumber)
     
     # callback from stop button
     def killSaveProcessing(self):

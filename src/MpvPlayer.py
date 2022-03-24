@@ -72,6 +72,7 @@ class MpvPlayer():
         self._lastDispatch=0.0
         self.lastError=""
         self._readyMsgCount=0
+        self._frameOffset=0
     
     def initPlayer(self,container):
         self.mediaPlayer = MPV(wid=str(int(container.winId())),#these are all options, can be accessed with mediaPlayer[option] (props with mp.prop)
@@ -83,12 +84,13 @@ class MpvPlayer():
             input_vo_keyboard=False,  #We'll take the qt events
             pause=True,
             mute='yes',
-            framedrop="vo",
+            #video_latency_hacks="yes", #no avail sbtx
             audio="no", #this improves seeking
+            #video_sync="desync", #improves seeking instead of audio = off
             #initial_audio_sync="no", check this as an alternative
             keep_open="always",
             #rebase_start_time='yes',  #default, no will show the real time
-            #hr_seek_framedrop='yes',  #default, no=still no backwards seek on mts
+            #hr_seek_framedrop='no',  #yes=default, no=no effect on seek on mts
             #stream_buffer_size='256MiB',#Works for uhd (dimensions>1920xx)
             #deinterlace="yes",        #needed for m2t if interlaced...
             #index="recreate",         #test for m2t
@@ -155,7 +157,8 @@ class MpvPlayer():
                 
         
     def getCurrentFrameNumber(self):
-        return round(self.timePos()*self.fps,0)
+        return int(round(self.timePos()*self.fps,0))
+        
     
     def validate(self):
         pass #ffmpeg can read it ..
@@ -176,13 +179,13 @@ class MpvPlayer():
         if abs(step) < 20: #mpv hack: mpegts small distances
             self.seekStep(step)
             return
-        secs = self.calcPosition(frameNumber)
-        #print("seek secs: %.3f %f"%(secs,frameNumber))
-        tp = self.timePos()
-        #print("seek to pos: %f [%f] fn:%d currFn:%d"%(secs,tp,frameNumber,self.getCurrentFrameNumber()))
+        secs = self.calcPosition(frameNumber)#hack
+        #ts =self._timeAsString(secs)
+        #print("1seek secs: %.3f %d >%s"%(secs,frameNumber,ts))
         self.mediaPlayer.seek(secs,"absolute+exact")
         self._waitSeekDone()
-        #print("seek pos now:%f fn:%d"%(self.timePos(),self.getCurrentFrameNumber()))
+
+        
     
     #unused    
     def __seekPrecise(self,dialStep):
@@ -190,12 +193,13 @@ class MpvPlayer():
         #print("dial:",dialStep)
         self.mediaPlayer.seek(secs,"absolute+exact")
         self._waitSeekDone()
-        #self.mediaPlayer.hr_seek_demuxer_offset=0.0
 
     #using dialStep with relative leads to different timestamps... 
     def seekStep(self,dialStep):
         if self.mediaPlayer.seeking is not None:
-            #Log.logInfo("Seek step %d"%(dialStep))
+            if dialStep == -1:
+                self.mediaPlayer.frame_back_step()
+                return
             if dialStep > 0:
                 #self.mediaPlayer.frame_step() #crash at end/fills queue with afterruns
                 fix=0.8
@@ -205,7 +209,6 @@ class MpvPlayer():
                 if self.timePos()+nxt>self.duration:
                     return
             else:
-                #too slow: self.mediaPlayer.frame_back_step()
                 if self.timePos()>self.duration:
                     nxt=-1/self.fps*1.8
                 else:
@@ -270,12 +273,10 @@ class MpvPlayer():
                     return
                 self._lastDispatch=now
             frameNumber=self.getCurrentFrameNumber()
-            '''
-            s = int(val*1000/1000)
-            ms = int(val*1000 % 1000)
-            ts = '{:02}:{:02}:{:02}.{:03}'.format(s // 3600, s % 3600 // 60, s % 60, ms)
-            print("TS:",val," fn:",frameNumber," real time:",ts," calc:",self.timePos())
             
+            #ts =self._timeAsString(val)
+            #print("TS:",val," fn:",frameNumber," real time:",ts," calc:",self.timePos())
+            '''
             xfps = self.fps
             if xfps is None:
                 xfps=-1.0
@@ -285,6 +286,12 @@ class MpvPlayer():
             print("prop time %.3f fps:%f fn:%d fc:%d"%(val,xfps,frameNumber,self.framecount))
             '''
             self._frameInfoFunc(frameNumber,self.framecount,self.timePos()*1000)
+    
+    #pure debug info
+    def _timeAsString(self,val):
+        s = int(val*1000/1000)
+        ms = int(val*1000 % 1000)
+        return '{:02}:{:02}:{:02}.{:03}'.format(s // 3600, s % 3600 // 60, s % 60, ms)   
     
     def _onPlayEnd(self,name,val):
         if val == True:
@@ -332,7 +339,8 @@ class MpvPlayer():
                     
                 
     def timePos(self):
-        return self._timePos-1/self.fps
+        return self._timePos-self._frameOffset/self.fps #mpg mpv bug workaround
+        #return self._timePos
        
     def isValid(self):
         return self.mediaPlayer.seekable
@@ -343,7 +351,7 @@ class MpvPlayer():
     #tweak for transport streams
     def tweakTansportStreamSettings(self,isInterlaced):
         Log.logInfo("Transport stream. Setting seek offset to 1.5 and interlacing: %d"%(isInterlaced))
-        self.mediaPlayer.hr_seek_demuxer_offset=1.5#Solution for mpegts seek
+        self.mediaPlayer.hr_seek_demuxer_offset=2.5#Solution for mpegts seek
         if isInterlaced:
             self.mediaPlayer.deinterlace="yes"
  
@@ -355,6 +363,11 @@ class MpvPlayer():
         Log.logInfo("VC1 codec -set hw_codecs")
         self.mediaPlayer.hwdec_codecs="vc1"       
  
+    def tweakMPG(self):
+        Log.logInfo("Setting frame offset in mpg (mpv bug)")
+        self._frameOffset=1
+        self.mediaPlayer.hr_seek_demuxer_offset=2.5 #mpeg seek
+        
     def togglePlay(self):
         if self.mediaPlayer is None:
             return False
@@ -487,6 +500,8 @@ class MpvPlugin():
             self.player.tweakUHD() 
         if streamData.isVC1():
             self.player.tweakVC1()  
+        if streamData.isMPEG2():
+            self.player.tweakMPG()                        
 
     def _secureDiv(self,nominator,denominator):
         return nominator / denominator if denominator else 0
@@ -502,13 +517,14 @@ class MpvPlugin():
     #slider    
     def enqueueFrame(self,frameNumber): #Slider stuff
         self.sliderThread.seekTo(frameNumber)
-        #self.player.seek(frameNumber)
-        #self._showPos()
 
-    #spinbutton    
+    #spinbutton +cutEntry   
     def setFrameDirect(self,frameNumber):
-        #self.player.seek(frameNumber) #direct in Main thread
-        self.sliderThread.seekTo(int(frameNumber)) #pass it to slider thread
+        self.player.seek(frameNumber) #direct in Main thread
+        delta = int(frameNumber-self.player.getCurrentFrameNumber())
+        if delta != 0:
+            self.player.seekStep(delta)
+        #self.sliderThread.seekTo(int(frameNumber)) #pass it to slider thread
         
     #dial
     def onDial(self,pos):

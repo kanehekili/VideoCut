@@ -167,8 +167,8 @@ static int findBestVideoStream(){//enum AVMediaType type
     context.videoIndex=0;
 
     const char* MPEG_TS_ID = "mpegts";
-    const char* test = context.ifmt_ctx->iformat->name;
-    info->isTransportStream = strcmp(test,MPEG_TS_ID) == 0 ;
+    const char* tsName = context.ifmt_ctx->iformat->name;
+    info->isTransportStream = strcmp(tsName,MPEG_TS_ID) == 0 ;
 
     return info->srcIndex;
 }
@@ -272,9 +272,21 @@ static const AVOutputFormat* checkVideoFormat(struct StreamInfo *info,char *out_
     	}
     }else if ((codecID == AV_CODEC_ID_VP8 || codecID == AV_CODEC_ID_VP9) && context.muxMode==MODE_TRANSCODE){
         ofmt= av_guess_format("webm", NULL, NULL);//is usually VP9, even if VP8 is preferred
+    //}else if(codecID == AV_CODEC_ID_HEVC){ doesn't even run with ffmepg
+    //	ofmt = av_guess_format("mov", out_filename,NULL);
     }else
     	ofmt= av_guess_format(NULL,out_filename, NULL);
 
+   /* --- TEST search
+   int audio_c= getAudioRef()->inStream->codecpar->codec_id;
+   printf("codec id:%d / %d \n",codecID,audio_c);
+   void *i =0;
+   const AVOutputFormat *fmt;
+   while ((fmt = av_muxer_iterate(&i))) {
+	   if (fmt->audio_codec == audio_c)
+		   printf("fmt: %s %d / %d\n",fmt->name,fmt->video_codec,fmt->audio_codec);
+   }
+   */
    return ofmt;
 }
 /*
@@ -414,6 +426,8 @@ static int createOutputStream(struct StreamInfo *info){
 			av_log(NULL, AV_LOG_ERROR,"Err: Failed to copy codec parameters\n");
 			return ret;
 		}
+		//copy the stream metadata
+    	av_dict_copy(&out_stream->metadata,info->inStream->metadata, 0);
 		out_stream->codecpar->codec_tag = 0;//if not m2t to mp4 fails
 
     }
@@ -431,7 +445,7 @@ static int createOutputStream(struct StreamInfo *info){
 /*
  * Copies the sidedata - currently the rotation information
  */
-int _copySidedata(struct StreamInfo *info){
+static int _copySidedata(struct StreamInfo *info){
     uint8_t *data;
     size_t size;
 	data = av_stream_get_side_data(info->inStream,AV_PKT_DATA_DISPLAYMATRIX, &size);
@@ -474,7 +488,7 @@ void _createOutputForSubTitles(int destIndx){
 			av_dict_set(&meta,"language",subTitleStream->lang,0);
 			subTitleStream->outStream->metadata = meta;
         }
-        _copySidedata(subTitleStream);
+        //why twice ? _copySidedata(subTitleStream);
     }
 }
 
@@ -757,6 +771,36 @@ int _setupStreams(SourceContext *sctx ){
     return -1;
 }
 
+/**************** NAL SECTION ***********************/
+//SPS Example: https://gist.github.com/annidy/3f0f1d790f01b9bd8acccc2e8381e6e3
+//This code only works for VC1 !
+static inline int vc1Check(const uint8_t * const data){
+	return  data[4]==0xC0; //Incredible hack,but working
+}
+
+static inline int h264Check(const uint8_t * const data){
+	/*
+	 * This works for h264 and AVC, not for TS! TS seems to use data[5] for detection.
+	 * Did not find any mention of that field, but test show that the nals are identical.
+	 * Currently not used since AVPacket.flags seems sufficient.
+	 */
+	return  (data[4] & 0x1f) == 5;
+}
+
+static int isRealIFrame(struct StreamInfo *info, const AVPacket* pkt){
+	if (pkt->flags!=AV_PKT_FLAG_KEY)
+		return 0;
+
+	if (pkt->data && pkt->size >= 5) {
+	    void* nal_start = pkt->data;
+		if (info->in_codec_ctx->codec_id==AV_CODEC_ID_VC1)
+			return vc1Check(nal_start);
+		//if (info->in_codec_ctx->codec_id==AV_CODEC_ID_H264)
+		//	return h264Check(nal_start);
+	}
+
+	return 1;
+}
 
 /**************** MUXING SECTION ***********************/
 static int seekTailGOP(struct StreamInfo *info, int64_t ts,CutData *borders) {
@@ -814,7 +858,7 @@ static int seekTailGOP(struct StreamInfo *info, int64_t ts,CutData *borders) {
     }
     //h264 non TS precise cut:
     short isTS = info->isTransportStream;
-    short isMP4 = info->in_codec_ctx->codec_id==AV_CODEC_ID_H264;
+    short isMP4 = info->in_codec_ctx->codec_id==AV_CODEC_ID_H264 || info->in_codec_ctx->codec_id==AV_CODEC_ID_AV1;
 	if (isMP4 && !isTS){
 		borders->end=borders->dts;
 	    av_log(NULL, AV_LOG_VERBOSE,"<mp4&!TS>");
@@ -867,13 +911,13 @@ static int seekHeadGOP(struct StreamInfo *info, int64_t ts,CutData *borders) {
             continue;
         }    
        secureTs=pkt.dts==AV_NOPTS_VALUE?pkt.pts:pkt.dts;
-        if (pkt.flags == AV_PKT_FLAG_KEY && pkt.dts != AV_NOPTS_VALUE){
-            if (timeHit)
-            	gopIndx++;
-            gop[gopIndx]=secureTs;
-            keyFrameCount++; 
-            if (gopIndx==maxFrames-1)//one gop == 2 frames are needed
-                break;
+       if (secureTs != AV_NOPTS_VALUE && isRealIFrame(info, &pkt)){
+			if (timeHit)
+				gopIndx++;
+			gop[gopIndx]=secureTs;
+			keyFrameCount++;
+			if (gopIndx==maxFrames-1)//one gop == 2 frames are needed
+				break;
         } 
         
         if (pkt.dts >= ts && !timeHit){
@@ -1670,7 +1714,6 @@ static int seekAndMux(double_t timeslots[],int seekCount){
         if (endSecs < startSecs)
             endSecs=startSecs+duration;
 
-        //double_t dtsX=endSecs+vStreamStartTime;//Test
         int64_t ptsStart = ptsFromTime(startSecs+vStreamStartTime-streamOffsetTime,time_base);
         int64_t ptsEnd = ptsFromTime(endSecs+vStreamStartTime-streamOffsetTime,time_base);
         av_log(NULL, AV_LOG_VERBOSE,"************************\nSearch from %.3f to %.3f pts: %ld - %ld lookback: %ld\n",startSecs,endSecs,ptsStart,ptsEnd,lookback);
