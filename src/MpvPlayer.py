@@ -16,7 +16,7 @@ from PyQt5.QtWidgets import QApplication
 from threading import Condition
 from PyQt5.QtCore import pyqtSignal
 import FFMPEGTools
-import sys,time
+import sys,time,re
 
 
 try:
@@ -107,10 +107,12 @@ class MpvPlayer():
             #the follwing entries enable mts back seeking: (https://github.com/mpv-player/mpv/issues/4019#issuecomment-747853186)
             cache='yes',
             demuxer_seekable_cache='yes',
-            demuxer_max_back_bytes ='10000MiB',
+            #no valid for libmpv < 0.30:
+            #demuxer_max_back_bytes ='10000MiB',
+            #demuxer_cache_wait='no', #if yes remote files take too long...
             #demuxer_max_bytes ='10000MiB',
             #demuxer_backward_playback_step=180,
-            demuxer_cache_wait='no', #if yes remote files take too long...
+            
             volume=100
          ) 
         
@@ -119,6 +121,14 @@ class MpvPlayer():
     
     
     def _hookEvents(self):
+        ver = self.mpvVersion()
+        res= re.findall(r'\d+',ver)
+        nbr = 100*int(res[0])+int(res[1])
+        if nbr>30:
+            self.mediaPlayer.demuxer_max_back_bytes='10000MiB'
+            self.mediaPlayer.demuxer_cache_wait='no'
+            Log.logInfo("applied new demuxer settings")
+        
         observe=[]#"seeking","time-pos"...
         #ignore=["mouse-pos",""]
         #observe = [p for p in self.mediaPlayer.property_list if p not in ignore]
@@ -171,7 +181,8 @@ class MpvPlayer():
     def calcPosition(self,frameNumber):
         return frameNumber/self.fps
   
-    def seek(self,frameNumber):
+    #performance tweak: fastseek should have a low demuxer seek offset: tune if fast seek.
+    def seek(self,frameNumber,fast=False):
         if self.mediaPlayer.seeking is None:
             Log.logError("No seek! Aborting")
             return
@@ -182,9 +193,11 @@ class MpvPlayer():
         secs = self.calcPosition(frameNumber)#hack
         #ts =self._timeAsString(secs)
         #print("1seek secs: %.3f %d >%s"%(secs,frameNumber,ts))
+        if fast:
+            self.mediaPlayer.hr_seek_demuxer_offset=0.1
         self.mediaPlayer.seek(secs,"absolute+exact")
         self._waitSeekDone()
-
+        self.mediaPlayer.hr_seek_demuxer_offset=self._demuxOffset
         
     
     #unused    
@@ -350,8 +363,8 @@ class MpvPlayer():
     
     #tweak for transport streams
     def tweakTansportStreamSettings(self,isInterlaced):
-        Log.logInfo("Transport stream. Setting seek offset to 1.5 and interlacing: %d"%(isInterlaced))
-        self.mediaPlayer.hr_seek_demuxer_offset=2.5#Solution for mpegts seek
+        Log.logInfo("Transport stream. Setting seek offset to high and interlacing: %d"%(isInterlaced))
+        self._demuxOffset=1.5#Solution for mpegts seek
         if isInterlaced:
             self.mediaPlayer.deinterlace="yes"
  
@@ -364,9 +377,9 @@ class MpvPlayer():
         self.mediaPlayer.hwdec_codecs="vc1"       
  
     def tweakMPG(self):
-        Log.logInfo("Setting frame offset in mpg (mpv bug)")
+        Log.logInfo("MP2: Setting frame offset in mpg (mpv bug) and seek offset to high")
         self._frameOffset=1
-        self.mediaPlayer.hr_seek_demuxer_offset=2.5 #mpeg seek
+        self._demuxOffset=1.5 #mpeg step seek
         
     def togglePlay(self):
         if self.mediaPlayer is None:
@@ -514,6 +527,11 @@ class MpvPlugin():
         self.player.syncToStart()
         #self._showPos()
 
+    '''
+    Performance:
+    The higher the demuxeroffset, the better the "step" seek, but the worse the fast slider seek.
+    Offset should be 0.5 for fast seek and 1.5 to 2.5 for slow seek (especially mpgts)
+    '''
     #slider    
     def enqueueFrame(self,frameNumber): #Slider stuff
         self.sliderThread.seekTo(frameNumber)
@@ -533,7 +551,8 @@ class MpvPlugin():
 
     def onSeek(self,frameNumber):
         if self.player:
-            self.player.seek(frameNumber) 
+            #no demux offset on fast seek
+            self.player.seek(frameNumber,fast=True) 
         #return self.player.getCurrentFrameNumber()
 
     def toggleVideoPlay(self):
