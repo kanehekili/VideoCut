@@ -132,7 +132,7 @@ class VideoGLWidget(QtWidgets.QOpenGLWidget):
     
     
 class MpvPlayer():
-    ERR_IDS=["No video or audio streams selected."]
+    ERR_IDS=["No video or audio streams selected.","Failed to recognize file format."]
     def __init__(self):
         self.mediaPlayer =None
         self.seekLock=Condition()
@@ -456,7 +456,8 @@ class MpvPlayer():
         self.seekLock=Condition()
         with self.seekLock:
             res = self.seekLock.wait(timeout=15.0)#networking=15
-            broken = self.lastError in self.ERR_IDS
+            broken = len(self.lastError)>0
+            #print("ready: %d, broken:%s"%(res,self.lastError))
             self.isReadable=res and not broken 
 
     def _onReadyWait(self,name,val):
@@ -476,8 +477,9 @@ class MpvPlayer():
         msg='{}: {}'.format(component, message)
         Log.logError(">"+msg)
         with self.seekLock:
-            self.lastError=message
-            if "file" in message or message in self.ERR_IDS:
+            #TODO: file not recognized seems not be working"
+            if message in self.ERR_IDS:
+                self.lastError=message
                 self.seekLock.notifyAll()
                     
     def timePos(self):
@@ -552,7 +554,7 @@ class MpvPlugin():
         #check stream data for exact one video stream
         self.player.open(filePath)    
         if not self.player.isReadable:
-            raise Exception("Invalid file")
+            raise Exception(self.player.lastError)
         self._sanityCheck(streamData)
         self.player.syncPlay(self.markStopPlay)
         return self.player

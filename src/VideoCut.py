@@ -1319,12 +1319,12 @@ class VideoControl(QtCore.QObject):
             self.onSettingsChanged(self.gui.settings)
             self.gui.updateWindowTitle(OSTools().getFileNameOnly(filePath))
             self._initVideoViews()
-        except:
+        except Exception as ex:
             Log.logException("Error 2")
             if not OSTools().fileExists(filePath):
                 self.lastError = "File not found"
             else:
-                self.lastError = "Invalid file format"
+                self.lastError = str(ex)
             
             VideoPlugin.showBanner()
             self.gui.enableControls(False)
