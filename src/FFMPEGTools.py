@@ -83,10 +83,19 @@ class OSTools():
     def getDirectory(self,aPath):
         return os.path.dirname(aPath)
 
+    #that is the directory where the file resides
     def getWorkingDirectory(self):
         abspath = os.path.abspath(__file__)
         dname = os.path.dirname(abspath)
         return dname               
+
+    #location of "cwd", i.e where is bash..
+    def getActiveDirectory(self):
+        return os.getcwd()
+    
+    #check if filename only or the complete path
+    def isAbsolute(self,path):
+        return os.path.isabs(path)
 
     def getHomeDirectory(self):
         return os.path.expanduser("~")

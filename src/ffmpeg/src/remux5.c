@@ -801,6 +801,25 @@ static int isRealIFrame(struct StreamInfo *info, const AVPacket* pkt){
 
 	return 1;
 }
+/*some test code:
+static inline void traceNal(const AVPacket* pkt,const uint8_t * const dp){
+	int nal = dp[4] & 0x1f;
+
+	printf("0:%x 1:%x 2:%x 3:%x 4:%x %x\n",dp[0],dp[1],dp[2],dp[3],dp[4],nal);
+}
+
+static void testNal(struct StreamInfo *info, const AVPacket* pkt){
+
+	if (pkt->data && pkt->size >= 5) {
+		int64_t vStreamOffset = info->inStream->start_time;
+		int64_t dt = pkt->dts-vStreamOffset;
+		printf("%ld (%ld)->",dt,pkt->dts);
+		void* dp=pkt->data;
+		traceNal(pkt, dp);
+	}else
+		printf("Test NAL <5\n");
+}
+*/
 
 /**************** MUXING SECTION ***********************/
 static int seekTailGOP(struct StreamInfo *info, int64_t ts,CutData *borders) {
