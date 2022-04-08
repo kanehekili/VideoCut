@@ -623,7 +623,7 @@ class FFStreamProbe():
     def _readData(self):
         result = Popen(["ffprobe", "-show_format", "-show_streams", self.path, "-v", "quiet"], stdout=subprocess.PIPE, stderr=subprocess.PIPE).communicate()
         if len(result[0]) == 0:
-            raise IOError('No such media file ' + self.path)
+            raise IOError('Not a media file ' + self.path)
         self.streams = []
         datalines = []
         self.video = []
@@ -653,6 +653,11 @@ class FFStreamProbe():
                 self.video.append(a)
             elif a.isSubTitle():
                 self.subtitle.append(a)
+        self.sanityCheck()
+
+    def sanityCheck(self):
+        if self.getVideoStream() is None:
+            raise IOError("No video stream available")
              
     def getVideoStream(self):
         if len(self.video) == 0:

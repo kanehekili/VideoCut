@@ -1320,7 +1320,7 @@ class VideoControl(QtCore.QObject):
             self.gui.updateWindowTitle(OSTools().getFileNameOnly(filePath))
             self._initVideoViews()
         except Exception as ex:
-            Log.logException("Error 2")
+            Log.logException("Setting file")
             if not OSTools().fileExists(filePath):
                 self.lastError = "File not found"
             else:
