@@ -446,7 +446,7 @@ class CvPlugin():
             return self.player.validate()
         raise Exception("Invalid medium")
     
-    def createWidget(self,parent):
+    def createWidget(self,useGL,parent):
         self.cvWidget=VideoWidget(parent)
         return self.cvWidget
     

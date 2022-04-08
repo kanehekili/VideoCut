@@ -1,7 +1,7 @@
 # VideoCut
-Version 2.0.4
+Version 2.1.0
 
-![Download](https://github.com/kanehekili/VideoCut/releases/download/2.0.4/videocut2.0.4.tar)
+![Download](https://github.com/kanehekili/VideoCut/releases/download/2.1.0/videocut2.1.0.tar)
 
 MP2/MP4 Cutter for Linux on base of mpv and ffmpeg. Cutting is lossless, the target file will not be reencoded. 
 
@@ -16,14 +16,15 @@ VideoCut supports the cutting of subtitles when "Show subtitles"  in the setting
 The current version is written in python3 and uses the qt5 widget kit.  
 ### Prerequisites
 * Arch: python3, python-pillow and mpv
-* Debian/Mint/Ubuntu: python3 python3-pil libmpv1 (no-recommends)
+* Debian/Mint/Ubuntu: python3 python3-pil libmpv1 python3-pyqt5.qtopengl (no-recommends)
 * Fedora: python3-pillow-qt and mpv-libs.x86_64
-* ffmpeg > 3.X or 4.0.X
+* ffmpeg > 3.X to 5.X
 * python3-pyqt5
-* optional:(legacy) OpenCV 2.4 or OPENCV 3 (must be build with ffmpeg)
+* optional:(legacy) OpenCV 2.4 or OpenCV 3 (must be build with ffmpeg - with all its dependencies)
 
 #### Set GTK Theme for this QT application
 If you are running a DE with GTK/Gnome (as opposed to LXQT or KDE) you need to tweak your system:
+(Arch users may have to install qt5-styleplugins from AUR)
 
 `sudo nano /etc/environment`
 
@@ -46,6 +47,8 @@ Instead of using the ffmpeg command line, Videocut offers its own muxer, which i
 
 Videocut supports subtitle cut. This is work in progress. 
 
+As of version 2.1.x wayland is supported. For old hardware, the openGL feature may be disabled in the "Settings" dialog.
+
 ### Limitations
 Using ffmpeg as cutting/joining tool some of the older versions of ffmpeg seem to have problems with syncing audio on avchd (mp4 TS) streams. (see Videocut muxer)
 
@@ -54,10 +57,6 @@ Using ffmpeg as cutting/joining tool some of the older versions of ffmpeg seem t
 :boom: Be aware that this tool does not cut exact on frame - except you reencode the whole film.
 
 :boom: Subtitles come in differents flavours: Image and text. A conversion from image subs to text subs is not supported.
-
-:boom: Will not work on wayland. The mpv window behaves strangely
-
-:boom: libmpv must have version >0.30
 
 :boom: hevc codecs can be reencoded into an mp4 container but not remuxed - neither remux nor ffmpeg work can "copy" that codec. 
 
@@ -98,7 +97,7 @@ Remove with:
 Select video and open it with "Open with ->VideoCut", oder via terminal "VideoCut"
 
 
-#### Install dependencies manually on Linux Mint or Ubuntu (tested from 16.04 to 21.10)
+#### Install dependencies manually on Linux Mint or Ubuntu (tested from 16.04 to 22.04)
 ```
 sudo apt –no-install-recommends install python3-pyqt5 ffmpeg python3-pil libmpv1
 ```
@@ -249,3 +248,7 @@ Create a .desktop file with the line "Exec= python3 .../VideoCut.py -p cv %f". O
 * Improved seeking of mpeg2(ts) streams
 * VC1 codec IDR frame recognition
 * AV1 codec enhancements
+
+05.04.2022
+* Support for wayland (OpenGL Widget)
+* Tune MPV settings for older mpv versions

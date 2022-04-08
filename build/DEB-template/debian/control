@@ -8,7 +8,7 @@ Standards-Version: 2.0.0
 
 
 Architecture: all
-Depends: python3, ffmpeg, python3-pyqt5, python3-pil, libmpv1, ${shlibs:Depends}, ${misc:Depends}
+Depends: python3, ffmpeg, python3-pyqt5, python3-pil, libmpv1,python3-pyqt5.qtopengl,${shlibs:Depends}, ${misc:Depends}
 Description: Fast and lossless videocutter for mp2,mp4,mkv,av-1 and more 
 Section: video
 Package: videocut

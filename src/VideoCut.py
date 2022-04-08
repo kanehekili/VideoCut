@@ -46,18 +46,6 @@ if not saneCheck.confirmFFmpegInstalled():
         ("FFMPEG must be installed to run VideoCut."))
     sys.exit(1)
 
-'''    
-#Select a VideoPlugin here
-_mpv=True
-if _mpv:
-    from MpvPlayer import MpvPlugin 
-    VideoPlugin=MpvPlugin(SIZE_ICON)
-else:
-    #retained for testing - OpenCV is not precise enough
-    from CvPlayer import CvPlugin
-    VideoPlugin=CvPlugin(SIZE_ICON) #TODO not the right place!
-'''
-
 def setUpVideoPlugin(mpv):
     if mpv:
         from MpvPlayer import MpvPlugin 
@@ -247,12 +235,12 @@ class LayoutWindow(QWidget):
     SLIDER_RESOLUTION = 1000*1000
     DIAL_RESOLUTION = 50 
 
-    def __init__(self,parent=None):
+    def __init__(self,settings,parent=None):
         QWidget.__init__(self, parent)
-        self.initWidgets()
+        self.initWidgets(settings)
 
-    def initWidgets(self):
-        self.ui_VideoFrame = VideoPlugin.createWidget(self) 
+    def initWidgets(self,settings):
+        self.ui_VideoFrame = VideoPlugin.createWidget(settings.showGL,self) 
         
         self.ui_Slider = QtWidgets.QSlider(QtCore.Qt.Horizontal)
         self.ui_Slider.setFocusPolicy(QtCore.Qt.StrongFocus)
@@ -619,16 +607,14 @@ class MainFrame(QtWidgets.QMainWindow):
         fileMenu.addSeparator();
         fileMenu.addAction(self.exitAction)
 
-        widgets = LayoutWindow()
+        widgets = LayoutWindow(self.settings)
         self.setCentralWidget(widgets);
         self.setWindowTitle("VideoCut")
-        #TODO good place?
-        
+      
         widgets.ui_VideoFrame.trigger.connect(self._videoController._onUpdateInfo)
         self.settings.trigger.connect(self._videoController.onSettingsChanged)
         
         # connect the labels to their dialogs
-
         # if not "self" - stops if out of scope!
         self.cutfilter = SignalOnEvent(widgets.ui_CutModeLabel)
         self.cutfilter.clicked.connect(self.openMediaSettings)
@@ -911,6 +897,7 @@ class SettingsModel(QtCore.QObject):
         self.reencoding = vc_config.getBoolean("recode",False)
         self.mainFrame = mainframe
         self.showSubid=vc_config.getInt("subtitles",0)  #id if subtitle should be presented. mpv only
+        self.showGL=vc_config.getBoolean("openGL",True) #GL Widgets, mpv only
     
     def update(self):
         cutmode = "Fast"
@@ -926,13 +913,18 @@ class SettingsModel(QtCore.QObject):
             vc_config.set("useRemux", "True")
         else:
             vc_config.set("useRemux", "False")
-#         vc_config.set("container",self.selectedContainer)
-#         vc_config.set("containerList",','.join(self.containerList))
+
         if self.reencoding:
             vc_config.set("recode", "True")
         else:
             vc_config.set("recode", "False")
         vc_config.set("subtitles",str(self.showSubid))
+        
+        if self.showGL:
+            vc_config.set("openGL", "True")
+        else:
+            vc_config.set("openGL", "False")
+        
         vc_config.store()
         self.trigger.emit(self)
         
@@ -1001,7 +993,13 @@ class SettingsDialog(QtWidgets.QDialog):
         self.showSub = QtWidgets.QCheckBox("Show subtitles")
         self.showSub.setToolTip("Toggle show subtitles (mpv only)")
         self.showSub.setChecked(self.model.showSubid>0)
-        self.showSub.stateChanged.connect(self._onSubChanged)                 
+        self.showSub.stateChanged.connect(self._onSubChanged)
+        
+        self.showGL = QtWidgets.QCheckBox("Use GL Widgets(mpv only) Restart required")
+        self.showGL.setToolTip("Use GL widgets - must be activated for wayland\n Restart app on change")
+        self.showGL.setChecked(self.model.showGL>0)
+        self.showGL.stateChanged.connect(self._onGLChanged)        
+          
 
         encodeBox.addWidget(self.check_reencode)
         encodeBox.addWidget(self.exRemux)
@@ -1010,6 +1008,7 @@ class SettingsDialog(QtWidgets.QDialog):
         
         subBox= QtWidgets.QVBoxLayout(frame2)
         subBox.addWidget(self.showSub)
+        subBox.addWidget(self.showGL)
         
         outBox.addLayout(versionBox)
         outBox.addWidget(frame1)
@@ -1039,6 +1038,9 @@ class SettingsDialog(QtWidgets.QDialog):
         self.model.showSubid=val
         self.model.update()       
 
+    def _onGLChanged(self,useGL):
+        self.model.showGL=QtCore.Qt.Checked == useGL
+        self.model.update() 
         
 class LanguageSettingsDialog(QtWidgets.QDialog):
 
@@ -1317,12 +1319,12 @@ class VideoControl(QtCore.QObject):
             self.onSettingsChanged(self.gui.settings)
             self.gui.updateWindowTitle(OSTools().getFileNameOnly(filePath))
             self._initVideoViews()
-        except:
-            Log.logException("Error 2")
+        except Exception as ex:
+            Log.logException("Setting file")
             if not OSTools().fileExists(filePath):
                 self.lastError = "File not found"
             else:
-                self.lastError = "Invalid file format"
+                self.lastError = str(ex)
             
             VideoPlugin.showBanner()
             self.gui.enableControls(False)
@@ -1777,8 +1779,9 @@ def main():
         global WIN
         global VideoPlugin
         global vc_config
+        localPath = OSTools().getActiveDirectory() #won't work after setting WD
         OSTools().setCurrentWorkingDirectory()
-        #Log.logInfo('*** start in %s***' % OSTools().getWorkingDirectory())        
+        #Log.logInfo('*** VC located in %s***' % OSTools().getWorkingDirectory())        
         vc_config = ConfigAccessor("vc.ini")
         vc_config.read();
         
@@ -1792,12 +1795,14 @@ def main():
         if fn is None:
             WIN = MainFrame(app)  # keep python reference!
         else:
+            if not OSTools().isAbsolute(fn):
+                fn=OSTools().joinPathes(localPath,fn)
             WIN = MainFrame(app,fn)  
         app.exec_()
         Log.logClose()
     except:
         Log.logException("Error in main:")      
-        traceback.print_exc(file=sys.stdout)
+        #traceback.print_exc(file=sys.stdout)
 
 #TODO: Respect theme
 def stylesheet():

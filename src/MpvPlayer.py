@@ -8,17 +8,24 @@ under the
 GNU Affero General Public License v3.0
 '''
      
-from PyQt5.QtCore import Qt
+from PyQt5.QtCore import Qt,QMetaObject,pyqtSlot,pyqtSignal
 from PyQt5 import QtCore,QtWidgets
 from PyQt5 import QtGui
 from PyQt5.QtWidgets import QApplication
 
 from threading import Condition
-from PyQt5.QtCore import pyqtSignal
 import FFMPEGTools
 import sys,time,re
+import locale
 
-
+try:
+    from PyQt5.QtOpenGL import QGLContext    
+except ImportError:
+    print ("OpenGL lib not found")
+    app = QApplication(sys.argv)
+    QtWidgets.QMessageBox.critical(None, "OpenGL lib",'"python3-pyqt5.qtopengl" must be installed to run VideoCut.')
+    sys.exit(1)    
+    
 try:
     from PIL.ImageQt import ImageQt #Not there by default...
 except ImportError:
@@ -28,7 +35,7 @@ except ImportError:
     sys.exit(1)    
 
 try:
-    from lib.mpv import MPV
+    from lib.mpv import (MPV,OpenGlCbGetProcAddrFn,MpvRenderContext,MpvEventEndFile)
 except:
     print (("MPV lib not found"))  
     app = QApplication(sys.argv)
@@ -36,6 +43,14 @@ except:
     sys.exit(1)    
 
 Log=FFMPEGTools.Log
+
+def get_proc_addr(_, name):
+    glctx = QGLContext.currentContext()
+    if glctx is None:
+        return 0
+    addr = int(glctx.getProcAddress(name.decode('utf-8')))
+    return addr
+
 
 class VideoWidget(QtWidgets.QFrame):
     """ Sized frame for mpv """
@@ -55,16 +70,150 @@ class VideoWidget(QtWidgets.QFrame):
     def updateUI(self,frameNumber,framecount,timeinfo):
         self.trigger.emit(frameNumber,framecount,timeinfo)
 
+class VideoGLWidget(QtWidgets.QOpenGLWidget):
+    trigger = pyqtSignal(float,float,float)
 
+    def __init__(self, parent,mpv):
+        QtWidgets.QOpenGLWidget.__init__(self, parent)
+        self.ratio= 1.0 #?is that true?
+        self.mpv=mpv
+        self.ctx = None
+        self.get_proc_addr_c = OpenGlCbGetProcAddrFn(get_proc_addr)
+        self._defaultHeight = 518 #ratio 16:9
+        self._defaultWidth = 921
+
+    def initializeGL(self):
+        params = {'get_proc_address': self.get_proc_addr_c}
+        self.ctx = MpvRenderContext(self.mpv,
+                                    'opengl',
+                                    opengl_init_params=params)
+        self.ctx.update_cb = self.on_update
+
+    def shutdown(self):
+        if self.ctx is not None:
+            self.ctx.free()
+            self.ctx = None
+
+    def paintGL(self):
+        "init it on the 1st time"
+        if self.ctx is None:
+            self.initializeGL()
+        # check if we really need a ratio on desktops
+        #ratio = self._app.devicePixelRatio()
+        w = int(self.width() * self.ratio)
+        h = int(self.height() * self.ratio)
+        opengl_fbo = {'w': w,
+                      'h': h,
+                      'fbo': self.defaultFramebufferObject()}
+        self.ctx.render(flip_y=True, opengl_fbo=opengl_fbo)
+
+
+    @pyqtSlot()
+    def __update(self):
+        if self.window().isMinimized():
+            self.makeCurrent()
+            self.paintGL()
+            self.context().swapBuffers(self.context().surface())
+            self.doneCurrent()
+        else:
+            self.update()
+
+    def on_update(self, ctx=None):
+        # __update method should run on the thread that creates the
+        # OpenGLContext, which in general is the main thread.
+        # QMetaObject.invokeMethod can do this trick.
+        QMetaObject.invokeMethod(self, '__update')
+    
+    def sizeHint(self):
+        return QtCore.QSize(self._defaultWidth, self._defaultHeight)
+
+    def updateUI(self,frameNumber,framecount,timeinfo):
+        self.trigger.emit(frameNumber,framecount,timeinfo)
+    
+    
 class MpvPlayer():
-    ERR_IDS=["No video or audio streams selected."]
+    ERR_IDS=["No video or audio streams selected.","Failed to recognize file format."]
     def __init__(self):
         self.mediaPlayer =None
-        self.framecount=None
-        self.fps=25.0
-        self.duration=0.0
         self.seekLock=Condition()
         self._frameInfoFunc=None
+        self._resetState()
+    
+    def initPlayer(self,container):
+        #self.__initPlayer()
+        kwArgs=self.__baseMpvArgs()
+        kwArgs["wid"]=str(int(container.winId()))
+        self.mediaPlayer = MPV(**kwArgs)
+        self._hookEvents()
+        return self.mediaPlayer 
+    
+    def initGLPlayer(self):
+        kwArgs=self.__baseMpvArgs()
+        self.mediaPlayer = MPV(**kwArgs)
+        self._hookEvents()
+        return self.mediaPlayer 
+
+    '''
+    Profile low-latency: 
+     audio-buffer=0
+     vd-lavc-threads=1
+     cache-pause=no
+     demuxer-lavf-o-add=fflags=+nobuffer
+     demuxer-lavf-probe-info=nostreams
+     demuxer-lavf-analyzeduration=0.1
+     video-sync=audio
+     interpolation=no
+     video-latency-hacks=yes
+     stream-buffer-size=4k
+
+    Performance:
+    The higher the demuxeroffset, the better the "step" seek, but the worse the fast slider seek.
+    Offset should be 0.1 for fast seek and 1.5 to 2.5 for slow seek (especially mpgts)
+    '''    
+    def __baseMpvArgs(self):
+        return {   "hwdec":"auto-safe", 
+            #video_sync="display-desync", #no effect on mkv/vc1
+            "log_handler":self._passLog,
+            "loglevel" : 'error',
+            "input_vo_keyboard" : False,  #We'll take the qt events
+            "pause" : True,
+            "mute" : 'yes',
+            #"video_latency_hacks" : "yes", #no avail sbtx
+            "audio" : "no", #this improves seeking
+            #"video_sync" : "desync", #improves seeking instead of audio = off
+            #"initial_audio_sync" : "no", check this as an alternative
+            "keep_open" : "always",
+            #"rebase_start_time" : 'yes',  #default, no will show the real time
+            #"hr_seek_framedrop" : 'no',  #yes=default, no=no effect on seek on mts
+            #"stream_buffer_size" : '256MiB',#Works for uhd (dimensions>1920xx)
+            #"deinterlace" : "yes",        #needed for m2t if interlaced...
+            #"index" : "recreate",         #test for m2t
+            #"demuxer_lavf_probescore" : 100, #not working with mpg
+            "demuxer_lavf_analyzeduration" : 100.0,
+            "video-latency-hacks" : "yes", #efficent for fast seek
+            #"demuxer_backward_playback_step" : 1024, #no help
+            #"video_sync" : "display-desync", #no help
+            #"demuxer_lavf_probesize" : 1000, #won't load any mpg2 stream
+            #"demuxer_lavf_probe_info" : 'yes',#not working on m2ts either
+            "hr_seek" : 'yes',            #yes for slider search
+            "hr_seek_demuxer_offset" : self._demuxOffset, #offset too large (2.1) will slow everything down, only if hr_seek is true
+            #video_aspect_override" : "16:9, #works,but not necessary
+            #demuxer_lavf_hacks" : 'yes', #test for m2t -no won't help 
+            #the follwing entries enable mts back seeking: (https://github.com/mpv-player/mpv/issues/4019#issuecomment-747853186)
+            "cache" : 'yes',
+            "demuxer_seekable_cache" : 'yes',
+            #no valid for libmpv < 0.30:
+            #"demuxer_max_back_bytes " : '10000MiB',
+            #"demuxer_cache_wait" : 'no', #if yes remote files take too long...
+            #"demuxer_max_bytes " : '10000MiB',
+            #"demuxer_backward_playback_step" : 180,
+            "volume" : 100
+            }
+    
+    def _resetState(self):
+        self.framecount=0
+        self.fps=25.0
+        self.duration=0.0
         self._timePos=0.0
         self._demuxOffset=0.1
         self.isReadable=False
@@ -72,53 +221,7 @@ class MpvPlayer():
         self._lastDispatch=0.0
         self.lastError=""
         self._readyMsgCount=0
-        self._frameOffset=0
-    
-    def initPlayer(self,container):
-        self.mediaPlayer = MPV(wid=str(int(container.winId())),#these are all options, can be accessed with mediaPlayer[option] (props with mp.prop)
-            #vo='x11', # You may not need this -vo=gpu is default
-            hwdec="auto-safe", 
-            #video_sync="display-desync", #no effect on mkv/vc1
-            log_handler=self._passLog,
-            loglevel='error',
-            input_vo_keyboard=False,  #We'll take the qt events
-            pause=True,
-            mute='yes',
-            #video_latency_hacks="yes", #no avail sbtx
-            audio="no", #this improves seeking
-            #video_sync="desync", #improves seeking instead of audio = off
-            #initial_audio_sync="no", check this as an alternative
-            keep_open="always",
-            #rebase_start_time='yes',  #default, no will show the real time
-            #hr_seek_framedrop='no',  #yes=default, no=no effect on seek on mts
-            #stream_buffer_size='256MiB',#Works for uhd (dimensions>1920xx)
-            #deinterlace="yes",        #needed for m2t if interlaced...
-            #index="recreate",         #test for m2t
-            #demuxer_lavf_probescore=100, #not working with mpg
-            demuxer_lavf_analyzeduration=100.0,
-            #demuxer_backward_playback_step=1024, #no help
-            #video_sync="display-desync", #no help
-            #demuxer_lavf_probesize=1000, #won't load any mpg2 stream
-            #demuxer_lavf_probe_info='yes',#not working on m2ts either
-            hr_seek='yes',            #yes for slider search
-            hr_seek_demuxer_offset=self._demuxOffset, #offset too large (2.1) will slow everything down, only if hr_seek is true
-            #video_aspect_override="16:9, #works,but not necessary
-            #demuxer_lavf_hacks='yes', #test for m2t -no won't help 
-            #the follwing entries enable mts back seeking: (https://github.com/mpv-player/mpv/issues/4019#issuecomment-747853186)
-            cache='yes',
-            demuxer_seekable_cache='yes',
-            #no valid for libmpv < 0.30:
-            #demuxer_max_back_bytes ='10000MiB',
-            #demuxer_cache_wait='no', #if yes remote files take too long...
-            #demuxer_max_bytes ='10000MiB',
-            #demuxer_backward_playback_step=180,
-            
-            volume=100
-         ) 
-        
-        self._hookEvents()
-        return self.mediaPlayer 
-    
+        self._frameOffset=0        
     
     def _hookEvents(self):
         ver = self.mpvVersion()
@@ -127,7 +230,7 @@ class MpvPlayer():
         if nbr>30:
             self.mediaPlayer.demuxer_max_back_bytes='10000MiB'
             self.mediaPlayer.demuxer_cache_wait='no'
-            Log.logInfo("applied new demuxer settings")
+            Log.logInfo("applied demuxer settings for mpv > 3.x")
         
         observe=[]#"seeking","time-pos"...
         #ignore=["mouse-pos",""]
@@ -140,17 +243,45 @@ class MpvPlayer():
         #mostly wrong: self.mediaPlayer.observe_property("estimated-frame-count",self._onFramecount)
         self.mediaPlayer.observe_property("video-frame-info",self._onFrameInfo)
     
+    '''
+    TEst with jasegs event handler...
+    def open_withEvent(self,filePath):
+        print("open:",filePath)
+        try:
+            self._resetState()
+            self.mediaPlayer.close()
+            self.mediaPlayer.loadfile(filePath)
+            #Try to pin down a potential file error 
+            @self.mediaPlayer.event_callback('end_file')
+            def eofHandler(evt):
+                self._superviseEndFileEvent(evt)
+            self._getReady()
+            eofHandler.unregister_mpv_events()
+        except Exception as ex:
+            Log.logException("Open mpv file")
+            print(ex)
+            
+    def _superviseEndFileEvent(self,evt):
+        if evt['event']['reason'] != MpvEventEndFile.REDIRECT or evt['event']['reason'] != MpvEventEndFile.RESTARTED:
+            self.lastError=self.ERR_IDS[0] 
+            with self.seekLock:
+                print('check notify:',evt)
+                self.seekLock.notify()
+        
+        return True
+    '''        
+    
     def open(self,filePath):
         try:     
-            self.lastError=""
             #Very verbose: self.mediaPlayer.register_event_callback(self._oncallback)
+            self._resetState()
             self.mediaPlayer.loadfile(filePath)
             self._getReady()
         except Exception as ex:
             Log.logException("Open mpv file")
             print(ex)
 
-    
+    #Test, not activated    
     def _oncallback(self,callback):
         print("callback:",callback)#.event_id,">",callback.event.level)
         print(callback["event"])
@@ -158,18 +289,15 @@ class MpvPlayer():
     def close(self):
         if self.mediaPlayer:
             self.mediaPlayer.quit()
-   
-    #todo: same with tweaks?
+            
     def changeSettings(self,key,value):
         if self.mediaPlayer:
             if key=="subtitle":
                 self.mediaPlayer.sid=int(value)
                 
-        
     def getCurrentFrameNumber(self):
         return int(round(self.timePos()*self.fps,0))
         
-    
     def validate(self):
         pass #ffmpeg can read it ..
 
@@ -199,13 +327,14 @@ class MpvPlayer():
         self._waitSeekDone()
         self.mediaPlayer.hr_seek_demuxer_offset=self._demuxOffset
         
-    
+    '''
     #unused    
     def __seekPrecise(self,dialStep):
         secs=self.calcOffset(dialStep)
         #print("dial:",dialStep)
         self.mediaPlayer.seek(secs,"absolute+exact")
         self._waitSeekDone()
+    '''
 
     #using dialStep with relative leads to different timestamps... 
     def seekStep(self,dialStep):
@@ -307,7 +436,7 @@ class MpvPlayer():
         return '{:02}:{:02}:{:02}.{:03}'.format(s // 3600, s % 3600 // 60, s % 60, ms)   
     
     def _onPlayEnd(self,name,val):
-        if val == True:
+        if val == True and self.play_func:
             self.play_func(False)
             
     def _onSeek(self,name,val):
@@ -320,16 +449,17 @@ class MpvPlayer():
         self.mediaPlayer.observe_property("seeking",self._onSeek)
         with self.seekLock:  
             self.seekLock.wait(timeout=3)
-            
-            
+    
     def _getReady(self):
         self.mediaPlayer.observe_property("estimated-vf-fps", self._onReadyWait)
         self.mediaPlayer.observe_property("duration", self._onReadyWait)
-        with self.seekLock:  
+        self.seekLock=Condition()
+        with self.seekLock:
             res = self.seekLock.wait(timeout=15.0)#networking=15
-            broken = self.lastError in self.ERR_IDS
+            broken = len(self.lastError)>0
+            #print("ready: %d, broken:%s"%(res,self.lastError))
             self.isReadable=res and not broken 
-    
+
     def _onReadyWait(self,name,val):
         if val is not None:
             with self.seekLock:
@@ -340,17 +470,18 @@ class MpvPlayer():
                         self._onDuration(name, val)
                     self._readyMsgCount+=1
                     if self._readyMsgCount == 2:
+                        self._readyMsgCount=0;
                         self.seekLock.notify()
     
     def _passLog(self,loglevel, component, message):
         msg='{}: {}'.format(component, message)
-        Log.logError(msg)
+        Log.logError(">"+msg)
         with self.seekLock:
-            self.lastError=message
-            if "file" in message:
+            #TODO: file not recognized seems not be working"
+            if message in self.ERR_IDS:
+                self.lastError=message
                 self.seekLock.notifyAll()
                     
-                
     def timePos(self):
         return self._timePos-self._frameOffset/self.fps #mpg mpv bug workaround
         #return self._timePos
@@ -373,7 +504,7 @@ class MpvPlayer():
         self.mediaPlayer.stream_buffer_size='255MiB' 
  
     def tweakVC1(self):
-        Log.logInfo("VC1 codec -set hw_codecs")
+        Log.logInfo("Set VC1 codec in MPV explictly")
         self.mediaPlayer.hwdec_codecs="vc1"       
  
     def tweakMPG(self):
@@ -415,19 +546,16 @@ class MpvPlugin():
         self.iconSize=iconSize
         self.controller=None #VCControl
         self.sliderThread=SliderThread(self.onSeek)
-    
+        
     def initPlayer(self,filePath, streamData):
-        import locale
         locale.setlocale(locale.LC_NUMERIC, 'C')
-        if self.player:
-            self.player.close()
-        self.player= MpvPlayer()
-        self.player.initPlayer(self.mpvWidget)
+        self.__setupPlayer()
+        
+        #check stream data for exact one video stream
         self.player.open(filePath)    
         if not self.player.isReadable:
-            raise Exception("Invalid file")
+            raise Exception(self.player.lastError)
         self._sanityCheck(streamData)
-        self.player.connectTo(self.mpvWidget.updateUI)
         self.player.syncPlay(self.markStopPlay)
         return self.player
 
@@ -437,19 +565,40 @@ class MpvPlugin():
         raise Exception('Invalid file')       
     
     def closePlayer(self):
-        if self.player:
-            self.player.close() 
-            self.player=None
+        pass
         
     def shutDown(self):
-        self.closePlayer()
         self.sliderThread.stop()
     
-    def createWidget(self,parent):
+    def createWidget(self,showGL,parent):
+        self.showGL=showGL;
+        if showGL:
+            Log.logInfo("create GL Widget")
+            return self._createGLWidget(parent)
+        Log.logInfo("create X11 Widget")
+        return self._createPlainwidget(parent)
+    
+    def _createPlainwidget(self,parent):
         self.mpvWidget=VideoWidget(parent)
         self.mpvWidget.setAttribute(Qt.WA_DontCreateNativeAncestors)
-        self.mpvWidget.setAttribute(Qt.WA_NativeWindow)    
+        self.mpvWidget.setAttribute(Qt.WA_NativeWindow)
+        return self.mpvWidget        
+    
+    def _createGLWidget(self,parent):
+        self.player= MpvPlayer()
+        mpv=self.player.initGLPlayer()    
+        self.mpvWidget=VideoGLWidget(parent,mpv)
+        self.player.connectTo(self.mpvWidget.updateUI)
         return self.mpvWidget
+    
+    def __setupPlayer(self):
+        if self.showGL:
+            return #already happened
+        if self.player:
+            self.player.close()
+        self.player= MpvPlayer()
+        self.player.initPlayer(self.mpvWidget)
+        self.player.connectTo(self.mpvWidget.updateUI)
     
     def videoWidget(self):
         return self.mpvWidget
@@ -527,11 +676,6 @@ class MpvPlugin():
         self.player.syncToStart()
         #self._showPos()
 
-    '''
-    Performance:
-    The higher the demuxeroffset, the better the "step" seek, but the worse the fast slider seek.
-    Offset should be 0.5 for fast seek and 1.5 to 2.5 for slow seek (especially mpgts)
-    '''
     #slider    
     def enqueueFrame(self,frameNumber): #Slider stuff
         self.sliderThread.seekTo(frameNumber)
@@ -584,7 +728,6 @@ class SliderThread(QtCore.QThread):
         #self.current=0
         self.__running=True
         self.start()
-        
         
     def run(self):
         while self.__running:
