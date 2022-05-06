@@ -33,7 +33,7 @@ except ImportError:
 Compat layer for cv2 and 3
 '''
 
-Log=FFMPEGTools.Log
+Log = FFMPEGTools.Log
 
 class OpenCV2():
 
@@ -231,7 +231,7 @@ class VideoPlayerCV():
             return False
         self._capture = OPENCV.getCapture();
         if not self._capture.open(self._file):
-            Log.logError("STREAM NOT OPENED")
+            Log.error("STREAM NOT OPENED")
             return False
 
         self.frameWidth = OPENCV.getFrameWidth()
@@ -243,10 +243,10 @@ class VideoPlayerCV():
         duration = self._streamProbe.formatInfo.getDuration()
         ff_fps= self._streamProbe.getVideoStream().frameRateMultiple()
         ff_FrameCount = round(ff_fps*duration)
-        Log.logInfo("Analyze %s frameCount:%d fps:%.3f ffmpeg frameCount:%d fps:%.3f"%(self._file,self.framecount,self.fps,ff_FrameCount,ff_fps))   
+        Log.info("Analyze %s frameCount:%d fps:%.3f ffmpeg frameCount:%d fps:%.3f"%(self._file,self.framecount,self.fps,ff_FrameCount,ff_fps))   
         fps_check= (self.fps/ff_fps)
         if abs(fps_check -1.0)>10.0:
-            Log.logInfo("Irregular data, ratio: %.3f"%(fps_check))
+            Log.info("Irregular data, ratio: %.3f"%(fps_check))
             self.framecount=ff_FrameCount
             self.fps=ff_fps 
         
@@ -264,12 +264,12 @@ class VideoPlayerCV():
     def _sanityCheck(self):
         if self._streamProbe is None or not self._streamProbe.isKnownVideoFormat():
             print ("STREAM NOT KNOWN")
-            Log.logInfo("STREAM NOT KNOWN")
+            Log.info("STREAM NOT KNOWN")
             return False
         
         if len(self._streamProbe.video)!=1:
             print("Zero or more than 1 video stream")
-            Log.logInfo("Zero or more than 1 video stream")
+            Log.info("Zero or more than 1 video stream")
             return False
         
         return True
@@ -312,7 +312,7 @@ class VideoPlayerCV():
             return frame
  
         self.framecount = self.getCurrentFrameNumber()
-        Log.logInfo("No more frames @" + str(self.framecount + 1));
+        Log.info("No more frames @" + str(self.framecount + 1));
         return self.__getLastFrame(self.framecount, 0)
 
     # A test to paint on a frame. Has artefacts..
@@ -354,7 +354,7 @@ class VideoPlayerCV():
             self.setFrameAt(frameNumber)
             return self.getNextFrame()
         except: 
-            Log.logException("Error Frame")
+            Log.exception("Error Frame")
             return None
     
     def getCurrentFrameNumber(self):

@@ -10,8 +10,10 @@
 		<property name="mpv" value="${rootDir}/lib"/>
 		<property name="aurTarget" value="AUR"/>
 		<property name="debTarget" value="DEB"/>
+		<property name="ubu0Build" value="videocut_${version}+${pkgrelease}~${ubu0}"/>
 		<property name="ubu1Build" value="videocut_${version}+${pkgrelease}~${ubu1}"/>
-		<property name="ubu2Build" value="videocut_${version}+${pkgrelease}~${ubu2}"/>		
+		<property name="ubu2Build" value="videocut_${version}+${pkgrelease}~${ubu2}"/>
+		<property name="ubu0Target" value="${stage}/${ubu0Build}"/>		
 		<property name="ubu1Target" value="${stage}/${ubu1Build}"/>
 		<property name="ubu2Target" value="${stage}/${ubu2Build}"/>		
 
@@ -26,6 +28,7 @@
 		<mkdir dir="${mpv}"/>
 		<mkdir dir="${aurTarget}"/>
 		<mkdir dir="${debTarget}"/>
+		<mkdir dir="${ubu0Target}"/>
 		<mkdir dir="${ubu1Target}"/>
 		<mkdir dir="${ubu2Target}"/>
 		<property name="source" value="../src"/>
@@ -64,6 +67,7 @@
 
 		<chmod file="${ffmpeg}/bin/V3/remux5" perm="uo+rwx"/>
 		<chmod file="${ffmpeg}/bin/V4/remux5" perm="uo+rwx"/>
+		<chmod file="${ffmpeg}/bin/V5/remux5" perm="uo+rwx"/>
 
 		<copy todir="${rootDir}">
 			<fileset file="${source}/*.py" >

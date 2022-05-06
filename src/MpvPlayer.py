@@ -230,7 +230,7 @@ class MpvPlayer():
         if nbr>30:
             self.mediaPlayer.demuxer_max_back_bytes='10000MiB'
             self.mediaPlayer.demuxer_cache_wait='no'
-            Log.logInfo("applied demuxer settings for mpv > 3.x")
+            Log.info("applied demuxer settings for mpv > 3.x")
         
         observe=[]#"seeking","time-pos"...
         #ignore=["mouse-pos",""]
@@ -278,7 +278,7 @@ class MpvPlayer():
             self.mediaPlayer.loadfile(filePath)
             self._getReady()
         except Exception as ex:
-            Log.logException("Open mpv file")
+            Log.exception("Open mpv file")
             print(ex)
 
     #Test, not activated    
@@ -312,7 +312,7 @@ class MpvPlayer():
     #performance tweak: fastseek should have a low demuxer seek offset: tune if fast seek.
     def seek(self,frameNumber,fast=False):
         if self.mediaPlayer.seeking is None:
-            Log.logError("No seek! Aborting")
+            Log.error("No seek! Aborting")
             return
         step = frameNumber - self.getCurrentFrameNumber()
         if abs(step) < 20: #mpv hack: mpegts small distances
@@ -360,7 +360,7 @@ class MpvPlayer():
             self._waitSeekDone()
             #print("seekStep2 %f dial: %d currTime:%f"%(nxt,dialStep,self.timePos()))
         else:
-            Log.logInfo("MPV: Seek none!")
+            Log.info("MPV: Seek none!")
                                
     def screenshotAtFrame(self,frameNumber):
         secs = self.calcPosition(frameNumber)
@@ -382,7 +382,7 @@ class MpvPlayer():
     def _onDuration(self,name,val):
         if val is not None:
             self.duration=val
-            Log.logInfo("durance detected:%.3f"%(val))
+            Log.info("durance detected:%.3f"%(val))
         
     def _onFrameInfo(self,name,val):
         if val is not None:
@@ -398,7 +398,7 @@ class MpvPlayer():
     '''            
     def _onFps(self,name,val):
         if val is not None:
-            Log.logInfo("fps detected: %.5f"%(val))
+            Log.info("fps detected: %.5f"%(val))
             self.mediaPlayer.unobserve_property("estimated-vf-fps",self._onFps)
             self.setFPS(val)
     '''
@@ -475,7 +475,7 @@ class MpvPlayer():
     
     def _passLog(self,loglevel, component, message):
         msg='{}: {}'.format(component, message)
-        Log.logError(">"+msg)
+        Log.error(">%s",msg)
         with self.seekLock:
             #TODO: file not recognized seems not be working"
             if message in self.ERR_IDS:
@@ -494,21 +494,21 @@ class MpvPlayer():
     
     #tweak for transport streams
     def tweakTansportStreamSettings(self,isInterlaced):
-        Log.logInfo("Transport stream. Setting seek offset to high and interlacing: %d"%(isInterlaced))
+        Log.info("Transport stream. Setting seek offset to high and interlacing: %d"%(isInterlaced))
         self._demuxOffset=1.5#Solution for mpegts seek
         if isInterlaced:
             self.mediaPlayer.deinterlace="yes"
  
     def tweakUHD(self):
-        Log.logInfo("UHD, set stream size")
+        Log.info("UHD, set stream size")
         self.mediaPlayer.stream_buffer_size='255MiB' 
  
     def tweakVC1(self):
-        Log.logInfo("Set VC1 codec in MPV explictly")
+        Log.info("Set VC1 codec in MPV explictly")
         self.mediaPlayer.hwdec_codecs="vc1"       
  
     def tweakMPG(self):
-        Log.logInfo("MP2: Setting frame offset in mpg (mpv bug) and seek offset to high")
+        Log.info("MP2: Setting frame offset in mpg (mpv bug) and seek offset to high")
         self._frameOffset=1
         self._demuxOffset=1.5 #mpeg step seek
         
@@ -573,9 +573,9 @@ class MpvPlugin():
     def createWidget(self,showGL,parent):
         self.showGL=showGL;
         if showGL:
-            Log.logInfo("create GL Widget")
+            Log.info("create GL Widget")
             return self._createGLWidget(parent)
-        Log.logInfo("create X11 Widget")
+        Log.info("create X11 Widget")
         return self._createPlainwidget(parent)
     
     def _createPlainwidget(self,parent):
@@ -643,26 +643,26 @@ class MpvPlugin():
             fps=1.0
         #rot = streamData.getRotation()
         #ratio = streamData.getAspectRatio()
-        Log.logInfo("Analyze MPV frameCount:%d fps:%.3f /FFMPEG frameCount:%d fps:%.3f, interlaced:%d"%(frameCount,fps,ff_FrameCount,ff_fps,interlaced))   
+        Log.info("Analyze MPV frameCount:%d fps:%.3f /FFMPEG frameCount:%d fps:%.3f, interlaced:%d"%(frameCount,fps,ff_FrameCount,ff_fps,interlaced))   
         
         fps_check= abs(self._secureDiv(self.player.fps,ff_fps)-1)
         #if fps_check >0.1:
-        Log.logInfo("Setting FPS into MPV, ratio: %.3f setting fps %.3f"%(fps_check,ff_fps))
+        Log.info("Setting FPS into MPV, ratio: %.3f setting fps %.3f"%(fps_check,ff_fps))
         self.player.setFPS(ff_fps)
             
         fcCheck= self._secureDiv(self.player.framecount,ff_FrameCount)
         if fcCheck < 0.9 or fcCheck > 1.1:
-            Log.logInfo("Irregular count, ratio: %.3f, setting framecount %d"%(fcCheck,ff_FrameCount))
+            Log.info.logInfo("Irregular count, ratio: %.3f, setting framecount %d"%(fcCheck,ff_FrameCount))
             self.player.framecount=max(1,ff_FrameCount)    
             
         #Transport stream handling:
-        if streamData.isTransportStream():
+        if streamData.isTransportStream() or interlaced:
             self.player.tweakTansportStreamSettings(interlaced)  
         if isUHD:
             self.player.tweakUHD() 
-        if streamData.isVC1():
+        if streamData.isVC1Codec():
             self.player.tweakVC1()  
-        if streamData.isMPEG2():
+        if streamData.isMPEG2Codec():
             self.player.tweakMPG()                        
 
     def _secureDiv(self,nominator,denominator):

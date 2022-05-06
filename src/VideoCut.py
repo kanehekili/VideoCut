@@ -23,7 +23,6 @@ from PyQt5.Qt import Qt
 from datetime import timedelta
 from FFMPEGTools import FFMPEGCutter, FFStreamProbe, CuttingConfig, OSTools, ConfigAccessor, VCCutter,FFmpegVersion
 import FFMPEGTools 
-import threading
 from time import sleep, time
 import xml.etree.cElementTree as CT
 #####################################################
@@ -776,7 +775,7 @@ class MainFrame(QtWidgets.QMainWindow):
             text2 = ''.join(entries)
                                         
         except:
-            Log.logException("Invalid codec format")
+            Log.exception("Invalid codec format")
             text = "<br><b>No Information</b><br>"  
             text2= "<br> Please select a file first"
         self.__getInfoDialog(text + text2).show()
@@ -853,7 +852,7 @@ class MainFrame(QtWidgets.QMainWindow):
         try:
             super(MainFrame, self).closeEvent(event)
         except:
-            Log.logException("Error Exit")
+            Log.exception("Error Exit")
 
 '''    
 class LanguageModel():
@@ -1320,7 +1319,7 @@ class VideoControl(QtCore.QObject):
             self.gui.updateWindowTitle(OSTools().getFileNameOnly(filePath))
             self._initVideoViews()
         except Exception as ex:
-            Log.logException("Setting file")
+            Log.exception("Setting file")
             if not OSTools().fileExists(filePath):
                 self.lastError = "File not found"
             else:
@@ -1390,7 +1389,7 @@ class VideoControl(QtCore.QObject):
             cutList = XMLAccessor(self.currentPath).readXML()
         except Exception as error:
             print(error)
-            Log.logException("Error restore:")  
+            Log.exception("Error restore:")  
             return  
         for cut in cutList:
             mode = VideoCutEntry.MODE_STOP
@@ -1424,7 +1423,7 @@ class VideoControl(QtCore.QObject):
     # callback from stop button
     def killSaveProcessing(self):
         if self.cutter is None:
-            Log.logInfo("Can't kill process")
+            Log.info("Can't kill process")
         else:
             self.cutter.stopCurrentProcess()
 
@@ -1435,7 +1434,7 @@ class VideoControl(QtCore.QObject):
             
             if cutEntry.isStartMode():
                 if block:
-                    Log.logInfo("Start invalid: %s" % (cutEntry.getTimeString()))
+                    Log.info("Start invalid: %s" % (cutEntry.getTimeString()))
                 else:
                     block = []
                     block.append(cutEntry)
@@ -1445,7 +1444,7 @@ class VideoControl(QtCore.QObject):
                     spanns.append(block)
                     block = None
                 else:
-                    Log.logInfo("Stop ignored:" + cutEntry.getTimeString())
+                    Log.info("Stop ignored:" + cutEntry.getTimeString())
         #src = self.player._file
         src = self._currentFile
         # need that without extension!
@@ -1509,7 +1508,7 @@ class VideoControl(QtCore.QObject):
             t2 = cutmark[1].timeDelta()
             hasSucess = self.cutter.cutPart(t1, t2, index, slices)
             if not hasSucess:
-                Log.logError("***Cutting failed***")
+                Log.error("***Cutting failed***")
                 return
         self.cutter.join()  
         
@@ -1671,7 +1670,7 @@ class LongRunningOperation(QtCore.QThread):
         try:
             self.function(*self.arguments)
         except Exception as ex:
-            Log.logException("***Error in LongRunningOperation***")
+            Log.exception("***Error in LongRunningOperation***")
             self.msg = "Error while converting: "+str(ex)
         finally:
             self.signal.emit(self)
@@ -1749,15 +1748,15 @@ def handle_exception(exc_type, exc_value, exc_traceback):
         infoText = str(exc_value)
         detailText = "*".join(traceback.format_exception(exc_type, exc_value, exc_traceback))
         WIN.getErrorDialog("Unexpected error", infoText, detailText).show()
-        Log.logger.error("Uncaught exception", exc_info=(exc_type, exc_value, exc_traceback))
+        Log.error("Uncaught exception", exc_info=(exc_type, exc_value, exc_traceback))
 
 def parseOptions(args):
     res={}
     res["mpv"]=True
-    res["log"]="debug"
+    res["logConsole"]=False
     res["file"]=None
     try:
-        opts,args=getopt.getopt(args[1:], "l:p:", ["log=","player="])
+        opts,args=getopt.getopt(args[1:], "cdp:", ["console","debug","player="])
         if len(args)==1:
             res["file"]=args[0]
     except getopt.GetoptError as err:
@@ -1765,11 +1764,13 @@ def parseOptions(args):
         sys.exit(2)
     
     for o,a in opts:
-        if o in ("-l","--log"):
-            print("log:",o," val:",a)
+        if o in ("-d","--debug"):
+            FFMPEGTools.setLogLevel("Debug")
         elif o in ("-p","--player"):
             if a in "cv":
                 res["mpv"]=False
+        elif o in ("-c","--console"):
+            res["logConsole"]=True
         else:
             print("Undef:",o) 
     return res
@@ -1782,14 +1783,14 @@ def main():
         localPath = OSTools().getActiveDirectory() #won't work after setting WD
         OSTools().setCurrentWorkingDirectory()
         #Log.logInfo('*** VC located in %s***' % OSTools().getWorkingDirectory())        
-        vc_config = ConfigAccessor("vc.ini")
+        vc_config = ConfigAccessor("VideoCut","vc.ini","videocut") #folder,name&section
         vc_config.read();
         
         argv = sys.argv
-        #parseOptions(argv)
         app = QApplication(argv)
         app.setWindowIcon(getAppIcon())
         res=parseOptions(argv)
+        FFMPEGTools.setupRotatingLogger("VideoCut",res["logConsole"])
         VideoPlugin=setUpVideoPlugin(res["mpv"])
         fn =res["file"]
         if fn is None:
@@ -1799,9 +1800,9 @@ def main():
                 fn=OSTools().joinPathes(localPath,fn)
             WIN = MainFrame(app,fn)  
         app.exec_()
-        Log.logClose()
+        #logging.shutdown()
     except:
-        Log.logException("Error in main:")      
+        Log.exception("Error in main:")      
         #traceback.print_exc(file=sys.stdout)
 
 #TODO: Respect theme

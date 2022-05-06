@@ -16,41 +16,50 @@ from logging.handlers import RotatingFileHandler
 from itertools import tee
 import configparser
 from shutil import which
+import gzip
 
-class Logger():
-    def __init__(self):
-        homeDir = os.path.expanduser("~")
-        self.LogDir =OSTools().joinPathes(homeDir,".config","VideoCut")
-        OSTools().ensureDirectory(self.LogDir, None)
-        self.mainHandler=None
-        self.setupLogging()
+
+def setupRotatingLogger(logName,logConsole):
+    logSize=5*1024*1024 #5MB
+    #if OSTools().isRoot(): won't work if you call it from commandline
+    #    folder=OSTools().joinPath("/var","log")
+    #    OSTools().ensureDirectory(folder)
+    #else:
+    folder = OSTools().moduleDir()
+    if not OSTools().canWriteToFolder(folder):
+        folder= OSTools().joinPathes(OSTools().getHomeDirectory(),".config",logName)
+        OSTools().ensureDirectory(folder)
+    logPath = OSTools().joinPathes(folder,logName+".log") 
+    fh= RotatingFileHandler(logPath,maxBytes=logSize,backupCount=5)
+    fh.rotator=OSTools().compressor
+    fh.namer=OSTools().namer
+    logHandlers=[]
+    logHandlers.append(fh)
+    if logConsole:
+        logHandlers.append(logging.StreamHandler(sys.stdout))    
+    logging.basicConfig(
+        handlers=logHandlers,
+        #level=logging.INFO
+        level=logging.DEBUG,
+        format='%(asctime)s %(levelname)s : %(message)s'
+    )
+    #console - only if needed
+    '''
+    if logConsole:
+        cons = logging.StreamHandler(sys.stdout)
+        logger.addHandler(cons)    
+    '''
+def setLogLevel(levelString):
+    if levelString == "Debug":
+        Log.setLevel(logging.DEBUG)
+    elif levelString == "Info":
+        Log.setLevel(logging.INFO)
+    elif levelString == "Warning":
+        Log.setLevel(logging.WARNING)
+    elif levelString == "Error":
+        Log.setLevel(logging.ERROR)
+
         
-        
-    def setupLogging(self): 
-        logpath = os.path.join(self.LogDir,"VC.log")
-        self.mainHandler = RotatingFileHandler(logpath, mode='a', maxBytes=10000000, backupCount=2)
-        handler = logging.StreamHandler(sys.stdout)
-        handler.setLevel(logging.DEBUG)
-        logging.basicConfig(
-            handlers=[handler,self.mainHandler],
-            level=logging.DEBUG,
-            format='%(asctime)s %(message)s'
-        )  
-        self.logger = logging.getLogger(__name__)
-        
-
-    def logInfo(self, aString):
-        self.logger.log(logging.INFO, aString)
-
-    def logError(self, aString):
-        self.logger.log(logging.ERROR, aString)
-    
-    def logClose(self):
-        logging.shutdown() 
-
-    def logException(self, text):
-        self.logger.exception(text)
-
 class OSTools():
     __instance=None
 
@@ -89,6 +98,9 @@ class OSTools():
         dname = os.path.dirname(abspath)
         return dname               
 
+    def moduleDir(self):
+        return os.path.dirname(__file__)
+
     #location of "cwd", i.e where is bash..
     def getActiveDirectory(self):
         return os.getcwd()
@@ -97,6 +109,7 @@ class OSTools():
     def isAbsolute(self,path):
         return os.path.isabs(path)
 
+    #The users home directory - not where the code lies
     def getHomeDirectory(self):
         return os.path.expanduser("~")
 
@@ -113,7 +126,13 @@ class OSTools():
         if self.fileExists(path):
             os.remove(path)
 
-    def ensureDirectory(self, path, tail):
+    def canWriteToFolder(self,path):
+        return os.access(path,os.W_OK)
+
+    def canReadFromFolder(self,path):
+        return os.access(path,os.R_OK)
+
+    def ensureDirectory(self, path, tail=None):
         # make sure the target dir is present
         if tail is not None:
             path = os.path.join(path, tail)
@@ -144,13 +163,36 @@ class OSTools():
         next(b, None)
         return list(zip(a, b))
 
+    def isRoot(self):
+        return os.geteuid()==0
+
+    def countFiles(self,aPath,searchString):
+        log_dir=os.path.dirname(aPath)
+        cnt=0
+        for f in os.listdir(log_dir):
+            if searchString is None or searchString in f:
+                cnt+=1
+        return cnt
+
+    #logging rotation & compression
+    def compressor(self,source, dest):
+        with open(source,'rb') as srcFile:
+            data=srcFile.read()
+            bindata = bytearray(data)
+            with gzip.open(dest,'wb') as gz:
+                gz.write(bindata)
+        os.remove(source)
+    
+    def namer(self,name):
+        return name+".gz"
 
 class ConfigAccessor():
-    __SECTION = "videocut"
+    __SECTION = "default" 
     homeDir = OSTools().getHomeDirectory()
 
-    def __init__(self, filePath):
-        self._path = OSTools().joinPathes(self.homeDir,".config","VideoCut",filePath)
+    def __init__(self, folder,filePath,section="default"):
+        self.__SECTION=section
+        self._path = OSTools().joinPathes(self.homeDir,".config",folder,filePath)
         self.parser = configparser.ConfigParser()
         self.parser.add_section(self.__SECTION)
         
@@ -191,8 +233,7 @@ class ConfigAccessor():
 
 
 BIN = "ffmpeg"
-Log = Logger()
-
+Log=logging.getLogger("Main")
 
 def parseCVInfos(cvtext):
     lines = cvtext.splitlines(False)
@@ -240,13 +281,13 @@ def timedeltaToString2(deltaTime):
     so = str(s).rjust(2, '0')
     mso = str(ms).rjust(3, '0')
     return '%s.%s' % (so, mso)
-
+'''
 def log(*messages): #text value only...
     # Hook for logger...
     # cnt = len(messages)
     #print("{0} {1}".format(*messages))
     Log.logInfo("{0} {1}".format(*messages))
-    '''
+    
     cnt = len(messages)
     r= range(cnt)
     tmp=[]
@@ -256,8 +297,8 @@ def log(*messages): #text value only...
         tmp.append('}')
     fmt=''.join(tmp)    
     Log.logInfo(fmt.format(*messages))
-    '''
-
+    
+'''
     
     # execs an command, yielding the lines to caller. Throws exception on error
 def executeAsync(cmd, commander):
@@ -351,7 +392,7 @@ class FFPacketProbe():
         if count is not None:
             cmd = cmd + ["-read_intervals", seekTo + "%+#" + str(count)]
         cmd.extend(("-show_packets", "-select_streams", "v:0", "-show_entries", "packet=pts,pts_time,dts,dts_time,flags", "-of", "csv" , self.path, "-v", "quiet"))
-        log("FFPacket:", cmd)    
+        Log.debug("FFPacket:%s", cmd)    
         result = Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE).communicate()
         if len(result[0]) == 0:
             raise IOError('No such media file ' + self.path)
@@ -658,6 +699,43 @@ class FFStreamProbe():
     def sanityCheck(self):
         if self.getVideoStream() is None:
             raise IOError("No video stream available")
+        if logging.root.level!=logging.DEBUG:
+            return 
+        Log.debug("-------- Video -------------")
+        s = self.getVideoStream()
+        Log.debug("Index: %d", s.getStreamIndex())
+        Log.debug("codec %s", s.getCodec())
+        Log.debug("getCodecTimeBase: %s", s.getCodecTimeBase())
+        Log.debug("getTimeBase: %s", s.getTimeBase())
+        Log.debug("getAspect %s", s.getAspectRatio())
+        Log.debug("getFrameRate_r: %.3f", s.frameRateMultiple())
+        Log.debug("getAVGFrameRate: %3.f", s.frameRateAvg())  # Common denominator
+        Log.debug("getDuration: %.3f", s.duration())
+        Log.debug("getWidth: %s", s.getWidth())
+        Log.debug("getHeight: %s", s.getHeight())
+        Log.debug("isAudio: %r", s.isAudio())
+        Log.debug("isVideo: %r", s.isVideo())
+        
+        Log.debug("-------- Audio -------------")
+        s = self.getAudioStream()  
+        if not s:
+            Log.debug("No audio")
+            exit(0)  
+        Log.debug("Index:%d", s.getStreamIndex())
+        Log.debug("getCodec:%s", s.getCodec())
+        Log.debug("bitrate(kb) %d", s.getBitRate())
+        Log.debug("getCodecTimeBase: %s", s.getCodecTimeBase())
+        Log.debug("getTimeBase: %s", s.getTimeBase())
+        Log.debug("getDuration: %.3f", s.duration())
+        Log.debug("isAudio: %r", s.isAudio())
+        Log.debug("isVideo: %r", s.isVideo())
+        Log.debug("-----------Formats-----------")
+        f=self.formatInfo
+        Log.debug("Fmt Names:%s",f.formatNames())
+        Log.debug("Fmt bitrate;%d",f.getBitRate())
+        Log.debug("Fmt dur: %.3f",f.getDuration())
+        Log.debug("Fmt size %.3f",f.getSizeKB())
+        Log.debug("-----------EOF---------------")
              
     def getVideoStream(self):
         if len(self.video) == 0:
@@ -712,21 +790,19 @@ class FFStreamProbe():
     This filter is required for copying an AAC stream from 
     a raw ADTS AAC or an MPEG-TS container to MP4A-LATM.
     '''
-    
     def needsAudioADTSFilter(self):
         if self.getAudioStream() is None:
             return False
-        return self.getAudioStream().getCodec() == "aac" and (self.isH264() or self.isMP4())
+        return self.getAudioStream().getCodec() == "aac" and (self.isH264() or self.isMP4Container())
     
     '''
     check if needs the h264_mp4toannexb filter-
-    Used on mp4 or h264, for converting INTO transport streams
+     Use on: MP4 file(container) containing an H.264 stream to mpegts format
     '''
-
     def needsH264Filter(self):
         if self.isTransportStream():
             return False;
-        return self.isH264()
+        return self.isH264Codec() #also works work mkv
     
     # VideoFormat is format info....
     def getFormatNames(self):
@@ -781,16 +857,16 @@ class FFStreamProbe():
     is MP4? Since its a formatcheck it can't be mp4-TS
     '''
 
-    def isMP4(self): 
+    def isMP4Container(self): 
         return self.hasFormat("mp4")
     
-    def isMPEG2(self):
+    def isMPEG2Codec(self):
         return "mpeg" in self.getVideoStream().getCodec()
         
-    def isH264(self):
+    def isH264Codec(self):
         return "h264" == self.getVideoStream().getCodec()
     
-    def isVC1(self):
+    def isVC1Codec(self):
         return "vc1" == self.getVideoStream().getCodec()
     
     
@@ -883,10 +959,11 @@ class VideoFormatInfo():
 
     def _parse(self, dataArray):
         for entry in dataArray:
+            val=self.NA
             try:
                 (key, val) = entry.strip().split('=')
             except:
-                log("Error in entry:", entry)
+                Log.error("Error in entry:%s", entry)
             if self.NA != val:
                 if self.TAG in key:
                     key = key.split(':')[1]
@@ -948,7 +1025,7 @@ class VideoStreamInfo():
             try:
                 (key, val) = entry.strip().split('=')
             except:
-                log("Error in entry:", entry)
+                Log.error("Error in entry:%s", entry)
 
             if self.NA != val:
                 if self.TAG in key:
@@ -970,6 +1047,9 @@ class VideoStreamInfo():
         return 1.0
 
     def getRotation(self):
+        result = self.dataDict.get('rotation',None)
+        if result:
+            return int(result)
         result = self.dataDict.get('TAG:rotate',None)
         if result:
             return int(result)
@@ -1109,7 +1189,6 @@ class FFFrameProbe():
                 break
             if re.match('\[\/FRAME\]', line):
                 proc += 1
-                log("p ", proc)
                 
 #             dataBucket = self.__processLine(line,dataBucket)
 #             if len(dataBucket)==0:
@@ -1272,13 +1351,13 @@ class FFMPEGCutter():
         durString = timedeltaToFFMPEGString(timedelta(seconds=deltaSeconds, microseconds=deltaMillis))
 
         # fast search - which is key search
-        log('Prefetch seek/dur: ', prefetchString, ">>", durString)
+        Log.info('Prefetch seek/dur:%s >> %s ', prefetchString, durString)
         if nbrOfFragments == 1:
             fragment = self.targetPath()
         else:
             ext = self.retrieveConcatExtension()
             fragment = self._getTempPath() + str(index) + ext
-        log("generate file:", fragment)
+        Log.debug("generate file:%s", fragment)
         self.say("Cutting part:" + str(index))
         
         cmdExt = self._videoMode()
@@ -1293,7 +1372,7 @@ class FFMPEGCutter():
             cmd.extend(self.langMappings)
         cmdExt.extend(["-avoid_negative_ts", "1", "-shortest", fragment])
         cmd.extend(cmdExt)
-        log("cut:", cmd)
+        Log.debug("cut:%s", cmd)
         prefix = "Cut part " + str(index) + ":"  
         try:
             for path in executeAsync(cmd, self):
@@ -1325,7 +1404,7 @@ class FFMPEGCutter():
         if self._config.streamData.getAudioStream() is None:
             return []
         targetFmt = FORMATS.fromFilename(self.targetPath())
-        log("audio:", self._config.streamData.getAudioStream().getCodec()," targets:",targetFmt) #TODO logging
+        Log.debug("audio: %s  targets:%s", self._config.streamData.getAudioStream().getCodec(),targetFmt) #TODO logging
         container=targetFmt.format
         lib = "copy"
         if self._config.reencode:
@@ -1335,7 +1414,7 @@ class FFMPEGCutter():
         if self._config.streamData.needsAudioADTSFilter():            
             return ["-c:a", lib, "-bsf:a", "aac_adtstoasc"]
 
-        if self._config.streamData.isMPEG2() and container=='mpegts' and (self._fragmentCount == 1 or mode == self.MODE_JOIN):
+        if self._config.streamData.isMPEG2Codec() and container=='mpegts' and (self._fragmentCount == 1 or mode == self.MODE_JOIN):
             return ["-c:a", lib, "-f", "dvd"]
 
         # This must be configurable - at least for tests. mp2 seems to work for kodi+mp4
@@ -1354,7 +1433,7 @@ class FFMPEGCutter():
         srcContainer=srcFmt.format
         
 
-        log("video:", videoStream.getCodec())
+        Log.debug("video %s:", videoStream.getCodec())
         lib="copy"
         bsf=None
         codec=None
@@ -1420,10 +1499,10 @@ class FFMPEGCutter():
                 subSrc= self._config.streamData.subtitleCodec()
                 subTarget= targetFmt.subtitleFormat()
                 if not FORMATS.sameSubGroup(subSrc,subTarget): #TODO ? Only if we can't copy them.  
-                    log("subtitle:","src and target are not both text or image")
+                    Log.warning("subtitle: src and target are not same text or image")
                     return []
                 if subTarget is None:
-                    log("subtitle:","container does not support subtitles")
+                    Log.warning("subtitle: container does not support subtitles")
                     return[]
                 scopy=subTarget
                 
@@ -1511,7 +1590,7 @@ class FFMPEGCutter():
         if len(self.langMappings) > 0:
             cmd.extend(["-map", "0"])
         cmd.append(self.targetPath())
-        log("join:", cmd)
+        Log.info("join:%s", cmd)
         prefix = "Join:"  
         try:
             for path in executeAsync(cmd, self):
@@ -1546,7 +1625,7 @@ class FFMPEGCutter():
             if len(text) > 5:
                 print ("<" + text.rstrip())   
         if "failed" in text:
-            print ("ERR:", text)
+            Log.error("FFmpeg error: %s", text)
             self.say(prefix + " !Conversion failed!")
             self.warn(text);
             return False
@@ -1605,7 +1684,7 @@ class FFMPEGCutter():
         # Stop button has been pressed....
         self.killed = True
         if self.runningProcess is None:
-            self.log("Can't kill proc!", "-Error")
+            Log.warning("Can't kill proc! -Error")
             self.warn("Can't kill proc!", "-Error")
         else:
             print("FFMPEGCutter - stop process")
@@ -1681,7 +1760,7 @@ class VCCutter():
         cmd = cmd + [self.config.targetPath]    
                 
         print(cmd)
-        log("cut file:", cmd)
+        Log.debug("cut file:%s", cmd)
         try:
             start = time.monotonic()
             for path in executeAsync(cmd, self):
@@ -1694,7 +1773,7 @@ class VCCutter():
 
         except Exception as error:
             self.warn("Remux failed: %s" % (error))
-            log("Remux failed", error)
+            Log.error("Remux failed %s", str(error))
             self.runningProcess = None
             return False
         
@@ -1742,7 +1821,7 @@ class VCCutter():
                 aLine= text.rstrip()
                 print ("<" + aLine )  
                 if "Err:" in aLine:
-                    log(">", aLine)
+                    Log.debug(">%s", aLine)
                     if not "muxing" in aLine: 
                         self.warn(aLine);
             return False
@@ -1756,7 +1835,7 @@ class VCCutter():
         # Stop button has been pressed....
         self.killed = True
         if self.runningProcess is None:
-            self.log("Can't kill proc!", "-Error")
+            Log.error("Can't kill proc! -Error")
         else:
             print("VCCutter - stop process")
             self.runningProcess.kill()
@@ -1793,7 +1872,7 @@ class FFmpegVersion():
             g1 = m.group(0)
             print(g1)
             self.version = float(g1)
-            log("FFmepg Version:", float(g1))
+            Log.info("FFmepg Version:%.3f", float(g1))
 
 
 class FFmpegPicture():

@@ -1,7 +1,7 @@
 # VideoCut
-Version 2.1.0
+Version 2.1.1
 
-![Download](https://github.com/kanehekili/VideoCut/releases/download/2.1.0/videocut2.1.0.tar)
+![Download](https://github.com/kanehekili/VideoCut/releases/download/2.1.1/videocut2.1.1.tar)
 
 MP2/MP4 Cutter for Linux on base of mpv and ffmpeg. Cutting is lossless, the target file will not be reencoded. 
 
@@ -17,6 +17,7 @@ The current version is written in python3 and uses the qt5 widget kit.
 ### Prerequisites
 * Arch: python3, python-pillow and mpv
 * Debian/Mint/Ubuntu: python3 python3-pil libmpv1 python3-pyqt5.qtopengl (no-recommends)
+  #not working for Ubuntu 18.4: libmpv - use python3-opencv instead
 * Fedora: python3-pillow-qt and mpv-libs.x86_64
 * ffmpeg > 3.X to 5.X
 * python3-pyqt5
@@ -73,7 +74,7 @@ MPV supports audio streams while playing. Unfortunately it relies on the audio s
 
 ##Install
 
-#### Install via ppa on Linux Mint or Ubuntu (focal/Mint20 only)
+#### Install via ppa on Linux Mint or Ubuntu (focal/jammy/Mint20 only)
 ```
 sudo add-apt-repository ppa:jentiger-moratai/mediatools
 sudo apt update
@@ -97,10 +98,11 @@ Remove with:
 Select video and open it with "Open with ->VideoCut", oder via terminal "VideoCut"
 
 
-#### Install dependencies manually on Linux Mint or Ubuntu (tested from 16.04 to 22.04)
+#### Install dependencies manually on Linux Mint or Ubuntu (tested from 20.04 to 22.04)
 ```
 sudo apt –no-install-recommends install python3-pyqt5 ffmpeg python3-pil libmpv1
 ```
+libmpv1 won't work on Ubuntu 18.04 - no bindings for the old libs - use opencv instead
 
 #### Install dependencies on Fedora
 ```
@@ -136,12 +138,14 @@ remux5 is a c binary based on the libavcodec library, but uses an integrated app
 ### Exact frame cut for one GOP only?
 Can't be really implemented with the ffmpeg ABI. The transcoded part will have different coding parameters than the rest of the stream. A decoder cannot handle that change. On the other hand there is no way to transcode the GOP with the exact parameters of the original stream, since only a subset of h264 paramenters are accepted by the ffmpeg ABI. 
 
-### Legacy Opencv
+### Legacy Opencv (for Ubuntu 18.04 and older)
 Since Videocut ran with OpenCV for many years it is still available. If needed it has to be downloaded 
 * python3-opencv
 * hdf5 (Arch only)
 
-Create a .desktop file with the line "Exec= python3 .../VideoCut.py -p cv %f". Opencv will not be displaying subtitles nor frametypes.
+Copy the .desktop file and change the exec line to "Exec= python3 .../VideoCut.py -p cv %f"
+
+Opencv will not be displaying subtitles nor frametypes.
 
 ### Changes 
 08.07.2016
@@ -252,3 +256,7 @@ Create a .desktop file with the line "Exec= python3 .../VideoCut.py -p cv %f". O
 05.04.2022
 * Support for wayland (OpenGL Widget)
 * Tune MPV settings for older mpv versions
+
+04.05.2022
+* Fixed ffmpeg3 build for older distros
+* revamped logging
