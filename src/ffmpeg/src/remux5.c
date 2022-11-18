@@ -30,6 +30,10 @@
   * ffmpeg 4.x
   * #define LIBAVCODEC_VERSION_MAJOR  58
   * #define LIBAVCODEC_VERSION_MINOR 18
+  *
+  * ffmpeg 5
+  * #define FF_API_OLD_CHANNEL_LAYOUT   (LIBAVUTIL_VERSION_MAJOR < 58)
+  * else: #include <libavutil/channel_layout.h>
   */
 #include <libavutil/timestamp.h>
 #include <libavformat/avformat.h>
@@ -194,7 +198,9 @@ static int _collectAllStreams(){
     	        return -1;
     	    }
     	}else if (in_codecpar->codec_type == AVMEDIA_TYPE_AUDIO){
-           	int channels = in_codecpar->channels;
+           int channels = in_codecpar->channels;
+			//LIBAVUTIL_VERSION_MAJOR > 57
+            //int channels= in_codecpar->ch_layout>nb_channels;
             int sr = in_codecpar->sample_rate;
         	currLang = av_dict_get(ifmt_ctx->streams[i]->metadata, "language", NULL,0);
         	int audioIndex= currLang!=NULL?getLanguageIndex(currLang->value):-1;
@@ -1218,12 +1224,15 @@ static int mux1(CutData head,CutData tail){
             //run audio until it reaches tail.end as well
         	//int64_t refTime= av_rescale_q(context.refTime,videoStream->inStream->time_base,streamInfo->inStream->time_base);
         	int64_t refTime= av_rescale_q(context.audio_sync_dts,audioref->inStream->time_base,streamInfo->inStream->time_base);
-        	if (!fcnt || pkt.dts<refTime){
+        	if (pkt.dts<refTime){//independent of any flagkey!
         		av_log(NULL,AV_LOG_VERBOSE,"Skip head A/S packet %ld [*]\n",pkt.dts);
         		  av_packet_unref(&pkt);
         		  continue;
         	}
-            if (pkt.dts >= audioTail){
+        	else if (!fcnt) {
+        		av_log(NULL,AV_LOG_VERBOSE,"Audio ahead package %ld [*]\n",pkt.dts);
+        	}
+        	else if (pkt.dts >= audioTail){
             	if (videoAtEnd){
             		av_log(NULL,AV_LOG_VERBOSE,"Stop audio packet %ld [*] index %d\n",pkt.dts,pkt.stream_index);
             		break;

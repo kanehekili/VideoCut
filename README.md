@@ -1,7 +1,7 @@
 # VideoCut
-Version 2.1.1
+Version 2.1.2
 
-![Download](https://github.com/kanehekili/VideoCut/releases/download/2.1.1/videocut2.1.1.tar)
+![Download](https://github.com/kanehekili/VideoCut/releases/download/2.1.1/videocut2.1.2.tar)
 
 MP2/MP4 Cutter for Linux on base of mpv and ffmpeg. Cutting is lossless, the target file will not be reencoded. 
 
@@ -21,7 +21,7 @@ The current version is written in python3 and uses the qt5 widget kit.
 * Fedora: python3-pillow-qt and mpv-libs.x86_64
 * ffmpeg > 3.X to 5.X
 * python3-pyqt5
-* optional:(legacy) OpenCV 2.4 or OpenCV 3 (must be build with ffmpeg - with all its dependencies)
+* optional:(legacy) OpenCV 2.4 up to OpenCV 4.x (must be build with ffmpeg - with all its dependencies)
 
 #### Set GTK Theme for this QT application
 If you are running a DE with GTK/Gnome (as opposed to LXQT or KDE) you need to tweak your system:
@@ -69,9 +69,8 @@ Finalized in Version 1.3.0, improved in Version 2.0.0.  Not all containers (e.g.
 
 For DVB transport stream you should keep the ".m2t" ending, mkv containers shouldn't be changed either. See [here](https://en.wikipedia.org/wiki/Comparison_of_video_container_formats) for a overview of containers.
 
-### Audio
-MPV supports audio streams while playing. Unfortunately it relies on the audio stream while seeking (precise) thus rendering exact seeking sometimes difficult due to problems decoding it. So audio is turned of (not just muted) while seeking. This sometimes leads to audio dropouts while playing the video im mpv (not on the cut film!)
-
+### Audio Monitoring
+MPV supports audio streams while playing. Unfortunately it relies on the audio stream while seeking (precise) thus rendering exact seeking sometimes difficult due to problems decoding it. So audio is turned of (not just muted) while seeking. The "auto" mode has been replaced with the first valid audio stream and seems to work better for listening while cutting. 
 ##Install
 
 #### Install via ppa on Linux Mint or Ubuntu (focal/jammy/Mint20 only)
@@ -260,3 +259,7 @@ Opencv will not be displaying subtitles nor frametypes.
 04.05.2022
 * Fixed ffmpeg3 build for older distros
 * revamped logging
+
+17.11.2022
+* Audio fix vor very short cuts (< 1 min)
+* Audio monitoring via mpv improved

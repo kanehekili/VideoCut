@@ -21,12 +21,8 @@ import gzip
 
 def setupRotatingLogger(logName,logConsole):
     logSize=5*1024*1024 #5MB
-    #if OSTools().isRoot(): won't work if you call it from commandline
-    #    folder=OSTools().joinPath("/var","log")
-    #    OSTools().ensureDirectory(folder)
-    #else:
-    folder = OSTools().moduleDir()
-    if not OSTools().canWriteToFolder(folder):
+    folder = OSTools().getActiveDirectory()
+    if not OSTools().canWriteToFolder(folder): 
         folder= OSTools().joinPathes(OSTools().getHomeDirectory(),".config",logName)
         OSTools().ensureDirectory(folder)
     logPath = OSTools().joinPathes(folder,logName+".log") 

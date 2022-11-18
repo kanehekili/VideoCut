@@ -221,7 +221,8 @@ class MpvPlayer():
         self._lastDispatch=0.0
         self.lastError=""
         self._readyMsgCount=0
-        self._frameOffset=0        
+        self._frameOffset=0   
+        self._audioIndex="auto"     
     
     def _hookEvents(self):
         ver = self.mpvVersion()
@@ -511,6 +512,9 @@ class MpvPlayer():
         Log.info("MP2: Setting frame offset in mpg (mpv bug) and seek offset to high")
         self._frameOffset=1
         self._demuxOffset=1.5 #mpeg step seek
+    
+    def setAudioIndex(self,intIndex):
+        self._audioIndex=str(intIndex)
         
     def togglePlay(self):
         if self.mediaPlayer is None:
@@ -520,7 +524,8 @@ class MpvPlayer():
         
         playing = self.mediaPlayer.pause #property
         if playing:
-            self.mediaPlayer.audio="auto"
+            #self.mediaPlayer.audio="auto" #TODO: Doesnt work, get first valid stream!
+            self.mediaPlayer.audio=self._audioIndex
             self.mediaPlayer["mute"]="no" #option
         else:
             self.mediaPlayer["mute"]="yes"
@@ -630,7 +635,11 @@ class MpvPlugin():
         if streamData is None:
             return
         duration = streamData.formatInfo.getDuration()
-        videoInfo = streamData.getVideoStream()               
+        videoInfo = streamData.getVideoStream()   
+        audioInfo = streamData.getAudioStream()
+        if audioInfo:
+            audioIndex = audioInfo.getStreamIndex()
+            self.player.setAudioIndex(audioIndex)        
         ff_fps= videoInfo.frameRateMultiple()
         ff_FrameCount = round(ff_fps*duration)
         isUHD = float(videoInfo.getWidth())>3000.0
