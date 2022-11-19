@@ -741,7 +741,7 @@ class FFStreamProbe():
     def getAudioStream(self):
         for stream in self.audio:
             # if stream.getBitRate()>0:
-            if stream.getCodec() != VideoStreamInfo.NA:
+            if stream.isValidAudio():
                 return stream     
         return None
     
@@ -1146,6 +1146,18 @@ class VideoStreamInfo():
         if "duration" in self.dataDict:
             return float(self.dataDict["duration"])
         return 0.0 
+   
+    '''
+    some audio stuff
+    '''
+    def sampleRate(self):
+        return int(self.dataDict.get("sample_rate","0"))
+    
+    def audioChannels(self):
+        return int(self.dataDict.get("channels","0"))  
+
+    def isValidAudio(self):
+        return self.sampleRate()>0 and self.audioChannels()>0 and self.getCodec()!= VideoStreamInfo.NA
    
     def getLanguage(self):
         if "language" in self.tagDict:
