@@ -1,7 +1,7 @@
 # VideoCut
-Version 2.1.2
+Version 2.1.3
 
-![Download](https://github.com/kanehekili/VideoCut/releases/download/2.1.2/videocut2.1.2.tar)
+![Download](https://github.com/kanehekili/VideoCut/releases/download/2.1.3/videocut2.1.3.tar)
 
 MP2/MP4 Cutter for Linux on base of mpv and ffmpeg. Cutting is lossless, the target file will not be reencoded. 
 
@@ -263,3 +263,6 @@ Opencv will not be displaying subtitles nor frametypes.
 17.11.2022
 * Audio fix vor very short cuts (< 1 min)
 * Audio monitoring via mpv improved
+
+28.11.2022
+* Adapt to new mpv lib.
