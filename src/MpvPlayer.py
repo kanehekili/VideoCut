@@ -35,7 +35,7 @@ except ImportError:
     sys.exit(1)    
 
 try:
-    from lib.mpv import (MPV,OpenGlCbGetProcAddrFn,MpvRenderContext,MpvEventEndFile)
+    from lib.mpv import (MPV,MpvGlGetProcAddressFn,MpvRenderContext,MpvEventEndFile)
 except:
     print (("MPV lib not found"))  
     app = QApplication(sys.argv)
@@ -78,7 +78,7 @@ class VideoGLWidget(QtWidgets.QOpenGLWidget):
         self.ratio= 1.0 #?is that true?
         self.mpv=mpv
         self.ctx = None
-        self.get_proc_addr_c = OpenGlCbGetProcAddrFn(get_proc_addr)
+        self.get_proc_addr_c = MpvGlGetProcAddressFn(get_proc_addr)
         self._defaultHeight = 518 #ratio 16:9
         self._defaultWidth = 921
 

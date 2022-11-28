@@ -2,18 +2,17 @@
 # vim: ts=4 sw=4 et
 #
 # Python MPV library module
-# Copyright (C) 2017-2020 Sebastian Götte <code@jaseg.net>
+# Copyright (C) 2017-2022 Sebastian Götte <code@jaseg.net>
 #
-# This program is free software: you can redistribute it and/or modify it under the terms of the GNU Affero General
-# Public License as published by the Free Software Foundation, either version 3 of the License, or (at your option) any
-# later version.
+# This program is free software; you can redistribute it and/or modify it under the terms of the GNU General Public
+# License as published by the Free Software Foundation; either version 2 of the License, or (at your option) any later
+# version.
 #
 # This program is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied
-# warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU Affero General Public License for more
-# details.
+# warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License for more details.
 #
-# You should have received a copy of the GNU Affero General Public License along with this program.  If not, see
-# <http://www.gnu.org/licenses/>.
+# You should have received a copy of the GNU General Public License along with this program; if not, write to the Free
+# Software Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 #
 
 from ctypes import *
@@ -24,16 +23,18 @@ import sys
 from warnings import warn
 from functools import partial, wraps
 from contextlib import contextmanager
+from concurrent.futures import Future, InvalidStateError
 import collections
 import re
 import traceback
 
 if os.name == 'nt':
-    dll = ctypes.util.find_library('mpv-1.dll')
+    # Note: mpv-2.dll with API version 2 corresponds to mpv v0.35.0. Most things should work with the fallback, too.
+    dll = ctypes.util.find_library('mpv-2.dll') or ctypes.util.find_library('mpv-1.dll')
     if dll is None:
-        raise OSError('Cannot find mpv-1.dll in your system %PATH%. One way to deal with this is to ship mpv-1.dll '
-                      'with your script and put the directory your script is in into %PATH% before "import mpv": '
-                      'os.environ["PATH"] = os.path.dirname(__file__) + os.pathsep + os.environ["PATH"] '
+        raise OSError('Cannot find mpv-1.dll or mpv-2.dll in your system %PATH%. One way to deal with this is to ship '
+                      'the dll with your script and put the directory your script is in into %PATH% before '
+                      '"import mpv": os.environ["PATH"] = os.path.dirname(__file__) + os.pathsep + os.environ["PATH"] '
                       'If mpv-1.dll is located elsewhere, you can add that path to os.environ["PATH"].')
     backend = CDLL(dll)
     fs_enc = 'utf-8'
@@ -57,15 +58,14 @@ else:
 class ShutdownError(SystemError):
     pass
 
+class EventOverflowError(SystemError):
+    pass
+
 class MpvHandle(c_void_p):
     pass
 
 class MpvRenderCtxHandle(c_void_p):
     pass
-
-class MpvOpenGLCbContext(c_void_p):
-    pass
-
 
 class PropertyUnavailableError(AttributeError):
     pass
@@ -122,15 +122,25 @@ class ErrorCode(object):
             -20:    lambda *a: RuntimeError('Unspecified error') }
 
     @staticmethod
+    def human_readable(ec):
+        return _mpv_error_string(ec).decode('utf-8')
+
+    @staticmethod
     def default_error_handler(ec, *args):
-        return ValueError(_mpv_error_string(ec).decode('utf-8'), ec, *args)
+        return ValueError(ErrorCode.human_readable(ec), ec, *args)
+
+    @classmethod
+    def exception_for_ec(kls, ec, *args):
+        ec = 0 if ec > 0 else ec
+        ex = kls.EXCEPTION_DICT.get(ec, kls.default_error_handler)
+        if ex:
+            return ex(ec, *args)
 
     @classmethod
     def raise_for_ec(kls, ec, func, *args):
-        ec = 0 if ec > 0 else ec
-        ex = kls.EXCEPTION_DICT.get(ec , kls.default_error_handler)
+        ex = kls.exception_for_ec(ec, *args)
         if ex:
-            raise ex(ec, *args)
+            raise ex
 
 MpvGlGetProcAddressFn = CFUNCTYPE(c_void_p, c_void_p, c_char_p)
 class MpvOpenGLInitParams(Structure):
@@ -269,32 +279,20 @@ class MpvEventID(c_int):
     START_FILE              = 6
     END_FILE                = 7
     FILE_LOADED             = 8
-    TRACKS_CHANGED          = 9
-    TRACK_SWITCHED          = 10
-    IDLE                    = 11
-    PAUSE                   = 12
-    UNPAUSE                 = 13
-    TICK                    = 14
-    SCRIPT_INPUT_DISPATCH   = 15
     CLIENT_MESSAGE          = 16
     VIDEO_RECONFIG          = 17
     AUDIO_RECONFIG          = 18
-    METADATA_UPDATE         = 19
     SEEK                    = 20
     PLAYBACK_RESTART        = 21
     PROPERTY_CHANGE         = 22
-    CHAPTER_CHANGE          = 23
+    QUEUE_OVERFLOW          = 24
+    HOOK                    = 25
 
     ANY = ( SHUTDOWN, LOG_MESSAGE, GET_PROPERTY_REPLY, SET_PROPERTY_REPLY, COMMAND_REPLY, START_FILE, END_FILE,
-            FILE_LOADED, TRACKS_CHANGED, TRACK_SWITCHED, IDLE, PAUSE, UNPAUSE, TICK, SCRIPT_INPUT_DISPATCH,
-            CLIENT_MESSAGE, VIDEO_RECONFIG, AUDIO_RECONFIG, METADATA_UPDATE, SEEK, PLAYBACK_RESTART, PROPERTY_CHANGE,
-            CHAPTER_CHANGE )
+            FILE_LOADED, CLIENT_MESSAGE, VIDEO_RECONFIG, AUDIO_RECONFIG, SEEK, PLAYBACK_RESTART, PROPERTY_CHANGE)
 
     def __repr__(self):
-        return ['NONE', 'SHUTDOWN', 'LOG_MESSAGE', 'GET_PROPERTY_REPLY', 'SET_PROPERTY_REPLY', 'COMMAND_REPLY',
-                'START_FILE', 'END_FILE', 'FILE_LOADED', 'TRACKS_CHANGED', 'TRACK_SWITCHED', 'IDLE', 'PAUSE', 'UNPAUSE',
-                'TICK', 'SCRIPT_INPUT_DISPATCH', 'CLIENT_MESSAGE', 'VIDEO_RECONFIG', 'AUDIO_RECONFIG',
-                'METADATA_UPDATE', 'SEEK', 'PLAYBACK_RESTART', 'PROPERTY_CHANGE', 'CHAPTER_CHANGE'][self.value]
+        return f'<MpvEventID {self.value} {_mpv_event_name(self.value).decode("utf-8")}>'
 
     @classmethod
     def from_str(kls, s):
@@ -378,48 +376,66 @@ MpvNodeList._fields_ = [('num', c_int),
                         ('values', POINTER(MpvNode)),
                         ('keys', POINTER(c_char_p))]
 
-class MpvSubApi(c_int):
-    MPV_SUB_API_OPENGL_CB   = 1
-
 class MpvEvent(Structure):
     _fields_ = [('event_id', MpvEventID),
                 ('error', c_int),
                 ('reply_userdata', c_ulonglong),
-                ('data', c_void_p)]
+                ('_data', c_void_p)]
+
+    @property
+    def data(self):
+        dtype = {
+            MpvEventID.GET_PROPERTY_REPLY:     MpvEventProperty,
+            MpvEventID.PROPERTY_CHANGE:        MpvEventProperty,
+            MpvEventID.LOG_MESSAGE:            MpvEventLogMessage,
+            MpvEventID.CLIENT_MESSAGE:         MpvEventClientMessage,
+            MpvEventID.START_FILE:             MpvEventStartFile,
+            MpvEventID.END_FILE:               MpvEventEndFile,
+            MpvEventID.HOOK:                   MpvEventHook,
+            MpvEventID.COMMAND_REPLY:          MpvEventCommand,
+            }.get(self.event_id.value)
+        return cast(self._data, POINTER(dtype)).contents if dtype else None
 
     def as_dict(self, decoder=identity_decoder):
-        dtype = {MpvEventID.END_FILE:               MpvEventEndFile,
-                MpvEventID.PROPERTY_CHANGE:         MpvEventProperty,
-                MpvEventID.GET_PROPERTY_REPLY:      MpvEventProperty,
-                MpvEventID.LOG_MESSAGE:             MpvEventLogMessage,
-                MpvEventID.SCRIPT_INPUT_DISPATCH:   MpvEventScriptInputDispatch,
-                MpvEventID.CLIENT_MESSAGE:          MpvEventClientMessage
-            }.get(self.event_id.value, None)
-        return {'event_id': self.event_id.value,
-                'error': self.error,
-                'reply_userdata': self.reply_userdata,
-                'event': cast(self.data, POINTER(dtype)).contents.as_dict(decoder=decoder) if dtype else None}
+        out = cast(create_string_buffer(sizeof(MpvNode)), POINTER(MpvNode))
+        _mpv_event_to_node(out, pointer(self))
+        rv = out.contents.node_value(decoder=decoder)
+        _mpv_free_node_contents(out)
+        return rv
+
+    def __str__(self):
+        d = self.data
+        return f'<{type(d).__name__} ({self.event_id.value}) err={self.error} p={self.reply_userdata:016x} d={self.as_dict()}>'
 
 class MpvEventProperty(Structure):
-    _fields_ = [('name', c_char_p),
+    _fields_ = [('_name', c_char_p),
                 ('format', MpvFormat),
                 ('data', MpvNodeUnion)]
-    def as_dict(self, decoder=identity_decoder):
-        value = MpvNode.node_cast_value(self.data, self.format.value, decoder)
-        return {'name': self.name.decode('utf-8'),
-                'format': self.format,
-                'data': self.data,
-                'value': value}
+
+    @property
+    def name(self):
+        return self._name.decode("utf-8")
+
+    @property
+    def value(self):
+        return MpvNode.node_cast_value(self.data, self.format.value, decoder=lazy_decoder)
 
 class MpvEventLogMessage(Structure):
-    _fields_ = [('prefix', c_char_p),
-                ('level', c_char_p),
-                ('text', c_char_p)]
+    _fields_ = [('_prefix', c_char_p),
+                ('_level', c_char_p),
+                ('_text', c_char_p)]
 
-    def as_dict(self, decoder=identity_decoder):
-        return { 'prefix': self.prefix.decode('utf-8'),
-                 'level':  self.level.decode('utf-8'),
-                 'text':   decoder(self.text).rstrip() }
+    @property
+    def prefix(self):
+        return self._prefix.decode("utf-8")
+
+    @property
+    def level(self):
+        return self._level.decode("utf-8")
+
+    @property
+    def text(self):
+        return lazy_decoder(self._text)
 
 class MpvEventEndFile(Structure):
     _fields_ = [('reason', c_int),
@@ -432,27 +448,35 @@ class MpvEventEndFile(Structure):
     ERROR               = 4
     REDIRECT            = 5
 
-    # For backwards-compatibility
-    @property
-    def value(self):
-        return self.reason
-
-    def as_dict(self, decoder=identity_decoder):
-        return {'reason': self.reason, 'error': self.error}
-
-class MpvEventScriptInputDispatch(Structure):
-    _fields_ = [('arg0', c_int),
-                ('type', c_char_p)]
-
-    def as_dict(self, decoder=identity_decoder):
-        pass # TODO
+class MpvEventStartFile(Structure):
+    _fields_ = [('playlist_entry_id', c_ulonglong),]
 
 class MpvEventClientMessage(Structure):
-    _fields_ = [('num_args', c_int),
-                ('args', POINTER(c_char_p))]
+    _fields_ = [('_num_args', c_int),
+                ('_args', POINTER(c_char_p))]
 
-    def as_dict(self, decoder=identity_decoder):
-        return { 'args': [ self.args[i].decode('utf-8') for i in range(self.num_args) ] }
+    @property
+    def args(self):
+        return [ self._args[i] for i in range(self._num_args) ]
+
+class MpvEventCommand(Structure):
+    _fields_ = [('_result', MpvNode)]
+
+    def unpack(self, decoder=identity_decoder):
+        return self._result.node_value(decoder=decoder)
+
+    @property
+    def result(self):
+        return self.unpack()
+
+class MpvEventHook(Structure):
+    _fields_ = [('_name', c_char_p),
+                ('id', c_ulonglong),]
+
+    
+    @property
+    def name(self):
+        return self._name.decode("utf-8")
 
 StreamReadFn = CFUNCTYPE(c_int64, c_void_p, POINTER(c_char), c_uint64)
 StreamSeekFn = CFUNCTYPE(c_int64, c_void_p, c_int64)
@@ -465,17 +489,14 @@ class StreamCallbackInfo(Structure):
                 ('read', StreamReadFn),
                 ('seek', StreamSeekFn),
                 ('size', StreamSizeFn),
-                ('close', StreamCloseFn), ]
-#                ('cancel', StreamCancelFn)]
+                ('close', StreamCloseFn),
+                ('cancel', StreamCancelFn)]
 
 StreamOpenFn = CFUNCTYPE(c_int, c_void_p, c_char_p, POINTER(StreamCallbackInfo))
 
 WakeupCallback = CFUNCTYPE(None, c_void_p)
 
 RenderUpdateFn = CFUNCTYPE(None, c_void_p)
-
-OpenGlCbUpdateFn = CFUNCTYPE(None, c_void_p)
-OpenGlCbGetProcAddrFn = CFUNCTYPE(c_void_p, c_void_p, c_char_p)
 
 def _handle_func(name, args, restype, errcheck, ctx=MpvHandle, deprecated=False):
     func = getattr(backend, name)
@@ -511,13 +532,15 @@ def notnull_errcheck(res, func, *args):
 
 ec_errcheck = ErrorCode.raise_for_ec
 
-def _handle_gl_func(name, args=[], restype=None, deprecated=False):
-    _handle_func(name, args, restype, errcheck=None, ctx=MpvOpenGLCbContext, deprecated=deprecated)
-
 backend.mpv_client_api_version.restype = c_ulong
 def _mpv_client_api_version():
     ver = backend.mpv_client_api_version()
     return ver>>16, ver&0xFFFF
+
+MPV_VERSION = _mpv_client_api_version()
+if MPV_VERSION < (1, 108):
+    ver = '.'.join(str(num) for num in MPV_VERSION)
+    raise RuntimeError(f"python-mpv requires libmpv with an API version of 1.108 or higher (libmpv >= 0.33), but you have an older version ({ver}).")
 
 backend.mpv_free.argtypes = [c_void_p]
 _mpv_free = backend.mpv_free
@@ -529,9 +552,10 @@ backend.mpv_create.restype = MpvHandle
 _mpv_create = backend.mpv_create
 
 _handle_func('mpv_create_client',           [c_char_p],                                 MpvHandle, notnull_errcheck)
+_handle_func('mpv_create_weak_client',      [c_char_p],                                 MpvHandle, notnull_errcheck)
 _handle_func('mpv_client_name',             [],                                         c_char_p, errcheck=None)
 _handle_func('mpv_initialize',              [],                                         c_int, ec_errcheck)
-_handle_func('mpv_detach_destroy',          [],                                         None, errcheck=None)
+_handle_func('mpv_destroy',                 [],                                         None, errcheck=None)
 _handle_func('mpv_terminate_destroy',       [],                                         None, errcheck=None)
 _handle_func('mpv_load_config_file',        [c_char_p],                                 c_int, ec_errcheck)
 _handle_func('mpv_get_time_us',             [],                                         c_ulonglong, errcheck=None)
@@ -543,7 +567,8 @@ _handle_func('mpv_command',                 [POINTER(c_char_p)],                
 _handle_func('mpv_command_string',          [c_char_p, c_char_p],                       c_int, ec_errcheck)
 _handle_func('mpv_command_async',           [c_ulonglong, POINTER(c_char_p)],           c_int, ec_errcheck)
 _handle_func('mpv_command_node',            [POINTER(MpvNode), POINTER(MpvNode)],       c_int, ec_errcheck)
-_handle_func('mpv_command_async',           [c_ulonglong, POINTER(MpvNode)],            c_int, ec_errcheck)
+_handle_func('mpv_command_node_async',      [c_ulonglong, POINTER(MpvNode)],            c_int, ec_errcheck)
+_handle_func('mpv_abort_async_command',     [c_ulonglong],                              None, errcheck=None)
 
 _handle_func('mpv_set_property',            [c_char_p, MpvFormat, c_void_p],            c_int, ec_errcheck)
 _handle_func('mpv_set_property_string',     [c_char_p, c_char_p],                       c_int, ec_errcheck)
@@ -556,6 +581,7 @@ _handle_func('mpv_observe_property',        [c_ulonglong, c_char_p, MpvFormat], 
 _handle_func('mpv_unobserve_property',      [c_ulonglong],                              c_int, ec_errcheck)
 
 _handle_func('mpv_event_name',              [c_int],                                    c_char_p, errcheck=None, ctx=None)
+_handle_func('mpv_event_to_node',           [POINTER(MpvNode), POINTER(MpvEvent)],      c_int, ec_errcheck, ctx=None)
 _handle_func('mpv_error_string',            [c_int],                                    c_char_p, errcheck=None, ctx=None)
 
 _handle_func('mpv_request_event',           [MpvEventID, c_int],                        c_int, ec_errcheck)
@@ -563,7 +589,6 @@ _handle_func('mpv_request_log_messages',    [c_char_p],                         
 _handle_func('mpv_wait_event',              [c_double],                                 POINTER(MpvEvent), errcheck=None)
 _handle_func('mpv_wakeup',                  [],                                         None, errcheck=None)
 _handle_func('mpv_set_wakeup_callback',     [WakeupCallback, c_void_p],                 None, errcheck=None)
-_handle_func('mpv_get_wakeup_pipe',         [],                                         c_int, errcheck=None)
 
 _handle_func('mpv_stream_cb_add_ro',        [c_char_p, c_void_p, StreamOpenFn],         c_int, ec_errcheck)
 
@@ -575,18 +600,6 @@ _handle_func('mpv_render_context_update',               [],                     
 _handle_func('mpv_render_context_render',               [POINTER(MpvRenderParam)],                                  c_int, ec_errcheck,     ctx=MpvRenderCtxHandle)
 _handle_func('mpv_render_context_report_swap',          [],                                                         None, errcheck=None,    ctx=MpvRenderCtxHandle)
 _handle_func('mpv_render_context_free',                 [],                                                         None, errcheck=None,    ctx=MpvRenderCtxHandle)
-
-
-# Deprecated in v0.29.0 and may disappear eventually
-if hasattr(backend, 'mpv_get_sub_api'):
-    _handle_func('mpv_get_sub_api',             [MpvSubApi],                                c_void_p, notnull_errcheck, deprecated=True)
-
-    _handle_gl_func('mpv_opengl_cb_set_update_callback',    [OpenGlCbUpdateFn, c_void_p], deprecated=True)
-    _handle_gl_func('mpv_opengl_cb_init_gl',                [c_char_p, OpenGlCbGetProcAddrFn, c_void_p],    c_int, deprecated=True)
-    _handle_gl_func('mpv_opengl_cb_draw',                   [c_int, c_int, c_int],                          c_int, deprecated=True)
-    _handle_gl_func('mpv_opengl_cb_render',                 [c_int, c_int],                                 c_int, deprecated=True)
-    _handle_gl_func('mpv_opengl_cb_report_flip',            [c_ulonglong],                                  c_int, deprecated=True)
-    _handle_gl_func('mpv_opengl_cb_uninit_gl',              [],                                             c_int, deprecated=True)
 
 
 def _mpv_coax_proptype(value, proptype=str):
@@ -631,6 +644,21 @@ def _make_node_str_list(l):
         val=MpvNodeUnion(list=pointer(node_list)))
     return char_ps, node_list, node, cast(pointer(node), c_void_p)
 
+def _make_node_str_map(d):
+    """Take a dict of python objects and make a MPV string node map from it. """
+    char_ps = [ (c_char_p(k.encode('utf-8')), c_char_p(_mpv_coax_proptype(v, str))) for k, v in d.items() ]
+    node_list = MpvNodeList(
+        num=len(d),
+        keys=( c_char_p * len(d))( *[k for k, v in char_ps] ),
+        values=( MpvNode * len(d))( *[ MpvNode(
+                format=MpvFormat.STRING,
+                val=MpvNodeUnion(string=v))
+            for k, v in char_ps ]))
+    node = MpvNode(
+        format=MpvFormat.NODE_MAP,
+        val=MpvNodeUnion(map=pointer(node_list)))
+    return char_ps, node_list, node, cast(pointer(node), c_void_p)
+
 
 def _event_generator(handle):
     while True:
@@ -638,6 +666,12 @@ def _event_generator(handle):
         if event.event_id.value == MpvEventID.NONE:
             raise StopIteration()
         yield event
+
+
+def _create_null_term_cmd_arg_array(name, args):
+    args = [name.encode('utf-8')] + [(arg if type(arg) is bytes else str(arg).encode('utf-8'))
+                                     for arg in args if arg is not None] + [None]
+    return (c_char_p * len(args))(*args)
 
 
 _py_to_mpv = lambda name: name.replace('_', '-')
@@ -682,8 +716,8 @@ class _DecoderPropertyProxy(_PropertyProxy):
         setattr(self.mpv, _py_to_mpv(name), value)
 
 class GeneratorStream:
-    """Transform a python generator into an mpv-compatible stream object. This only supports size() and read(), and
-    does not support seek(), close() or cancel().
+    """Transform a python generator into an mpv-compatible stream object. The total size of the file can be indicated to
+    mpv using the size argument to __init__. Seeking is not supported.
     """
 
     def __init__(self, generator_fun, size=None):
@@ -713,7 +747,6 @@ class GeneratorStream:
 
     def cancel(self):
         self._read_iter = iter([]) # make next read() call return EOF
-        # TODO?
 
 
 class ImageOverlay:
@@ -804,6 +837,7 @@ class MPV(object):
 
     To make your program not barf hard the first time its used on a weird file system **always** access properties
     containing file names or file tags through ``MPV.raw``.  """
+
     def __init__(self, *extra_mpv_flags, log_handler=None, start_event_thread=True, loglevel=None, **extra_mpv_opts):
         """Create an MPV instance.
 
@@ -831,6 +865,7 @@ class MPV(object):
         self.lazy   = _DecoderPropertyProxy(self, lazy_decoder)
 
         self._event_callbacks = []
+        self._command_reply_callbacks = {}
         self._event_handler_lock = threading.Lock()
         self._property_handlers = collections.defaultdict(lambda: [])
         self._quit_handlers = set()
@@ -849,7 +884,7 @@ class MPV(object):
             self.set_loglevel(loglevel or 'terminal-default')
         if start_event_thread:
             self._event_thread = threading.Thread(target=self._loop, name='MPVEventHandlerThread')
-            self._event_thread.setDaemon(True)
+            self._event_thread.daemon = True
             self._event_thread.start()
         else:
             self._event_thread = None
@@ -857,34 +892,47 @@ class MPV(object):
     def _loop(self):
         for event in _event_generator(self._event_handle):
             try:
-                devent = event.as_dict(decoder=lazy_decoder) # copy data from ctypes
-                eid = devent['event_id']
+                eid = event.event_id.value
 
                 with self._event_handler_lock:
                     if eid == MpvEventID.SHUTDOWN:
                         self._core_shutdown = True
 
                 for callback in self._event_callbacks:
-                    callback(devent)
+                    callback(event)
 
                 if eid == MpvEventID.PROPERTY_CHANGE:
-                    pc = devent['event']
-                    name, value, _fmt = pc['name'], pc['value'], pc['format']
+                    pc = event.data
+                    name, value, _fmt = pc.name, pc.value, pc.format
                     for handler in self._property_handlers[name]:
                         handler(name, value)
 
                 if eid == MpvEventID.LOG_MESSAGE and self._log_handler is not None:
-                    ev = devent['event']
-                    self._log_handler(ev['level'], ev['prefix'], ev['text'])
+                    ev = event.data
+                    self._log_handler(ev.level, ev.prefix, ev.text)
 
                 if eid == MpvEventID.CLIENT_MESSAGE:
                     # {'event': {'args': ['key-binding', 'foo', 'u-', 'g']}, 'reply_userdata': 0, 'error': 0, 'event_id': 16}
-                    target, *args = devent['event']['args']
+                    target, *args = event.data.args
+                    target = target.decode("utf-8")
                     if target in self._message_handlers:
                         self._message_handlers[target](*args)
 
+                if eid == MpvEventID.COMMAND_REPLY:
+                    key = event.reply_userdata
+                    callback = self._command_reply_callbacks.pop(key, None)
+                    if callback:
+                        callback(ErrorCode.exception_for_ec(event.error), event.data)
+
+                if eid == MpvEventID.QUEUE_OVERFLOW:
+                    # cache list, since error handlers will unregister themselves
+                    for cb in list(self._command_reply_callbacks.values()):
+                        cb(EventOverflowError('libmpv event queue has flown over because events have not been processed fast enough'), None)
+
                 if eid == MpvEventID.SHUTDOWN:
-                    _mpv_detach_destroy(self._event_handle)
+                    _mpv_destroy(self._event_handle)
+                    for cb in list(self._command_reply_callbacks.values()):
+                        cb(ShutdownError('libmpv core has been shutdown'), None)
                     return
 
             except Exception as e:
@@ -903,79 +951,103 @@ class MPV(object):
         if self._core_shutdown:
             raise ShutdownError('libmpv core has been shutdown')
 
-    def wait_until_paused(self):
+    def wait_until_paused(self, timeout=None):
         """Waits until playback of the current title is paused or done. Raises a ShutdownError if the core is shutdown while
         waiting."""
-        self.wait_for_property('core-idle')
+        self.wait_for_property('core-idle', timeout=timeout)
 
-    def wait_for_playback(self):
+    def wait_for_playback(self, timeout=None):
         """Waits until playback of the current title is finished. Raises a ShutdownError if the core is shutdown while
         waiting.
         """
-        self.wait_for_event('end_file')
+        self.wait_for_event('end_file', timeout=timeout)
 
-    def wait_until_playing(self):
+    def wait_until_playing(self, timeout=None):
         """Waits until playback of the current title has started. Raises a ShutdownError if the core is shutdown while
         waiting."""
-        self.wait_for_property('core-idle', lambda idle: not idle)
+        self.wait_for_property('core-idle', lambda idle: not idle, timeout=timeout)
 
-    def wait_for_property(self, name, cond=lambda val: val, level_sensitive=True):
+    def wait_for_property(self, name, cond=lambda val: val, level_sensitive=True, timeout=None):
         """Waits until ``cond`` evaluates to a truthy value on the named property. This can be used to wait for
         properties such as ``idle_active`` indicating the player is done with regular playback and just idling around.
         Raises a ShutdownError when the core is shutdown while waiting.
         """
-        with self.prepare_and_wait_for_property(name, cond, level_sensitive):
+        with self.prepare_and_wait_for_property(name, cond, level_sensitive, timeout=timeout) as result:
             pass
+        return result.result()
 
-    def wait_for_shutdown(self):
+    def wait_for_shutdown(self, timeout=None):
         '''Wait for core to shutdown (e.g. through quit() or terminate()).'''
-        sema = threading.Semaphore(value=0)
+        try:
+            self.wait_for_event(None, timeout=timeout)
+        except ShutdownError:
+            return
 
-        @self.event_callback('shutdown')
+    def _set_error_handler(self, future):
+        @self.event_callback('shutdown', 'queue-overflow')
         def shutdown_handler(event):
-            sema.release()
-
-        sema.acquire()
-        shutdown_handler.unregister_mpv_events()
+            nonlocal future
+            try:
+                if event.event_id.value == MpvEventID.SHUTDOWN:
+                    future.set_exception(ShutdownError('libmpv core has been shutdown'))
+                else:
+                    future.set_exception(EventOverflowError('libmpv event queue has flown over because events have not been processed fast enough'))
+            except InvalidStateError:
+                pass
+        return shutdown_handler.unregister_mpv_events
 
     @contextmanager
-    def prepare_and_wait_for_property(self, name, cond=lambda val: val, level_sensitive=True):
+    def prepare_and_wait_for_property(self, name, cond=lambda val: val, level_sensitive=True, timeout=None):
         """Context manager that waits until ``cond`` evaluates to a truthy value on the named property. See
         prepare_and_wait_for_event for usage.
-        Raises a ShutdownError when the core is shutdown while waiting.
+        Raises a ShutdownError when the core is shutdown while waiting. Re-raises any errors inside ``cond``.
         """
-        sema = threading.Semaphore(value=0)
+        result = Future()
 
         def observer(name, val):
-            if cond(val):
-                sema.release()
+            try:
+                rv = cond(val)
+                if rv:
+                    result.set_result(rv)
+            except Exception as e:
+                try:
+                    result.set_exception(e)
+                except InvalidStateError:
+                    pass
+            except InvalidStateError:
+                pass
         self.observe_property(name, observer)
+        err_unregister = self._set_error_handler(result)
 
-        @self.event_callback('shutdown')
-        def shutdown_handler(event):
-            sema.release()
+        try:
+            result.set_running_or_notify_cancel()
+            yield result
 
-        yield
-        if not level_sensitive or not cond(getattr(self, name.replace('-', '_'))):
-            sema.acquire()
+            rv = cond(getattr(self, name.replace('-', '_')))
+            if level_sensitive and rv:
+                result.set_result(rv)
 
-        self.check_core_alive()
+            else:
+                self.check_core_alive()
+                result.result(timeout)
+        finally:
+            err_unregister()
+            self.unobserve_property(name, observer)
 
-        shutdown_handler.unregister_mpv_events()
-        self.unobserve_property(name, observer)
-
-    def wait_for_event(self, *event_types, cond=lambda evt: True):
+    def wait_for_event(self, *event_types, cond=lambda evt: True, timeout=None):
         """Waits for the indicated event(s). If cond is given, waits until cond(event) is true. Raises a ShutdownError
-        if the core is shutdown while waiting. This also happens when 'shutdown' is in event_types.
+        if the core is shutdown while waiting. This also happens when 'shutdown' is in event_types. Re-raises any error
+        inside ``cond``.
         """
-        with self.prepare_and_wait_for_event(*event_types, cond=cond):
+        with self.prepare_and_wait_for_event(*event_types, cond=cond, timeout=timeout) as result:
             pass
+        return result.result()
 
     @contextmanager
-    def prepare_and_wait_for_event(self, *event_types, cond=lambda evt: True):
+    def prepare_and_wait_for_event(self, *event_types, cond=lambda evt: True, timeout=None):
         """Context manager that waits for the indicated event(s) like wait_for_event after running. If cond is given,
         waits until cond(event) is true. Raises a ShutdownError if the core is shutdown while waiting. This also happens
-        when 'shutdown' is in event_types.
+        when 'shutdown' is in event_types. Re-raises any error inside ``cond``.
 
         Compared to wait_for_event this handles the case where a thread waits for an event it itself causes in a
         thread-safe way. An example from the testsuite is:
@@ -986,24 +1058,34 @@ class MPV(object):
         Using just wait_for_event it would be impossible to ensure the event is caught since it may already have been
         handled in the interval between keypress(...) running and a subsequent wait_for_event(...) call.
         """
-        sema = threading.Semaphore(value=0)
-
-        @self.event_callback('shutdown')
-        def shutdown_handler(event):
-            sema.release()
+        result = Future()
 
         @self.event_callback(*event_types)
         def target_handler(evt):
-            if cond(evt):
-                sema.release()
 
-        yield
-        sema.acquire()
+            try:
+                rv = cond(evt)
+                if rv:
+                    result.set_result(rv)
+            except Exception as e:
+                try:
+                    result.set_exception(e)
+                except InvalidStateError:
+                    pass
+            except InvalidStateError:
+                pass
 
-        self.check_core_alive()
+        err_unregister = self._set_error_handler(result)
 
-        shutdown_handler.unregister_mpv_events()
-        target_handler.unregister_mpv_events()
+        try:
+            result.set_running_or_notify_cancel()
+            yield result
+            self.check_core_alive()
+            result.result(timeout)
+
+        finally:
+            err_unregister()
+            target_handler.unregister_mpv_events()
 
     def __del__(self):
         if self.handle:
@@ -1037,14 +1119,76 @@ class MPV(object):
         """
         _mpv_request_log_messages(self._event_handle, level.encode('utf-8'))
 
-    def command(self, name, *args):
+    def string_command(self, name, *args):
         """Execute a raw command."""
-        args = [name.encode('utf-8')] + [ (arg if type(arg) is bytes else str(arg).encode('utf-8'))
-                for arg in args if arg is not None ] + [None]
-        _mpv_command(self.handle, (c_char_p*len(args))(*args))
+        args = _create_null_term_cmd_arg_array(name, args)
+        _mpv_command(self.handle, args)
+
+    def command_async(self, name, *args, callback=None, decoder=lazy_decoder, **kwargs):
+        """Same as mpv_command, but run the command asynchronously. If you provide a callback, that callback will be
+        called after completion or on error. This method returns a future that evaluates to the result of the callback
+        (if given), and the result of the libmpv call otherwise.
+
+        Usage example:
+
+            future = player.command_async(...)
+            try:
+                print('The result was', future.result())
+            except Exception as e:
+                print('mpv returned an error:', e)
+        """
+
+        future = Future()
+        future.set_running_or_notify_cancel()
+
+        if callback is None:
+            def callback(error, result):
+                if error:
+                    raise error
+                return result
+
+        def wrapper(error, result):
+            try:
+                result = result.unpack(decoder)
+                future.set_result(callback(error, result))
+            except Exception as e:
+                try:
+                    future.set_exception(e)
+                except InvalidStateError:
+                    pass
+
+        def abort():
+            _mpv_abort_async_command(self._event_handle, id(future))
+            del self._command_reply_callbacks[id(future)]
+        future.cancel = abort
+
+        self._command_reply_callbacks[id(future)] = wrapper
+
+        if kwargs:
+            if args:
+                raise ValueError('Can only call mpv commands either using positional or using named arguments, not a mix of both.')
+            kwargs['name'] = name
+            _1, _2, _3, pointer = _make_node_str_map(kwargs)
+        else:
+            _1, _2, _3, pointer = _make_node_str_list([name, *args])
+
+        ppointer = cast(pointer, POINTER(MpvNode))
+        _mpv_command_node_async(self._event_handle, id(future), ppointer)
+        return future
+
 
     def node_command(self, name, *args, decoder=strict_decoder):
-        _1, _2, _3, pointer = _make_node_str_list([name, *args])
+        self.command(name, *args, decoder=decoder)
+
+    def command(self, name, *args, decoder=strict_decoder, **kwargs):
+        if kwargs:
+            if args:
+                raise ValueError('Can only call mpv commands either using positional or using named arguments, not a mix of both.')
+            kwargs['name'] = name
+            _1, _2, _3, pointer = _make_node_str_map(kwargs)
+        else:
+            _1, _2, _3, pointer = _make_node_str_list([name, *args])
+
         out = cast(create_string_buffer(sizeof(MpvNode)), POINTER(MpvNode))
         ppointer = cast(pointer, POINTER(MpvNode))
         _mpv_command_node(self.handle, ppointer, out)
@@ -1052,7 +1196,7 @@ class MPV(object):
         _mpv_free_node_contents(out)
         return rv
 
-    def seek(self, amount, reference="relative", precision="default-precise"):
+    def seek(self, amount, reference="relative", precision="keyframes"):
         """Mapped mpv seek command, see man mpv(1)."""
         self.command('seek', amount, reference, precision)
 
@@ -1095,7 +1239,7 @@ class MPV(object):
     def screenshot_raw(self, includes='subtitles'):
         """Mapped mpv screenshot_raw command, see man mpv(1). Returns a pillow Image object."""
         from PIL import Image
-        res = self.node_command('screenshot-raw', includes)
+        res = self.command('screenshot-raw', includes)
         if res['format'] != 'bgr0':
             raise ValueError('Screenshot in unknown format "{}". Currently, only bgr0 is supported.'
                     .format(res['format']))
@@ -1206,9 +1350,9 @@ class MPV(object):
         """Mapped mpv audio_reload command, see man mpv(1)."""
         self.command('audio_reload', audio_id)
 
-    def video_add(self, url, flags='select', title=None, lang=None):
+    def video_add(self, url, flags='select', title=None, lang=None, albumart=None):
         """Mapped mpv video_add command, see man mpv(1)."""
-        self.command('video_add', url.encode(fs_enc), *_drop_nones(flags, title, lang))
+        self.command('video_add', url.encode(fs_enc), *_drop_nones(flags, title, lang, albumart))
 
     def video_remove(self, video_id=None):
         """Mapped mpv video_remove command, see man mpv(1)."""
@@ -1246,17 +1390,17 @@ class MPV(object):
         """Mapped mpv print-text command, see man mpv(1)."""
         self.command('print-text', text)
 
-    def show_text(self, string, duration='-1', level=None):
+    def show_text(self, string, duration='-1', level=0):
         """Mapped mpv show_text command, see man mpv(1)."""
         self.command('show_text', string, duration, level)
 
     def expand_text(self, text):
         """Mapped mpv expand-text command, see man mpv(1)."""
-        return self.node_command('expand-text', text)
+        return self.command('expand-text', text)
 
     def expand_path(self, path):
         """Mapped mpv expand-path command, see man mpv(1)."""
-        return self.node_command('expand-path', path)
+        return self.command('expand-path', path)
 
     def show_progress(self):
         """Mapped mpv show_progress command, see man mpv(1)."""
@@ -1270,7 +1414,7 @@ class MPV(object):
         """Mapped mpv discnav command, see man mpv(1)."""
         self.command('discnav', command)
 
-    def mouse(self,x, y, button=None, mode='single'):
+    def mouse(x, y, button=None, mode='single'):
         """Mapped mpv mouse command, see man mpv(1)."""
         if button is None:
             self.command('mouse', x, y, mode)
@@ -1308,6 +1452,13 @@ class MPV(object):
         """Mapped mpv overlay_remove command, see man mpv(1)."""
         self.command('overlay_remove', overlay_id)
 
+    def osd_overlay(self, overlay_id, data, res_x=0, res_y=720, z=0, hidden=False):
+        self.command('osd_overlay', id=overlay_id, data=data, res_x=res_x, res_y=res_Y, z=z, hidden=hidden,
+        format='ass-events')
+
+    def osd_overlay_remove(self, overlay_id):
+        self.command('osd_overlay', id=overlay_id, format='none')
+
     def script_message(self, *args):
         """Mapped mpv script_message command, see man mpv(1)."""
         self.command('script_message', *args)
@@ -1316,6 +1467,15 @@ class MPV(object):
         """Mapped mpv script_message_to command, see man mpv(1)."""
         self.command('script_message_to', target, *args)
 
+    def drop_buffers(self):
+        self.command('drop_buffers')
+
+    def vf_command(self, label, command, argument):
+        self.command('vf_command', label, command, argument)
+
+    def af_command(self, label, command, argument):
+        self.command('af_command', label, command, argument)
+
     def observe_property(self, name, handler):
         """Register an observer on the named property. An observer is a function that is called with the new property
         value every time the property's value is changed. The basic function signature is ``fun(property_name,
@@ -1323,13 +1483,13 @@ class MPV(object):
         function decorator if no handler is given.
 
         To unregister the observer, call either of ``mpv.unobserve_property(name, handler)``,
-        ``mpv.unobserve_all_properties(handler)`` or the handler's ``unregister_mpv_properties`` attribute::
+        ``mpv.unobserve_all_properties(handler)`` or the handler's ``unobserve_mpv_properties`` attribute::
 
-            @player.observe_property('volume')
-            def my_handler(new_volume, *):
-                print("It's loud!", volume)
+            @player.property_observer('volume')
+            def my_handler(property_name, new_volume):
+                print("It's loud!", new_volume)
 
-            my_handler.unregister_mpv_properties()
+            my_handler.unobserve_mpv_properties()
 
         exit_handler is a function taking no arguments that is called when the underlying mpv handle is terminated (e.g.
         from calling MPV.terminate() or issuing a "quit" input command).
@@ -1451,7 +1611,7 @@ class MPV(object):
                 types = [MpvEventID.from_str(t) if isinstance(t, str) else t for t in event_types] or MpvEventID.ANY
                 @wraps(callback)
                 def wrapper(event, *args, **kwargs):
-                    if event['event_id'] in types:
+                    if event.event_id.value in types:
                         callback(event, *args, **kwargs)
                 self._event_callbacks.append(wrapper)
                 wrapper.unregister_mpv_events = partial(self.unregister_event_callback, wrapper)
@@ -1550,6 +1710,10 @@ class MPV(object):
         self.command('enable-section', binding_name, 'allow-hide-cursor+allow-vo-dragging')
 
     def _handle_key_binding_message(self, binding_name, key_state, key_name=None, key_char=None):
+        binding_name = binding_name.decode('utf-8')
+        key_state = key_state.decode('utf-8')
+        key_name = key_name.decode('utf-8') if key_name is not None else None
+        key_char = key_char.decode('utf-8') if key_char is not None else None
         self._key_binding_handlers[binding_name](key_state, key_name, key_char)
 
     def unregister_key_binding(self, keydef):
@@ -1586,16 +1750,16 @@ class MPV(object):
                     return read # non-empty bytes object with input
                     return b'' # empty byte object signals permanent EOF
 
-                def seek(self, pos):
+                def seek(self, pos): # optional
                     return new_offset # integer with new byte offset. The new offset may be before the requested offset
                     in case an exact seek is inconvenient.
 
-                def close(self):
+                def close(self): # optional
                     ...
 
-                # def cancel(self): (future API versions only)
-                #     Abort a running read() or seek() operation
-                #     ...
+                def cancel(self): # optional
+                    Abort a running read() or seek() operation
+                    ...
 
         """
 
@@ -1622,10 +1786,8 @@ class MPV(object):
                     seek = cb_info.contents.seek = StreamSeekFn(lambda _userdata, offx: frontend.seek(offx))
                 if hasattr(frontend, 'size') and frontend.size is not None:
                     size = cb_info.contents.size = StreamSizeFn(lambda _userdata: frontend.size)
-
-                # Future API versions only
-                # if hasattr(frontend, 'cancel'):
-                #     cb_info.contents.cancel = StreamCancelFn(lambda _userdata: frontend.cancel())
+                if hasattr(frontend, 'cancel'):
+                    cancel = cb_info.contents.cancel = StreamCancelFn(lambda _userdata: frontend.cancel())
 
                 # keep frontend and callbacks in memory forever (TODO)
                 frontend._registered_callbacks = [read, close, seek, size, cancel]
@@ -1816,6 +1978,7 @@ class MPV(object):
             return self._get_property('option-info/'+name)
         except AttributeError:
             return None
+
 
 class MpvRenderContext:
     def __init__(self, mpv, api_type, **kwargs):
