@@ -686,10 +686,13 @@ class FFStreamProbe():
         for a in self.streams:
             if a.isAudio():
                 self.audio.append(a)
+                a.slot=len(self.audio)
             elif a.isVideo():
                 self.video.append(a)
+                a.slot=len(self.video)
             elif a.isSubTitle():
                 self.subtitle.append(a)
+                a.slot=len(self.subtitle)
         self.sanityCheck()
 
     def sanityCheck(self):
@@ -716,7 +719,7 @@ class FFStreamProbe():
         s = self.getAudioStream()  
         if not s:
             Log.debug("No audio")
-            exit(0)  
+            return  
         Log.debug("Index:%d", s.getStreamIndex())
         Log.debug("getCodec:%s", s.getCodec())
         Log.debug("bitrate(kb) %d", s.getBitRate())
@@ -905,7 +908,7 @@ class FFStreamProbe():
         s = self.getAudioStream()  
         if not s:
             print ("No audio")
-            exit(0)  
+            return  
         print ("Index:", s.getStreamIndex())
         print ("getCodec:", s.getCodec())
         print ("bitrate(kb)", s.getBitRate())
@@ -1012,6 +1015,7 @@ class VideoStreamInfo():
         self.dataDict = {}
         self.tagDict = {}
         self._parse(dataArray)
+        self.slot=1 #thats the index in its list (mpv uses this) starting with 1
     
     def _parse(self, dataArray):
         for entry in dataArray:

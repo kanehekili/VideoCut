@@ -638,8 +638,7 @@ class MpvPlugin():
         videoInfo = streamData.getVideoStream()   
         audioInfo = streamData.getAudioStream()
         if audioInfo:
-            audioIndex = audioInfo.getStreamIndex()
-            self.player.setAudioIndex(audioIndex)        
+            self.player.setAudioIndex(audioInfo.slot)        
         ff_fps= videoInfo.frameRateMultiple()
         ff_FrameCount = round(ff_fps*duration)
         isUHD = float(videoInfo.getWidth())>3000.0

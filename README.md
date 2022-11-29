@@ -265,4 +265,5 @@ Opencv will not be displaying subtitles nor frametypes.
 * Audio monitoring via mpv improved
 
 28.11.2022
-* Adapt to new mpv lib.
+* Adapt to new mpv lib. Rel2: Fixed another mpv audio fluke
+* No audio streams working again.

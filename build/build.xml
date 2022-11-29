@@ -39,6 +39,12 @@
 		<property name="srcdata" value="${source}/data"/>
 		<property name="srcmpv" value="${source}/lib"/>
 		
+		<!-- get currentt yt-dlp via wget or curl -->  
+		<exec dir="." executable="/bin/bash" os="Linux">
+		 <arg value="updateMPV.sh"/>
+		</exec>
+		
+		
 		<copy todir="${rootDir}">
 			<fileset file="*.desktop">
 			</fileset>
