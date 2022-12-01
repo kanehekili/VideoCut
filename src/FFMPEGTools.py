@@ -792,7 +792,7 @@ class FFStreamProbe():
     def needsAudioADTSFilter(self):
         if self.getAudioStream() is None:
             return False
-        return self.getAudioStream().getCodec() == "aac" and (self.isH264() or self.isMP4Container())
+        return self.getAudioStream().getCodec() == "aac" and (self.isH264Codec() or self.isMP4Container())
     
     '''
     check if needs the h264_mp4toannexb filter-
