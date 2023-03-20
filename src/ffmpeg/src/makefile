@@ -1,5 +1,5 @@
 remux5: remux5.o
-	gcc -o ../bin/V3/remux5 remux5.o -g -lavutil -lavformat -lavcodec 
+	gcc -o ../bin/remux5 remux5.o -g -lavutil -lavformat -lavcodec 
 
 remux5.o: remux5.c
 	gcc -c remux5.c 

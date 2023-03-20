@@ -160,9 +160,6 @@
 		<copy todir="${ubu1Target}/addons">
 			<fileset file="*.desktop"/>
 		</copy>
-		<copy todir="${ubu1Target}">
-		    <fileset file="${srcffmpeg}/src/makefile"/>
-		</copy>
 		<exec executable="tar" output="/dev/null" os="Linux">
 			<arg value="-cp"/>
 			<arg value="--file=${debTarget}/${ubu1Build}.tar"/>
@@ -208,9 +205,6 @@
 		<chmod file="${ubu2Target}/src/VideoCut.py" perm="ug+rwx"/>
 		<copy todir="${ubu2Target}/addons">
 			<fileset file="*.desktop"/>
-		</copy>
-		<copy todir="${ubu2Target}">
-		    <fileset file="${srcffmpeg}/src/makefile"/>
 		</copy>
 		<exec executable="tar" output="/dev/null" os="Linux">
 			<arg value="-cp"/>

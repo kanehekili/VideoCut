@@ -11,36 +11,17 @@ GNU Affero General Public License v3.0
 from PyQt5.QtCore import Qt,QMetaObject,pyqtSlot,pyqtSignal
 from PyQt5 import QtCore,QtWidgets
 from PyQt5 import QtGui
-from PyQt5.QtWidgets import QApplication
 
 from threading import Condition
 import FFMPEGTools
-import sys,time,re
+import time,re
 import locale
 
-try:
-    from PyQt5.QtOpenGL import QGLContext    
-except ImportError:
-    print ("OpenGL lib not found")
-    app = QApplication(sys.argv)
-    QtWidgets.QMessageBox.critical(None, "OpenGL lib",'"python3-pyqt5.qtopengl" must be installed to run VideoCut.')
-    sys.exit(1)    
-    
-try:
-    from PIL.ImageQt import ImageQt #Not there by default...
-except ImportError:
-    print ("PIL lib not found")
-    app = QApplication(sys.argv)
-    QtWidgets.QMessageBox.critical(None, "PIL lib",'"python pillow" must be installed to run VideoCut.')
-    sys.exit(1)    
 
-try:
-    from lib.mpv import (MPV,MpvGlGetProcAddressFn,MpvRenderContext,MpvEventEndFile)
-except:
-    print (("MPV lib not found"))  
-    app = QApplication(sys.argv)
-    QtWidgets.QMessageBox.critical(None, "MPV lib",'"mpv" must be installed to run VideoCut.')
-    sys.exit(1)    
+from PyQt5.QtOpenGL import QGLContext    
+from PIL.ImageQt import ImageQt #Not there by default...
+from lib.mpv import (MPV,MpvGlGetProcAddressFn,MpvRenderContext,MpvEventEndFile)
+    
 
 Log=FFMPEGTools.Log
 
@@ -229,7 +210,8 @@ class MpvPlayer():
         res= re.findall(r'\d+',ver)
         nbr = 100*int(res[0])+int(res[1])
         if nbr>30:
-            self.mediaPlayer.demuxer_max_back_bytes='10000MiB'
+            self.mediaPlayer.demuxer_max_back_bytes='10000M'
+            self.mediaPlayer.demuxer_max_bytes = '10000M'
             self.mediaPlayer.demuxer_cache_wait='no'
             Log.info("applied demuxer settings for mpv > 3.x")
         

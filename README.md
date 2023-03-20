@@ -1,7 +1,7 @@
 # VideoCut
-Version 2.1.3
+Version 2.1.5
 
-![Download](https://github.com/kanehekili/VideoCut/releases/download/2.1.3/videocut2.1.3.tar)
+![Download](https://github.com/kanehekili/VideoCut/releases/download/2.1.5/videocut2.1.5.tar)
 
 MP2/MP4 Cutter for Linux on base of mpv and ffmpeg. Cutting is lossless, the target file will not be reencoded. 
 
@@ -14,6 +14,7 @@ Reencoding is possible for exact cutting as well as converting to different cont
 VideoCut supports the cutting of subtitles when "Show subtitles"  in the settings dialog is enabled. This flag will display the "first" subtitles stream and will cut all subtitles that have been defined in the "language" dialog.
 
 The current version is written in python3 and uses the qt5 widget kit.  
+
 ### Prerequisites
 * Arch: python3, python-pillow and mpv
 * Debian/Mint/Ubuntu: python3 python3-pil libmpv1 python3-pyqt5.qtopengl (no-recommends)
@@ -117,7 +118,7 @@ sudo dnf python3-qt5 ffmpeg python3-pillow-qt mpv-libs.x86_64
 * The app will be installed in /opt/videocut with a link to /usr/bin. 
 * The app should be appear in a menu or "Actvities"
 * Can be openend by selecting a video file & Open with...
-* In the terminal can be started via `VideoCut`
+* In the terminal can be started via `videocut`
 * python qt5, mpv and ffmpeg are required
 * you may now remove that download directory.
 * logs can be found in the user home ".config/VideoCut" folder
@@ -147,74 +148,58 @@ Copy the .desktop file and change the exec line to "Exec= python3 .../VideoCut.p
 Opencv will not be displaying subtitles nor frametypes.
 
 ### Changes 
-08.07.2016
-* Added "Exact cut" feature. Ensures that the cut of the mp4 is exact (Frame exact). Takes longer, since the video has to be reencoded. 
+20.03.2023
+* Dynamic ffmpeg build for Arch and debian
+* Changed cutter
 
-30.11.2016 V 0.9.0
-* Added filters for h264 and mpegts. 
-* Fixed some minor UI issues
-* Honored the "new" feature, that absolute paths in concat are not accepted
-* Added support for OpenCV 3
-* Cutting MOV,MP4,MPEG-TS, FLV and some more 
+20.12.2022
+* Fixed dialog handling on import and version errors 
+* Refactored tools
 
-05.2017
-* Added logging, some minor bugfixes/optimizations
+28.11.2022
+* Adapt to new mpv lib. Rel2: Fixed another mpv audio fluke
+* No audio streams working again.
 
-09.2018
-* The final QT4 version has been committed. 
+17.11.2022
+* Audio fix vor very short cuts (< 1 min)
+* Audio monitoring via mpv improved
 
-16.09.2018
-* Redesign of the frontend: Using python 3 and qt5.
-* Introduction of a native C ffmpeg layer, which can convert the videos much faster than the default interface. (Beta!)
+04.05.2022
+* Fixed ffmpeg3 build for older distros
+* revamped logging
 
-27.10.2018
-* Minor changes on the UI
-* Stabilized remux5 (native C ffmpeg lib). Better cut point recognition, transcoding fully implemented
-* Currently transcoding is precise, but far too slow. Remuxing is faster than ffmpeg native 
+05.04.2022
+* Support for wayland (OpenGL Widget)
+* Tune MPV settings for older mpv versions
 
-10.11.2018 
-* Increased the VBV Buffer for mpeg2 remuxing
+25.03.2022
+* Improved seeking of mpeg2(ts) streams
+* VC1 codec IDR frame recognition
+* AV1 codec enhancements
 
-22.12.2018
-* Bug fix in remux5(native C ffmpeg lib) by correcting the time offset calculation on delayed/discarded frames
+06.03.2022
+* adapted remux5 for ffmpeg version 5.0
 
-03.03.2019
-* Introduced a stop button while processing. Fixed some audio time calculation issues
+03.03.2022
+* remux fix for A/V offset. MPV VC1 support
 
-27.07.2019
-* Changed remux5:. Exact PTS/DTS calculation for video. Rewrote transcoding. Supports multi threading.
-* Allows mkv/VC1 codec, audio sync not good on source that has no PTS when decoding/muxing
+05.02.2022
+* Fixed failures on files recognition & analysis on NFS/Samba drives 
 
-15.08.2019
-* refined remux5 - exact cut now possible on most codecs.
-* no transcoding/remuxing with remux5 on mkv -> use ffmpeg switch
+21.01.2022
+* Replaced OpenCV with mpv for visualizing
+* Show frame info and subtitles (inspired by @ https://github.com/lxs602)
+* Reworked the ffmpeg API & improved some more subtitle features
 
-29.09.2019
-* Changed remux5: Fine tuning for exact cut. Works now for webm, VC1/mkv and the standard mpeg sources (mp2 and mp4)
-* Next steps: Select audio streams -  support ffmpeg cmd for transcoding/remuxing into other formats. Joining files
+25.11.2021
+* ISO Code refactoring
+* Bugfixing UI/Errorhandling
 
-19.12.2019
-* Added multi audio tracks. Support for vc1,vp8 and vp9 codecs. Handles AOMediaVideo (av1) on fast cut, but not on transcode. 
-* Finalized cutting mpeg2 and h246 codecs.
-
-10.06.2020
-* Added install script.
-* Introduced a "screen shot"
-* Some internal polishment
-
-13.02.2021
-* Made clear what "Start" and "Stop" means (Tooltip)
-* Increased precision for h264 (non TS) codecs. (remux)
-
-23.04.2021
-* Fixed unknown language codes
-* Supports subtitles (ffmpeg & remux - remux only in "fast" mode) 
-* Reworked remux5: better audio sync, more formats.
-* Better support for mkv (only meager using the ffmpeg option)
-
-25.04.2021
-* Fix for mpegts target extensions (merci @ https://github.com/moebius1)
-* DVB_SUBTITLE + eac3 audio support for m2t container 
+28.05.2021
+* Improve installation
+* change VC.log location to /.config/VideoCut
+* change vc.ini to the same location 
+* prepare for PKGBUILD
 
 02.05.2021
 * Fix for webm container audio (parser based containers)
@@ -223,47 +208,73 @@ Opencv will not be displaying subtitles nor frametypes.
 * fix for slider crash on next file
 * missing timestamp compensation (TS & VP8 streams)
 
-28.05.2021
-* Improve installation
-* change VC.log location to /.config/VideoCut
-* change vc.ini to the same location 
-* prepare for PKGBUILD
+25.04.2021
+* Fix for mpegts target extensions (merci @ https://github.com/moebius1)
+* DVB_SUBTITLE + eac3 audio support for m2t container 
 
-25.11.2021
-* ISO Code refactoring
-* Bugfixing UI/Errorhandling
+23.04.2021
+* Fixed unknown language codes
+* Supports subtitles (ffmpeg & remux - remux only in "fast" mode) 
+* Reworked remux5: better audio sync, more formats.
+* Better support for mkv (only meager using the ffmpeg option)
 
-21.01.2022
-* Replaced OpenCV with mpv for visualizing
-* Show frame info and subtitles (inspired by @ https://github.com/lxs602)
-* Reworked the ffmpeg API & improved some more subtitle features
+13.02.2021
+* Made clear what "Start" and "Stop" means (Tooltip)
+* Increased precision for h264 (non TS) codecs. (remux)
 
-05.02.2022
-* Fixed failures on files recognition & analysis on NFS/Samba drives 
+10.06.2020
+* Added install script.
+* Introduced a "screen shot"
+* Some internal polishment
 
-03.03.2022
-* remux fix for A/V offset. MPV VC1 support
+19.12.2019
+* Added multi audio tracks. Support for vc1,vp8 and vp9 codecs. Handles AOMediaVideo (av1) on fast cut, but not on transcode. 
+* Finalized cutting mpeg2 and h246 codecs.
 
-06.03.2022
-* adapted remux5 for ffmpeg version 5.0
+29.09.2019
+* Changed remux5: Fine tuning for exact cut. Works now for webm, VC1/mkv and the standard mpeg sources (mp2 and mp4)
+* Next steps: Select audio streams -  support ffmpeg cmd for transcoding/remuxing into other formats. Joining files
 
-25.03.2022
-* Improved seeking of mpeg2(ts) streams
-* VC1 codec IDR frame recognition
-* AV1 codec enhancements
+15.08.2019
+* refined remux5 - exact cut now possible on most codecs.
+* no transcoding/remuxing with remux5 on mkv -> use ffmpeg switch
 
-05.04.2022
-* Support for wayland (OpenGL Widget)
-* Tune MPV settings for older mpv versions
+27.07.2019
+* Changed remux5:. Exact PTS/DTS calculation for video. Rewrote transcoding. Supports multi threading.
+* Allows mkv/VC1 codec, audio sync not good on source that has no PTS when decoding/muxing
 
-04.05.2022
-* Fixed ffmpeg3 build for older distros
-* revamped logging
+03.03.2019
+* Introduced a stop button while processing. Fixed some audio time calculation issues
 
-17.11.2022
-* Audio fix vor very short cuts (< 1 min)
-* Audio monitoring via mpv improved
+22.12.2018
+* Bug fix in remux5(native C ffmpeg lib) by correcting the time offset calculation on delayed/discarded frames
 
-28.11.2022
-* Adapt to new mpv lib. Rel2: Fixed another mpv audio fluke
-* No audio streams working again.
+10.11.2018 
+* Increased the VBV Buffer for mpeg2 remuxing
+
+27.10.2018
+* Minor changes on the UI
+* Stabilized remux5 (native C ffmpeg lib). Better cut point recognition, transcoding fully implemented
+* Currently transcoding is precise, but far too slow. Remuxing is faster than ffmpeg native 
+
+16.09.2018
+* Redesign of the frontend: Using python 3 and qt5.
+* Introduction of a native C ffmpeg layer, which can convert the videos much faster than the default interface. (Beta!)
+
+09.2018
+* The final QT4 version has been committed. 
+
+05.2017
+* Added logging, some minor bugfixes/optimizations
+
+30.11.2016 V 0.9.0
+* Added filters for h264 and mpegts. 
+* Fixed some minor UI issues
+* Honored the "new" feature, that absolute paths in concat are not accepted
+* Added support for OpenCV 3
+* Cutting MOV,MP4,MPEG-TS, FLV and some more 
+
+08.07.2016
+* Added "Exact cut" feature. Ensures that the cut of the mp4 is exact (Frame exact). Takes longer, since the video has to be reencoded. 
+
+

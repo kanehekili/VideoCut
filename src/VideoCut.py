@@ -21,8 +21,10 @@ from PyQt5.QtWidgets import QApplication, QWidget
 import json
 from PyQt5.Qt import Qt
 from datetime import timedelta
-from FFMPEGTools import FFMPEGCutter, FFStreamProbe, CuttingConfig, OSTools, ConfigAccessor, VCCutter,FFmpegVersion
+from FFMPEGTools import  FFStreamProbe,  OSTools, ConfigAccessor, FFmpegVersion
+from Cutter import FFMPEGCutter,CuttingConfig,VCCutter
 import FFMPEGTools 
+import Cutter
 from time import sleep, time
 import xml.etree.cElementTree as CT
 #####################################################
@@ -646,7 +648,7 @@ class MainFrame(QtWidgets.QMainWindow):
     def openLanguageSettings(self):
         if self._videoController.streamData is None:
             return
-        langMap = FFMPEGTools.IsoMap()
+        langMap = Cutter.IsoMap()
         lang = self.settings.getPreferedLanguageCodes()
         dlg = LanguageSettingsDialog(self, lang, langMap, self._videoController.getLanguages())
         if dlg.exec_():
@@ -1487,7 +1489,7 @@ class VideoControl(QtCore.QObject):
             self.displayWarningMessage()
         else:
             dx = time() - self.cutTimeStart
-            delta = FFMPEGTools.timedeltaToFFMPEGString(timedelta(seconds=dx))
+            delta = Cutter.timedeltaToFFMPEGString(timedelta(seconds=dx))
             self.gui.getMessageDialog("Operation done", "Cutting time: %s" % delta,).show()
         self.cutter = None 
 
@@ -1781,11 +1783,11 @@ def main():
         global VideoPlugin
         global vc_config
         localPath = OSTools().getActiveDirectory() #won't work after setting WD
-        OSTools().setCurrentWorkingDirectory()
-        #Log.logInfo('*** VC located in %s***' % OSTools().getWorkingDirectory())        
+        wd= OSTools().getLocalPath(__file__)
+        OSTools().setMainWorkDir(wd)
         vc_config = ConfigAccessor("VideoCut","vc.ini","videocut") #folder,name&section
         vc_config.read();
-        
+
         argv = sys.argv
         app = QApplication(argv)
         app.setWindowIcon(getAppIcon())
@@ -1802,8 +1804,10 @@ def main():
         app.exec_()
         #logging.shutdown()
     except:
-        Log.exception("Error in main:")      
-        #traceback.print_exc(file=sys.stdout)
+        Log.exception("Error in main:")
+        #ex_type, ex_value, ex_traceback
+        sys_tuple = sys.exc_info()
+        QtWidgets.QMessageBox.critical(None,"Error!",str(sys_tuple[1]))
 
 #TODO: Respect theme
 def stylesheet():
