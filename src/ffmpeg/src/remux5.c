@@ -64,9 +64,9 @@
 #define SUBTEXT_IDX LANG_COUNT+1
 #define MAX_STREAM_SIZE 1+2*LANG_COUNT
 
-#define TYPE_VIDEO 0x4;
-#define TYPE_AUDIO 0x6;
-#define TYPE_SUBTITLE 0x8;
+#define TYPE_VIDEO 0x4
+#define TYPE_AUDIO 0x6
+#define TYPE_SUBTITLE 0x8
 
 struct StreamInfo{
     int srcIndex; //Index of ifmt_ctx stream
@@ -92,6 +92,7 @@ typedef struct {
 	int64_t audio_sync_dts; //Sync point audio for every scene
     double_t videoLen; //Approx duration in seconds
     int isDebug;
+    int muteAudio;
     int muxMode;
     char* sourceFile;
     char* targetFile;
@@ -981,6 +982,14 @@ static int write_packet(struct StreamInfo *info,AVPacket *pkt){
         AVStream *in_stream = NULL, *out_stream = NULL;
         struct StreamInfo *audioRef = getAudioRef();
         struct StreamInfo *videoRef = getVideoRef();
+
+        if (context.muteAudio && info->type==TYPE_AUDIO){
+        	av_log(NULL, AV_LOG_VERBOSE,"Mute audio pkt: %ld \n",pkt->pts);
+        	av_packet_unref(pkt);
+        	return 1;
+        }
+
+
         char frm='*';
         int isVideo = videoRef->srcIndex==pkt->stream_index;
         int isSubTitle = info->type==TYPE_SUBTITLE;
@@ -1180,6 +1189,9 @@ static int mux1(CutData head,CutData tail){
     int fcnt =0;
     context.audioRef=0;
     pkt= *av_packet_alloc();
+    if (context.muteAudio)
+    	av_log(NULL, AV_LOG_INFO,"Mux without audio \n");
+
     int64_t audioTail = audioref->inStream? av_rescale_q(tail.end,videoStream->inStream->time_base, audioref->inStream->time_base):0;
     av_log(NULL,AV_LOG_VERBOSE,">>> Audio tail: %ld tail.end: %ld\n",audioTail,tail.end);
     short audioAtEnd = audioTail==0;
@@ -1383,7 +1395,7 @@ static int pushTailAudio(){
     AVPacket pkt;
     struct StreamInfo *audioRef = getAudioRef();
     struct StreamInfo *videoRef = getVideoRef();
-    if (!audioRef->inStream)
+    if (!audioRef->inStream || context.muteAudio)
     	return 1;
     int64_t audioTail = av_rescale_q(context.video_trail_dts,videoRef->outStream->time_base, audioRef->outStream->time_base);
     pkt= *av_packet_alloc();
@@ -1834,7 +1846,7 @@ int parseArgs(int argc, char *argv[],double_t array[]) {
   opterr = 0;
   count=0;
   char *tmp;
-  while ((c = getopt (argc, argv, "l:s:drzt:i:c?")) != -1){
+  while ((c = getopt (argc, argv, "l:s:dmrzt:i:c?")) != -1){
         switch (c){
           case 's':
               i = 0;
@@ -1849,6 +1861,9 @@ int parseArgs(int argc, char *argv[],double_t array[]) {
             av_log_set_level(AV_LOG_VERBOSE);//DEBUG IS TOO verbose
             context.isDebug=1;
             break;
+          case 'm':
+        	  context.muteAudio=1;
+        	  break;
           case 'r':
             context.muxMode=MODE_TRANSCODE;
             break;
@@ -1934,6 +1949,7 @@ int main(int argc, char **argv)
     //allStreams = av_mallocz_array(MAX_STREAM_SIZE,sizeof(*allStreams));
     allStreams = av_calloc(MAX_STREAM_SIZE,sizeof(*allStreams));
     context.isDebug=0;
+    context.muteAudio=0;
     context.calcZeroTime=0;
     context.muxMode = MODE_FAST;
     context.sourceFile = NULL;
