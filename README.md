@@ -39,7 +39,7 @@ and logout/login (or reboot)
 ### Features
 Cuts an mpg file into parts and joins them afterwards. All commands can be reached via the toolbar.
 
-![Screenshot](https://github.com/kanehekili/VideoCut/blob/master/Videocut2.png)
+![Screenshot](https://github.com/kanehekili/VideoCut/blob/master/Videocut2.2.png)
 
 The cutout parts will be joined without beeing recoded - the quality stays the same
 
