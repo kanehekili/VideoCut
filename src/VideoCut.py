@@ -275,14 +275,30 @@ class LayoutWindow(QWidget):
         self.ui_InfoLabel.setText("")
         self.ui_InfoLabel.setToolTip("Infos about the video position")
         
+        self.ui_AudioModeLabel = QtWidgets.QLabel(self)
+        self.ui_AudioModeLabel.setStyleSheet("QLabel { border: 1px solid darkgray; border-radius: 3px; color: inherit; background: darkgreen} ");
+        self.ui_AudioModeLabel.setAlignment(QtCore.Qt.AlignCenter)
+        self.ui_AudioModeLabel.setToolTip("Toggle if audio should be saved")
+        
+        self.pixAudioOn = QtGui.QPixmap()
+        self.pixAudioOn.load("icons/speaker-high.png")
+        self.pixAudioOn = self.pixAudioOn.scaledToWidth(32, mode=Qt.SmoothTransformation)
+        self.pixAudioOff = QtGui.QPixmap()
+        self.pixAudioOff.load("icons/speaker-muted.png")
+        self.pixAudioOff = self.pixAudioOff.scaledToWidth(32, mode=Qt.SmoothTransformation)
+        
         self.ui_CutModeLabel = QtWidgets.QLabel(self)
         self.ui_CutModeLabel.setStyleSheet("QLabel { border: 1px solid darkgray; border-radius: 3px; color: inherit; background: lightgreen} ");
         self.ui_CutModeLabel.setAlignment(QtCore.Qt.AlignCenter)
+        self.ui_CutModeLabel.setToolTip("Toggle if exact or fast cut")
         
         self.ui_BackendLabel = QtWidgets.QLabel(self)
         self.ui_BackendLabel.setStyleSheet("QLabel { border: 1px solid darkgray; border-radius: 3px; color: inherit; background: lightgreen} ");
         self.ui_BackendLabel.setAlignment(QtCore.Qt.AlignCenter)
+        self.ui_BackendLabel.setToolTip("Toogle if precise remux or external ffmpeg")
+        
         self.statusBox = QtWidgets.QHBoxLayout()
+        self.statusBox.addWidget(self.ui_AudioModeLabel)
         self.statusBox.addWidget(self.ui_CutModeLabel)
         self.statusBox.addWidget(self.ui_BackendLabel)
         
@@ -313,8 +329,8 @@ class LayoutWindow(QWidget):
         # from row,from col, rowSpan, columnSpan
         gridLayout.addWidget(self.ui_VideoFrame, 0, 1, 4, -1);
         gridLayout.addWidget(self.ui_GotoField, 4, 1, 1, 2)
-        gridLayout.addWidget(self.ui_InfoLabel, 4, 3, 1, 7)
-        gridLayout.addLayout(self.statusBox, 4, 10, 1, -1)
+        gridLayout.addWidget(self.ui_InfoLabel, 4, 3, 1, 6)
+        gridLayout.addLayout(self.statusBox, 4, 9, 1, -1)
         gridLayout.addWidget(self.ui_Slider, 5, 0, 1, 11)
         gridLayout.addWidget(self.ui_Dial, 5, 11, 1, -1)
         gridLayout.addWidget(self.statusbar, 6, 0, 1, 12)
@@ -322,7 +338,7 @@ class LayoutWindow(QWidget):
         gridLayout.setRowStretch(1, 1)
 
         return gridLayout
-
+    #unused
     def makeBoxLayout(self):
         vbox = QtWidgets.QVBoxLayout()
         vbox.addWidget(self.ui_VideoFrame)
@@ -617,11 +633,20 @@ class MainFrame(QtWidgets.QMainWindow):
         
         # connect the labels to their dialogs
         # if not "self" - stops if out of scope!
+        
+        #--TOGGLE IT!
+        
+        self.audiofilter = SignalOnEvent(widgets.ui_AudioModeLabel)
+        #self.audiofilter.clicked.connect(self.openMediaSettings)
+        self.audiofilter.clicked.connect(self.settings.toggleMute)
+        
         self.cutfilter = SignalOnEvent(widgets.ui_CutModeLabel)
-        self.cutfilter.clicked.connect(self.openMediaSettings)
+        #self.cutfilter.clicked.connect(self.openMediaSettings)
+        self.cutfilter.clicked.connect(self.settings.toggleEncode)
         
         self.backendfilter = SignalOnEvent(widgets.ui_BackendLabel)
-        self.backendfilter.clicked.connect(self.openMediaSettings)
+        #self.backendfilter.clicked.connect(self.openMediaSettings)
+        self.backendfilter.clicked.connect(self.settings.toggleRemux)
         self.enableActions(False) 
         return widgets
 
@@ -896,6 +921,7 @@ class SettingsModel(QtCore.QObject):
         super(SettingsModel, self).__init__()
         self.fastRemux = vc_config.getBoolean("useRemux",True)
         self.reencoding = vc_config.getBoolean("recode",False)
+        self.muteAudio = vc_config.getBoolean("muteAudio",False)
         self.mainFrame = mainframe
         self.showSubid=vc_config.getInt("subtitles",0)  #id if subtitle should be presented. mpv only
         self.showGL=vc_config.getBoolean("openGL",True) #GL Widgets, mpv only
@@ -903,10 +929,18 @@ class SettingsModel(QtCore.QObject):
     def update(self):
         cutmode = "Fast"
         mode = "FFMPEG"
+        audio = self.mainFrame._widgets.pixAudioOn
         if self.fastRemux:
             mode = "REMUX"
         if self.reencoding:
             cutmode = "Exact"
+        
+        if self.muteAudio:
+            audio=self.mainFrame._widgets.pixAudioOff
+        
+        #self.ui_AudioModeLabel.setPixmap(pix)
+        
+        self.mainFrame._widgets.ui_AudioModeLabel.setPixmap(audio)
         self.mainFrame._widgets.ui_CutModeLabel.setText(cutmode)
         self.mainFrame._widgets.ui_BackendLabel.setText(mode)
         
@@ -925,6 +959,11 @@ class SettingsModel(QtCore.QObject):
             vc_config.set("openGL", "True")
         else:
             vc_config.set("openGL", "False")
+            
+        if self.muteAudio:
+            vc_config.set("muteAudio", "True")
+        else:
+            vc_config.set("muteAudio", "False")
         
         vc_config.store()
         self.trigger.emit(self)
@@ -943,6 +982,20 @@ class SettingsModel(QtCore.QObject):
     def setPreferedLanguageCodes(self, langList):
         vc_config.set("LANG", json.dumps(langList))
         vc_config.store()
+    
+    #UI toggle functions
+    def toggleRemux(self):
+        self.fastRemux = not self.fastRemux
+        self.update()
+
+    def toggleEncode(self):
+        self.reencoding = not self.reencoding
+        self.update()
+
+    def toggleMute(self):
+        self.muteAudio = not self.muteAudio
+        self.update()    
+    
        
         
 class SettingsDialog(QtWidgets.QDialog):
@@ -991,6 +1044,11 @@ class SettingsDialog(QtWidgets.QDialog):
         self.exRemux.setChecked(self.model.fastRemux)
         self.exRemux.stateChanged.connect(self.on_fastRemuxChanged)
 
+        self.muteAudio = QtWidgets.QCheckBox("Mute audio - Video only")
+        self.muteAudio.setToolTip("Cut the video without any audio tracks")
+        self.muteAudio.setChecked(self.model.muteAudio)
+        self.muteAudio.stateChanged.connect(self._onAudioChanged)  
+
         self.showSub = QtWidgets.QCheckBox("Show subtitles")
         self.showSub.setToolTip("Toggle show subtitles (mpv only)")
         self.showSub.setChecked(self.model.showSubid>0)
@@ -1000,10 +1058,12 @@ class SettingsDialog(QtWidgets.QDialog):
         self.showGL.setToolTip("Use GL widgets - must be activated for wayland\n Restart app on change")
         self.showGL.setChecked(self.model.showGL>0)
         self.showGL.stateChanged.connect(self._onGLChanged)        
+
           
 
         encodeBox.addWidget(self.check_reencode)
         encodeBox.addWidget(self.exRemux)
+        encodeBox.addWidget(self.muteAudio)
         #expoBox = QtWidgets.QVBoxLayout(frame2)
         #expoBox.addWidget(self.exRemux)
         
@@ -1042,6 +1102,10 @@ class SettingsDialog(QtWidgets.QDialog):
     def _onGLChanged(self,useGL):
         self.model.showGL=QtCore.Qt.Checked == useGL
         self.model.update() 
+        
+    def _onAudioChanged(self,muteAudio):
+        self.model.muteAudio = QtCore.Qt.Checked == muteAudio
+        self.model.update()
         
 class LanguageSettingsDialog(QtWidgets.QDialog):
 
@@ -1501,6 +1565,7 @@ class VideoControl(QtCore.QObject):
         config.streamData = self.streamData
         config.reencode = settings.reencoding
         config.messenger = self.statusbar()
+        config.muteAudio = settings.muteAudio
 
         self.cutter = FFMPEGCutter(config, self.calculateNewVideoTime(spanns))
         self.cutter.ensureAvailableSpace()
@@ -1523,6 +1588,7 @@ class VideoControl(QtCore.QObject):
         config.streamData = self.streamData
         config.messenger = self.statusbar()
         config.reencode = settings.reencoding
+        config.muteAudio = settings.muteAudio
         
         self.cutter = VCCutter(config)
         if self.cutter.setupBinary():

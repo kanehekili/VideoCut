@@ -516,18 +516,22 @@ class FormatMapGenerator():
     def getPreferredTargetExtension(self,vCodec,aCodec,currFormats):
         
         #mpegts: depends if h264 or mp2.... 
+        fmap = self._findFmtTargetMap(vCodec, aCodec)
+              
         for vInfo in currFormats:
             if vInfo=="mpegts":
                 continue
             res = self.targetExt.get(vInfo,None)
-            if res:
-                return res;
+            if res and self._verifyAudio(vInfo,aCodec):
+                    return res;
                 
         #IF not found ...
-        fmap = self._findFmtTargetMap(vCodec, aCodec)
         if fmap:
             return fmap.targetExt
-        return "mp4" #or what?
+        
+        #fallback
+        extList = self.extensions.get(currFormats[0],"matroska") #mkv should never be wrong
+        return extList[0] 
 
                 
 
@@ -558,6 +562,13 @@ class FormatMapGenerator():
             if fmtMap.containsCodecs(vCodec, aCodec):
                 return fmtMap
         return None
+
+    #redunant audio check
+    def _verifyAudio(self,foundVCodec, aCodec):
+        codecs = self.audioCodecs.get(foundVCodec,None)
+        if not codecs:
+            return False
+        return aCodec in codecs
 
     def fromFormatList(self,fmtList):
         formats=[]

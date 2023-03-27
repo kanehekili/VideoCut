@@ -89,6 +89,7 @@ class CuttingConfig():
         self.messenger = None
         self.reencode = False
         self.streamData = None
+        self.muteAudio = False
         self.srcfilePath = srcfilePath
         self.targetPath = targetPath
         self.languages = audioTracks
@@ -179,8 +180,9 @@ class FFMPEGCutter():
 
     def _audioMode(self, mode):
         # streamData is FFStreamProbe
-        if self._config.streamData.getAudioStream() is None:
-            return []
+        #TODO audiomute
+        if self._config.muteAudio or self._config.streamData.getAudioStream() is None:
+            return ["-an"]
         targetFmt = FORMATS.fromFilename(self.targetPath())
         Log.debug("audio: %s  targets:%s", self._config.streamData.getAudioStream().getCodec(),targetFmt) #TODO logging
         container=targetFmt.format
@@ -302,6 +304,9 @@ class FFMPEGCutter():
         
         #TODO subtitle language mapping only, if codecs/formats fit. 
         scopy = self._subtitleMode()
+        if self._config.muteAudio:
+            return []
+        
         langMap = self._config.streamData.getLanguageMapping() #dict lang, (aindex,sIndex)
         avail = self._config.streamData.getLanguages()
         selectedLangs = self._config.languages #intl language
@@ -534,6 +539,10 @@ class VCCutter():
             cmd = cmd + ["-r"]
         if self.config.calcZeroTime:
             cmd = cmd + ["-z"]
+        if self.config.muteAudio:
+            cmd = cmd + ["-m"]
+        
+        #TODO mute audio...
         lang = self._buildLanguageMapping()
         if len(lang) > 0:
             codes = ",".join(lang) 

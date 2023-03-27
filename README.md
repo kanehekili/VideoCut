@@ -1,7 +1,7 @@
 # VideoCut
-Version 2.1.5
+Version 2.2.0
 
-![Download](https://github.com/kanehekili/VideoCut/releases/download/2.1.5/videocut2.1.5.tar)
+![Download](https://github.com/kanehekili/VideoCut/releases/download/2.2.0/videocut2.2.0.tar)
 
 MP2/MP4 Cutter for Linux on base of mpv and ffmpeg. Cutting is lossless, the target file will not be reencoded. 
 
@@ -50,6 +50,7 @@ Instead of using the ffmpeg command line, Videocut offers its own muxer, which i
 Videocut supports subtitle cut. This is work in progress. 
 
 As of version 2.1.x wayland is supported. For old hardware, the openGL feature may be disabled in the "Settings" dialog.
+Since version 2.2.x the audio track can be omitted from the target file. (Video only) 
 
 ### Limitations
 Using ffmpeg as cutting/joining tool some of the older versions of ffmpeg seem to have problems with syncing audio on avchd (mp4 TS) streams. (see Videocut muxer)
@@ -72,6 +73,30 @@ For DVB transport stream you should keep the ".m2t" ending, mkv containers shoul
 
 ### Audio Monitoring
 MPV supports audio streams while playing. Unfortunately it relies on the audio stream while seeking (precise) thus rendering exact seeking sometimes difficult due to problems decoding it. So audio is turned of (not just muted) while seeking. The "auto" mode has been replaced with the first valid audio stream and seems to work better for listening while cutting. 
+
+### Settings
+The cog icon at the toolbar will open the settings dialog, providing the following settings:
+
+![Screenshot](https://github.com/kanehekili/VideoCut/blob/master/Settings.png)
+
+* Reencode: Precice, frame exact cut. This option might take hours. Default is off
+* VideoCut Muxer: Toggle between the internal Muxer or the ffmpeg command line. Default is on.
+* Audio Mute: Mute all audio streams and extract video only. Default is off (no mute)
+* Show Subtitles: Show subtitles in the preview window (mpv backend only)
+* Usel GL Widgets (mpv backend only). Needed for wayland. Default is on (works with X11 as well)
+
+Pressing one of the 3 lightgreen "buttons" toggles the upper 3 settings directly. 
+
+
+### Languages
+The flag icon opens the language dialog:
+
+![Screenshot](https://github.com/kanehekili/VideoCut/blob/master/Language.png)
+
+Select up to 3 languages for extraction. The tracks can be moved in order with the green arrows on the right side. 
+Note that this selection is ignored if audio is muted. 
+
+
 ##Install
 
 #### Install via ppa on Linux Mint or Ubuntu (focal/jammy/Mint20 only)
@@ -148,6 +173,10 @@ Copy the .desktop file and change the exec line to "Exec= python3 .../VideoCut.p
 Opencv will not be displaying subtitles nor frametypes.
 
 ### Changes 
+28.03.2023
+* Fix for target extension based on the codecs
+* Added audio mute - idea by user ![RedFraction](https://github.com/RedFraction)
+
 20.03.2023
 * Dynamic ffmpeg build for Arch and debian
 * Changed cutter
