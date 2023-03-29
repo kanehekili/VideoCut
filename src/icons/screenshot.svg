@@ -1,0 +1,8 @@
+<svg width="256" height="256" version="1.1" viewBox="0 0 256 256" xmlns="http://www.w3.org/2000/svg">
+ <path d="m23.308 23.308v209.38h209.38v-209.38z" fill="none" stroke="#000" stroke-dasharray="19, 19" stroke-dashoffset="9.5" stroke-linejoin="bevel" stroke-miterlimit="0" stroke-width="19" style="paint-order:stroke markers fill"/>
+ <g fill="#fff" stroke="#000" stroke-linejoin="round" stroke-miterlimit="0">
+  <rect x="91.977" y="158.84" width="152.54" height="83.816" stroke-width="15" style="paint-order:stroke markers fill"/>
+  <rect x="140.97" y="133.58" width="54.543" height="26.425" stroke-width="10" style="paint-order:stroke markers fill"/>
+  <ellipse cx="167.79" cy="201.6" rx="24.264" ry="24.264" stroke-width="16.472" style="paint-order:stroke markers fill"/>
+ </g>
+</svg>

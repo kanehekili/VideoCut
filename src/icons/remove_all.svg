@@ -1,0 +1,12 @@
+<svg width="256" height="256" version="1.1" viewBox="0 0 256 256" xmlns="http://www.w3.org/2000/svg">
+ <g transform="matrix(.43535 0 0 .43535 142.54 126.54)" fill="#f00">
+  <rect transform="rotate(-45)" x="-13.384" y="63.497" width="26.769" height="235.04" style="paint-order:markers fill stroke"/>
+  <rect transform="matrix(.70711 .70711 .70711 -.70711 0 0)" x="167.63" y="-117.52" width="26.769" height="235.04" style="paint-order:markers fill stroke"/>
+ </g>
+ <g>
+  <rect x="15" y="28" width="226" height="30" stop-color="#000000" style="-inkscape-stroke:none;font-variation-settings:normal;paint-order:markers fill stroke"/>
+  <rect x="15" y="80" width="226" height="30" style="paint-order:markers fill stroke"/>
+  <rect x="15" y="138" width="127.36" height="30" style="paint-order:markers fill stroke"/>
+  <rect x="15" y="194" width="128.91" height="30" style="paint-order:markers fill stroke"/>
+ </g>
+</svg>
