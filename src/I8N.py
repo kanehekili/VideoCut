@@ -62,8 +62,7 @@ def __get_lang_str_inner(path, obj):
     if isinstance(elem, dict):
         return __get_lang_str_inner(way[1], elem)
 
-    raise ValueError("Значение не существует либо не является результирующим %s" % way)
-    return None
+    raise ValueError("Value does not exists, or not in supported format %s" % way)
 
 
 # Public function for resolving localized string in JSON xPath like way
