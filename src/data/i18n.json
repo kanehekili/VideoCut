@@ -1,0 +1,269 @@
+{
+    "en_EN": {
+        "name": "English",
+        "native": "English",
+        "loading": {
+            "ffmpeg-error": "FFMPEG must be installed to run VideoCut."
+        },
+        "init_ui": {
+            "exit": "Exit",
+            "open": "Open video",
+            "save": "Save video",
+            "include-from": "Include from here",
+            "include-to": "Exclude from here",
+            "screenshot": "Take screenshot",
+            "info": "Codec info",
+            "play-pause": "Play video",
+            "output-settings": "Output settings",
+            "lang-settings": "Language settings",
+            "file": "File",
+
+            "settings": {
+                "reencode": "Reencode (Slow!)",
+                "reencode-popup": "Force exact cut. Makes it real slow!",
+                "remux": "VideoCut Muxer",
+                "remux-popup": "Uses the fast remux code instead of ffmpeg commandline",
+                "mute": "Mute audio - Video only",
+                "mute-popup": "Cut the video without any audio tracks",
+                "subtitles": "Show subtitles",
+                "subtitles-popup": "Toggle show subtitles (mpv only)",
+                "gl-widgets": "Use GL Widgets(mpv only) Restart required",
+                "gl-widgets-popup": "Use GL widgets - must be activated for wayland\\n Restart app on change",
+                "icon-theme": "Icon theme. Restart required",
+                "icon-theme-popup": "Select icon theme - restart to take effect",
+                "ui-lang": "App language select. Restart required",
+                "ui-lang-popup": "Select app language - restart to take effect"
+            }
+        },
+        "point_list": {
+            "start": "Start",
+            "stop": "Stop",
+            "frame": "F",
+            "time": "T"
+        },
+        "goto_field": {
+            "popup": "Go to frame"
+        },
+        "frame_info": {
+            "line": "<b>Frame:</b> %08d of %d <b>Time:</b> %s ",
+            "popup": "Info about the video position"
+        },
+        "button_menu": {
+            "mute": "Toggle if audio should be saved",
+            "cut": "Toggle if exact or fast cut",
+            "remux": "Toogle if precise remux or external ffmpeg"
+        },
+        "status_line": {
+            "start": "Start video"
+        },
+        "slider": {
+            "popup": "Video track"
+        },
+        "dial": {
+            "popup": "Fine tune"
+        },
+        "hook_list": {
+            "delete": "Delete",
+            "remove-all": "Remove all",
+            "goto": "Go to"
+        },
+        "button_stop": {
+            "popup": "Stop processing"
+        },
+        "show_warning": {
+            "msg": "Warning!"
+        },
+        "load_file":{
+            "caption": "Load Video"
+        },
+        "save_video": {
+            "process-warn-msg": "Can't process file!",
+            "filter": "Video Files (%s);;All Files(*.*)",
+            "caption": "Save Video",
+            "source-file-warn-msg": "Can't overwrite source file!"
+        },
+        "codec_info": {
+            "title": "Video info",
+            "bitrate": "Bitrate",
+            "size": "Size",
+            "ts": "is TS",
+            "v-codec": "Video codec",
+            "dimension": "Dimension",
+            "aspect": "Aspect",
+            "fps": "FPS",
+            "duration": "Duration",
+            "a-codec": "Audio codec",
+            "invalid-codec-msg-1": "No data",
+            "invalid-codec-msg-2": "Select file first"
+        },
+        "language_settings": {
+            "title": "Language",
+            "max-lang-label": "3 Languages max",
+            "no-data": "No language data available"
+        },
+        "video_control": {
+            "check-log": "Check log in .config/VideoCut for details",
+            "invalid-file": "Invalid file",
+            "file-not-found": "File not found",
+            "start": "Start video",
+            "stop": "Stop video",
+            "ready": "Ready",
+            "operation-failed-title": "Operation failed",
+            "operation-failed-msg": "Cut aborted",
+            "remux-failed": "Remux failed: ",
+            "operation-done": "Operation done",
+            "cut-time": "Cutting time: ",
+            "screenshot-saved": "Screenshot saved at: "
+        },
+        "long_running_operation": {
+            "converting-error": "Error while converting: "
+        },
+        "other": {
+            "error-dialog-title": "Error!",
+            "unexpected-error": "Unexpected error",
+            "msg-dialog-title": "Notice"
+        }
+    },
+    "en_GB": {
+        "name": "Great Britain English",
+        "alias": "en_EN"
+    },
+    "en_US": {
+        "name": "United States English",
+        "alias": "en_EN"
+    },
+    "ru_RU": {
+        "name": "Russian",
+        "native": "Русский",
+        "loading": {
+            "ffmpeg-error": "Для работы с VideoCut требуется установить FFMPEG"
+        },
+        "file_alt_menu": {
+            "title": "Файл",
+            "open": "Открыть видео",
+            "save": "Сохранить видео",
+            "include-from": "Включить от сюда",
+            "include-to": "Включить до сюда",
+            "exit": "Выход"
+        },
+        "init_ui": {
+            "exit": "Выход",
+            "open": "Открыть видео",
+            "save": "Сохранить видео",
+            "include-from": "Установить начало",
+            "include-to": "Установить конец",
+            "screenshot": "Скриншот",
+            "info": "Информация о кодировке",
+            "play-pause": "Играть/Остановить видео",
+            "output-settings": "Настройки вывода",
+            "lang-settings": "Языковые настройки субтитров",
+            "file": "Файл",
+
+            "settings": {
+                "reencode": "Перекодировка (Медленно!)",
+                "reencode-popup": "Перекодировка (Медленно!)",
+                "remux": "VideoCut Muxer",
+                "remux-popup": "Использовать быструю кодировку с помощью remux за место ffmpeg",
+                "mute": "Исключение аудио дорожки",
+                "mute-popup": "Исключение аудио дорожки из будущего видео файла",
+                "subtitles": "Показать субтитры",
+                "subtitles-popup": "Показать субтитры",
+                "gl-widgets": "Использовать виджеты GL (только mvp) Необходим перезапуск",
+                "gl-widgets-popup": "Использовать виджеты GL - должен быть активен для оконной системы Wayland. Необходим перезапуск",
+                "icon-theme": "Тема иконок. Необходима перезагрузка",
+                "icon-theme-popup": "Выбрать тему - для изменения необходима перезагрузка",
+                "ui-lang": "Выбор языка. Необходима перезагрузка",
+                "ui-lang-popup": "Выбор языка. Необходима перезагрузка"
+            }
+        },
+        "point_list": {
+            "start": "Старт",
+            "stop": "Cтоп",
+            "frame": "Кадр",
+            "time": "В"
+        },
+        "goto_field": {
+            "popup": "Переход к кадру"
+        },
+        "frame_info": {
+            "line": "<b>Кадр:</b> %d из %d, <b>Время:</b> %s",
+            "popup": "Информация о времени"
+        },
+        "button_menu": {
+            "mute": "Переключение Сохранять/Не сохранять аудио",
+            "cut": "Переключение Быстрая/Точная нарезка",
+            "remux": "Переключение remux/ffmpeg"
+        },
+        "status_line": {
+            "start": "Запустить видео"
+        },
+        "slider": {
+            "popup": "Видео дорожка"
+        },
+        "dial": {
+            "popup": "Тонкая настройка"
+        },
+        "hook_list": {
+            "delete": "Удалить",
+            "remove-all": "Удалить всё",
+            "goto": "Перейти в"
+        },
+        "button_stop": {
+            "popup": "Завершить обработку"
+        },
+        "show_warning": {
+            "msg": "Внимание!"
+        },
+        "load_file":{
+            "caption": "Загрузить видео"
+        },
+        "save_video": {
+            "process-warn-msg": "Не возможно обработать файл",
+            "filter": "Видео файлы (%s);;Все файлы(*.*)",
+            "caption": "Сохранить видео",
+            "source-file-warn-msg": "Нельзя изменять исходный файл"
+        },
+        "codec_info": {
+            "title": "Информация о видео кодеке",
+            "bitrate": "Битрейт",
+            "size": "Размер",
+            "ts": "TS",
+            "v-codec": "Видео кодек",
+            "dimension": "Разрешение",
+            "aspect": "Соотношение",
+            "fps": "Частота кадров",
+            "duration": "Продолжительность",
+            "a-codec": "Аудио кодек",
+            "invalid-codec-exception": "Неподдерживаемый формат кодека",
+            "invalid-codec-msg-1": "Нет информации",
+            "invalid-codec-msg-2": "Пожалуйста выберите сначала файл"
+        },
+        "language_settings": {
+            "title": "Язык",
+            "max-lang-label": "Максимум 3 языка",
+            "no-data": "Нет данных о языках"
+        },
+        "video_control": {
+            "check-log": "\nПроверьте лог по пути .config/VideoCut для получения деталей",
+            "invalid-file": "Некорректный файл",
+            "file-not-found": "Файл не найден",
+            "start": "Запустить видео",
+            "stop": "Остановить видео",
+            "ready": "Готов",
+            "operation-failed-title": "Операция не выполнена",
+            "operation-failed-msg": "Отмена нарезки",
+            "remux-failed": "Ошибка remux: ",
+            "operation-done": "Операция выполнена",
+            "cut-time": "Время нарезки: ",
+            "screenshot-saved": "Скриншот сохранен в: "
+        },
+        "long_running_operation": {
+            "converting-error": "Произошла ошибка во время конвертации: "
+        },
+        "other": {
+            "error-dialog-title": "Ошибка!",
+            "unexpected-error": "Непредвиденная ошибка",
+            "msg-dialog-title": "Уведомление"
+        }
+    }
+}

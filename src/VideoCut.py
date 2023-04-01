@@ -21,12 +21,14 @@ from PyQt5.QtWidgets import QApplication, QWidget
 import json
 from PyQt5.Qt import Qt
 from datetime import timedelta
-from FFMPEGTools import  FFStreamProbe,  OSTools, ConfigAccessor, FFmpegVersion
-from Cutter import FFMPEGCutter,CuttingConfig,VCCutter
-import FFMPEGTools 
+from FFMPEGTools import FFStreamProbe, OSTools, ConfigAccessor, FFmpegVersion
+from Cutter import FFMPEGCutter, CuttingConfig, VCCutter
+import FFMPEGTools
 import Cutter
 from time import sleep, time
 import xml.etree.cElementTree as CT
+from I18N import get_lang_str, set_lang, get_lang_list
+
 #####################################################
 Version = "@xxx@"
 #####################################################
@@ -42,22 +44,23 @@ ITEM_ROW_COUNT = 3
 saneCheck = FFmpegVersion()
 if not saneCheck.confirmFFmpegInstalled():
     app = QApplication(sys.argv)
-    QtWidgets.QMessageBox.critical(None, "FFMPEG",
-        ("FFMPEG must be installed to run VideoCut."))
+    QtWidgets.QMessageBox.critical(None, "FFMPEG", (get_lang_str("loading.ffmpeg-error")))
     sys.exit(1)
+
 
 def setUpVideoPlugin(mpv):
     if mpv:
-        from MpvPlayer import MpvPlugin 
+        from MpvPlayer import MpvPlugin
         return MpvPlugin(SIZE_ICON)
     else:
-        #retained for testing - OpenCV is not precise enough
+        # retained for testing - OpenCV is not precise enough
         from CvPlayer import CvPlugin
-        return CvPlugin(SIZE_ICON) #TODO not the right place!    
+        return CvPlugin(SIZE_ICON)  # TODO not the right place!
 
 
 def getAppIcon():
     return QtGui.QIcon('icons/movie-icon.png')
+
 
 def timedeltaToString(deltaTime):
     s = deltaTime.seconds
@@ -72,16 +75,16 @@ class XMLAccessor():
 
     def __init__(self, path):
         self._path = path + ".xml"
-        
+
     def writeXML(self, videoCutEntries):
         rootElement = CT.Element("VC_Data")
         for cut in videoCutEntries:
             entry = CT.SubElement(rootElement, "Entry")
             entry.attrib["frame"] = str(cut.frameNumber)
-            entry.attrib["timepos"] = str(cut.timePosMS) 
+            entry.attrib["timepos"] = str(cut.timePosMS)
             entry.attrib["mode"] = str(cut.modeString)
-            entry.attrib["pix"] =self.toBase64(cut.pix)
-        
+            entry.attrib["pix"] = self.toBase64(cut.pix)
+
         with open(self._path, 'wb') as aFile:
             CT.ElementTree(rootElement).write(aFile)
 
@@ -91,69 +94,94 @@ class XMLAccessor():
             return cutEntries
         with open(self._path, 'r') as xmlFile:
             xmlData = xmlFile.read()
-            
+
         root = CT.fromstring(xmlData)
         for info in root:
             frameNbr = float(info.get('frame'))
             markerType = info.get('mode')
-            timePosSecs= float(info.get('timepos',0))
-            pix=self.fromBase64(info.get('pix'))                            
-            entry = VideoCutEntry(frameNbr, timePosSecs, markerType,pix)
+            timePosSecs = float(info.get('timepos', 0))
+            pix = self.fromBase64(info.get('pix'))
+            entry = VideoCutEntry(frameNbr, timePosSecs, markerType, pix)
             cutEntries.append(entry)
-        
+
         return cutEntries
 
-    def toBase64(self,pix):
-        data = QtCore.QByteArray() 
+    def toBase64(self, pix):
+        data = QtCore.QByteArray()
         buf = QtCore.QBuffer(data)
         pix.save(buf, 'JPG')
-        #breaks xml test=data.toBase64()
-        t1=data.toBase64()
-        t2= str(t1,'ascii')
+        # breaks xml test=data.toBase64()
+        t1 = data.toBase64()
+        t2 = str(t1, 'ascii')
         return t2
-    
-    def fromBase64(self,pixstr):
+
+    def fromBase64(self, pixstr):
         if pixstr is None:
             return None
-        t1=bytearray(pixstr,"ascii")
-        #data = QtCore.QByteArray.fromBase64(pixstr,QtCore.QByteArray.Base64Encoding)
+        t1 = bytearray(pixstr, "ascii")
+        # data = QtCore.QByteArray.fromBase64(pixstr,QtCore.QByteArray.Base64Encoding)
         data = QtCore.QByteArray.fromBase64(t1)
-        pix=QtGui.QPixmap()
+        pix = QtGui.QPixmap()
         pix.loadFromData(data)
         return pix
 
     def clear(self):
         OSTools().removeFile(self._path)
 
-            
-            
+
+class VideoCutEntry:
+    def __init__(self, frameNbr, timepos, markerType, pix=None):
+        self.frameNumber = frameNbr;
+        self.modeString = markerType
+        self.timePosMS = timepos  # [ms]
+        self.pix = pix  # [qPixmap]
+
+
+    def isStartMode(self):
+        return get_lang_str("point_list.start") == self.modeString
+
+    def pixmap(self):
+        return self.pix
+
+    def getTimeString(self):
+        timeinfo = self.timePosMS
+        s = int(timeinfo / 1000)
+        ms = int(timeinfo % 1000)
+        ts = '{:02}:{:02}:{:02}.{:03}'.format(s // 3600, s % 3600 // 60, s % 60, ms)
+        return ts
+
+    def timeDelta(self):
+        return timedelta(milliseconds=self.timePosMS)
+
+
 class VideoDial(QtWidgets.QDial):
     finetune = pyqtSignal(int)
+
     def __init__(self, parent):
         QtWidgets.QDial.__init__(self, parent)
-        self.dir=0; #1 forw, 2 back, 0 center
-                    
-    def sliderChange(self,sliderChange):
-        if sliderChange==3:
-                
+        self.dir = 0;  # 1 forw, 2 back, 0 center
+
+    def sliderChange(self, sliderChange):
+        if sliderChange == 3:
+
             pos = self.value()
-            if self.dir==0 and pos > 0:
-                self.dir=1
+            if self.dir == 0 and pos > 0:
+                self.dir = 1
             elif self.dir == 0 and pos < 0:
-                self.dir =2 
+                self.dir = 2
             elif pos == 0:
-                self.dir =0
-            
-            if self.dir==1 and pos < 0:
+                self.dir = 0
+
+            if self.dir == 1 and pos < 0:
                 self.setValue(self.maximum())
                 return
-            if self.dir==2 and pos > 0:
+            if self.dir == 2 and pos > 0:
                 self.setValue(self.minimum())
                 return
             self.finetune.emit(pos)
-        
-        super(VideoDial, self).sliderChange(sliderChange)                                                        
-       
+
+        super(VideoDial, self).sliderChange(sliderChange)
+
     ''' That the native impl...
     from math import sin, cos, atan2, degrees, radians
     def  paintEvent(self,paintEvent):
@@ -188,37 +216,12 @@ class VideoDial(QtWidgets.QDial):
         qp.drawLine(center.x() - s * minSize, center.y() + c * minSize, center.x() - s * maxSize, center.y() + c * maxSize)
     '''
 
-class VideoCutEntry():
-    MODE_START = "Start"
-    MODE_STOP = "Stop"
 
-    def __init__(self, frameNbr, timepos, markerType,pix=None):
-        self.frameNumber = frameNbr;
-        self.modeString = markerType
-        self.timePosMS = timepos #[ms]
-        self.pix=pix #[qPixmap]
-        
-    def isStartMode(self):
-        return self.MODE_START == self.modeString    
-    
-    def pixmap(self):
-        return self.pix
-    
-    def getTimeString(self):
-        timeinfo=self.timePosMS
-        s = int(timeinfo / 1000)
-        ms = int(timeinfo % 1000)
-        ts = '{:02}:{:02}:{:02}.{:03}'.format(s // 3600, s % 3600 // 60, s % 60, ms)
-        return ts
-
-    def timeDelta(self):
-        return timedelta(milliseconds=self.timePosMS)
-    
 class VCSpinbox(QtWidgets.QSpinBox):
 
     def __init__(self, parent=None):
         QtWidgets.QSpinBox.__init__(self, parent)
-        
+
     def keyPressEvent(self, keyEvent):
         if (keyEvent.key() == QtCore.Qt.Key_Enter) or (keyEvent.key() == QtCore.Qt.Key_Return):
             super(VCSpinbox, self).keyPressEvent(keyEvent)
@@ -227,57 +230,58 @@ class VCSpinbox(QtWidgets.QSpinBox):
             super(VCSpinbox, self).keyPressEvent(keyEvent)
             self.blockSignals(False)
 
-        
+
 # widget that contains the widgets
 class LayoutWindow(QWidget):
-    #SLIDER_RESOLUTION = 1000
-    SLIDER_RESOLUTION = 1000*1000
-    DIAL_RESOLUTION = 50 
+    # SLIDER_RESOLUTION = 1000
+    SLIDER_RESOLUTION = 1000 * 1000
+    DIAL_RESOLUTION = 50
 
-    def __init__(self,settings,parent=None):
+    def __init__(self, settings, parent=None):
         QWidget.__init__(self, parent)
         self.initWidgets(settings)
 
-    def initWidgets(self,settings):
-        self.ui_VideoFrame = VideoPlugin.createWidget(settings.showGL,self) 
-        
+    def initWidgets(self, settings):
+        self.ui_VideoFrame = VideoPlugin.createWidget(settings.showGL, self)
+
         self.ui_Slider = QtWidgets.QSlider(QtCore.Qt.Horizontal)
         self.ui_Slider.setFocusPolicy(QtCore.Qt.StrongFocus)
         # contribution:
         self.ui_Slider.setStyleSheet(stylesheet())
-        
+
         self.ui_Slider.setMinimum(0)
         self.ui_Slider.setMaximum(self.SLIDER_RESOLUTION)
-        self.ui_Slider.setToolTip("Video track")
+        self.ui_Slider.setToolTip(get_lang_str("slider.popup"))
         self.ui_Slider.setTickPosition(QtWidgets.QSlider.TicksAbove)
         self.ui_Slider.setTickInterval(0)
-        
-        #self.ui_Dial = QtWidgets.QDial(self)
+
+        # self.ui_Dial = QtWidgets.QDial(self)
         self.ui_Dial = VideoDial(self)
-        
+
         self.ui_Dial.setProperty("value", 0)
         self.ui_Dial.setNotchesVisible(True)
         self.ui_Dial.setWrapping(False)
         self.ui_Dial.setNotchTarget(5.0)
-        self.ui_Dial.setToolTip("Fine tuning")
-        #styles don't work:
-        #no gradients: self.ui_Dial.setStyleSheet("QDial { background-color: qradialgradient(cx:0, cy:0, radius: 1,fx:0.5, fy:0.5, stop:0 white, stop:1 green); }")
+        self.ui_Dial.setToolTip(get_lang_str("dial.popup"))
+        # styles don't work:
+        # no gradients: self.ui_Dial.setStyleSheet("QDial { background-color: qradialgradient(cx:0, cy:0, radius: 1,fx:0.5, fy:0.5, stop:0 white, stop:1 green); }")
         self.setDialResolution(self.DIAL_RESOLUTION)
 
         self.ui_GotoField = VCSpinbox(self)
         self.ui_GotoField.setValue(0)
-        self.ui_GotoField.setToolTip("Goto Frame")
-        
+        self.ui_GotoField.setToolTip(get_lang_str("goto_field.popup"))
+
         self.ui_InfoLabel = QtWidgets.QLabel(self)
-        self.ui_InfoLabel.setStyleSheet("QLabel { border: 1px solid darkgray; border-radius: 3px; color: inherit; background: lightblue} ");
+        self.ui_InfoLabel.setStyleSheet(
+            "QLabel { border: 1px solid darkgray; border-radius: 3px; color: inherit; background: lightblue} ");
         self.ui_InfoLabel.setText("")
-        self.ui_InfoLabel.setToolTip("Infos about the video position")
-        
+        self.ui_InfoLabel.setToolTip(get_lang_str("frame_info.popup"))
+
         self.ui_AudioModeLabel = QtWidgets.QLabel(self)
         self.ui_AudioModeLabel.setStyleSheet("QLabel { border: 1px solid darkgray; border-radius: 3px; color: inherit; background: lightgreen} ");
         self.ui_AudioModeLabel.setAlignment(QtCore.Qt.AlignCenter)
-        self.ui_AudioModeLabel.setToolTip("Toggle if audio should be saved")
-        
+        self.ui_AudioModeLabel.setToolTip(get_lang_str("button_menu.mute"))
+
         self.pixAudioOn = QtGui.QPixmap()
         #self.pixAudioOn.load("icons/speaker-high.png")
         self.pixAudioOn.load(ICOMAP.ico("audioOn"))
@@ -286,30 +290,32 @@ class LayoutWindow(QWidget):
         #self.pixAudioOff.load("icons/speaker-muted.png")
         self.pixAudioOff.load(ICOMAP.ico("audioOff"))
         self.pixAudioOff = self.pixAudioOff.scaledToWidth(32, mode=Qt.SmoothTransformation)
-        
+
         self.ui_CutModeLabel = QtWidgets.QLabel(self)
-        self.ui_CutModeLabel.setStyleSheet("QLabel { border: 1px solid darkgray; border-radius: 3px; color: inherit; background: lightgreen} ");
+        self.ui_CutModeLabel.setStyleSheet(
+            "QLabel { border: 1px solid darkgray; border-radius: 3px; color: inherit; background: lightgreen} ");
         self.ui_CutModeLabel.setAlignment(QtCore.Qt.AlignCenter)
-        self.ui_CutModeLabel.setToolTip("Toggle if exact or fast cut")
-        
+        self.ui_CutModeLabel.setToolTip(get_lang_str("button_menu.cut"))
+
         self.ui_BackendLabel = QtWidgets.QLabel(self)
-        self.ui_BackendLabel.setStyleSheet("QLabel { border: 1px solid darkgray; border-radius: 3px; color: inherit; background: lightgreen} ");
+        self.ui_BackendLabel.setStyleSheet(
+            "QLabel { border: 1px solid darkgray; border-radius: 3px; color: inherit; background: lightgreen} ");
         self.ui_BackendLabel.setAlignment(QtCore.Qt.AlignCenter)
-        self.ui_BackendLabel.setToolTip("Toogle if precise remux or external ffmpeg")
-        
+        self.ui_BackendLabel.setToolTip(get_lang_str("button_menu.remux"))
+
         self.statusBox = QtWidgets.QHBoxLayout()
         self.statusBox.addWidget(self.ui_AudioModeLabel)
         self.statusBox.addWidget(self.ui_CutModeLabel)
         self.statusBox.addWidget(self.ui_BackendLabel)
-        
+
         self.ui_List = self.__createListWidget()
-        
+
         # self._listSplitter = QSplitter() ->add as widget...+QVBoxLayout
         # self._listSplitter.addWidget(iconList)
-        
+
         # status bar
         self.statusbar = QtWidgets.QStatusBar(self)
-        #self.statusbar.setStyleSheet("QStatusBar { border: 1px inset inherit; border-radius: 3px;}QStatusBar::item {border-radius: 3px;} ");
+        # self.statusbar.setStyleSheet("QStatusBar { border: 1px inset inherit; border-radius: 3px;}QStatusBar::item {border-radius: 3px;} ");
         self.statusbar.setSizeGripEnabled(False)
         self.statusbar.addPermanentWidget(self.__createProgressBar())
         self.buttonStop = QtWidgets.QToolButton(self)
@@ -317,7 +323,7 @@ class LayoutWindow(QWidget):
         self.buttonStop.setIcon(QtGui.QIcon(ICOMAP.ico("buttonStop")))
         self.buttonStop.setIconSize(QtCore.QSize(20, 20))
         self.buttonStop.setVisible(False)
-        self.buttonStop.setToolTip("Stop processing")
+        self.buttonStop.setToolTip(get_lang_str("button_stop.popup"))
         self.statusbar.addPermanentWidget(self.buttonStop, 0)
         self.setLayout(self.makeGridLayout())
         self.adjustSize()
@@ -335,16 +341,17 @@ class LayoutWindow(QWidget):
         gridLayout.addWidget(self.ui_Slider, 5, 0, 1, 11)
         gridLayout.addWidget(self.ui_Dial, 5, 11, 1, -1)
         gridLayout.addWidget(self.statusbar, 6, 0, 1, 12)
-        
+
         gridLayout.setRowStretch(1, 1)
 
         return gridLayout
-    #unused
+
+    # unused
     def makeBoxLayout(self):
         vbox = QtWidgets.QVBoxLayout()
         vbox.addWidget(self.ui_VideoFrame)
         vbox.addWidget(self.ui_InfoLabel);
-        
+
         slidehbox = QtWidgets.QHBoxLayout()
         slidehbox.addWidget(self.ui_Slider)
         slidehbox.addWidget(self.ui_Dial)
@@ -353,70 +360,67 @@ class LayoutWindow(QWidget):
         midHBox.addWidget(self.ui_List)
         self.ui_List.setSizePolicy(QtWidgets.QSizePolicy.Minimum, QtWidgets.QSizePolicy.Expanding)
         midHBox.addLayout(vbox)
-        
+
         mainVBox = QtWidgets.QVBoxLayout()
         mainVBox.addLayout(midHBox)
         mainVBox.addStretch(1)
         mainVBox.addLayout(slidehbox)
         return mainVBox
-    
+
     def showInfo(self, text):
         self.ui_InfoLabel.setText(text)
-    
+
     def showStatusMessage(self, text):
         self.statusbar.showMessage(text)
-    
+
     def setDialResolution(self, resolution):
         self.ui_Dial.setMinimum(round(-resolution / 2))
         self.ui_Dial.setMaximum(round(resolution / 2))
 
-    #pos correction from somewhere else (edit or dial) -no need to trigger anything
-    def syncSliderPos(self,pos): 
+    # pos correction from somewhere else (edit or dial) -no need to trigger anything
+    def syncSliderPos(self, pos):
         if pos == self.ui_Slider.value():
             return
         if not self.ui_Slider.isSliderDown():
             self.ui_Slider.blockSignals(True)
             self.ui_Slider.setSliderPosition(pos)
             self.ui_Slider.blockSignals(False)
-            
-    
+
     def setSliderTicks(self, ticks):
         self.ui_Slider.setSingleStep(ticks)
         self.ui_Slider.setPageStep(ticks * 2)
-    
+
     def setGotoFieldMaximum(self, count):
         self.ui_GotoField.blockSignals(True)
         self.ui_GotoField.setMaximum(count)
         self.ui_GotoField.blockSignals(False)
-    
+
     def clearVideoFrame(self):
         self.ui_VideoFrame.showFrame(None)
- 
- 
-    #add cutmark with pixmap sized SIZE_ICON
-    def addCutMark(self,cutEntry,rowIndex):
+
+    # add cutmark with pixmap sized SIZE_ICON
+    def addCutMark(self, cutEntry, rowIndex):
         item = QtWidgets.QListWidgetItem()
         item.setSizeHint(QtCore.QSize(SIZE_ICON, self.ITEM_HEIGHT))
         item.setIcon(QtGui.QIcon(cutEntry.pixmap()))
-        #TODO: Respect theme
+        # TODO: Respect theme
         if cutEntry.isStartMode():
             item.setBackground(QtGui.QColor(224, 255, 224))
         else:
             item.setBackground(QtGui.QColor(255, 224, 224))
         self.ui_List.insertItem(rowIndex, item)
 
-        text = "%s <br> F: %s<br> T: %s" % (cutEntry.modeString, str(cutEntry.frameNumber), str(cutEntry.getTimeString()))
+        text = "%s <br> F: %s<br> T: %s" % (
+        cutEntry.modeString, str(cutEntry.frameNumber), str(cutEntry.getTimeString()))
         marker = QtWidgets.QLabel(text)
         marker.setStyleSheet("QLabel {color:black;}")
         marker.setWordWrap(False)
         marker.layout()
-        
+
         self.ui_List.setItemWidget(item, marker)
         self.ui_List.setIconSize(QtCore.QSize(SIZE_ICON, SIZE_ICON))  # Forces an update!
         self.ui_List.setCurrentItem(item)
 
-            
- 
     def hookEvents(self, aVideoController):
         self.__videoController = aVideoController  # for menu callbacks
         self.ui_Slider.valueChanged.connect(aVideoController.sliderMoved)
@@ -425,34 +429,30 @@ class LayoutWindow(QWidget):
         self.ui_Dial.sliderReleased.connect(self.__resetDial)
 
         self.ui_GotoField.valueChanged.connect(self.__gotoFrame)
-        
+
         self.statusMessenger = StatusDispatcher()
         self.statusMessenger.signal.connect(self.showStatusMessage)
         self.statusMessenger.progressSignal.connect(self.updateProgressBar)
         self.buttonStop.clicked.connect(aVideoController.killSaveProcessing)
         self._hookListActions()
-    
+
     def syncSpinButton(self, frameNbr):
         self.ui_GotoField.blockSignals(True)
         self.ui_GotoField.setValue(int(frameNbr))
         self.ui_GotoField.blockSignals(False)
-    
+
     def keyReleaseEvent(self, event):
         self.__resetDial()
-     
+
     def _hookListActions(self):
         # TOO bad-the list model -should be here... 
-        #rmAction = QtWidgets.QAction(QtGui.QIcon('icons/close-x.png'), 'Delete', self)
-        rmAction = QtWidgets.QAction(QtGui.QIcon(ICOMAP.ico("rmAction")), 'Delete', self)
-        
+        rmAction = QtWidgets.QAction(QtGui.QIcon(ICOMAP.ico("rmAction")), get_lang_str("hook_list.delete"), self)
         rmAction.triggered.connect(self._removeMarker)
-        #rmAllAction = QtWidgets.QAction(QtGui.QIcon('icons/clear-all.png'), 'Remove all', self)
-        rmAllAction = QtWidgets.QAction(QtGui.QIcon(ICOMAP.ico("rmAllAction")), 'Remove all', self)
+        rmAllAction = QtWidgets.QAction(QtGui.QIcon(ICOMAP.ico("rmAllAction")), get_lang_str("hook_list.remove-all"), self)
         rmAllAction.triggered.connect(self.purgeMarker)
-        #self.gotoAction = QtWidgets.QAction(QtGui.QIcon('icons/go-next.png'), 'Goto', self)
-        self.gotoAction = QtWidgets.QAction(QtGui.QIcon(ICOMAP.ico("gotoAction")), 'Goto', self)
+        self.gotoAction = QtWidgets.QAction(QtGui.QIcon(ICOMAP.ico("gotoAction")), get_lang_str("hook_list.goto"), self)
         self.gotoAction.triggered.connect(self._gotoFromMarker)
-  
+
         # menus      
         self.ui_List.customContextMenuRequested.connect(self._openListMenu)
         self._listMenu = QtWidgets.QMenu()
@@ -460,7 +460,7 @@ class LayoutWindow(QWidget):
         self._listMenu.addSeparator()
         self._listMenu.addAction(rmAction)
         self._listMenu.addAction(rmAllAction)
- 
+
     def __resetDial(self):
         self.ui_Dial.setProperty("value", 0)
 
@@ -471,19 +471,19 @@ class LayoutWindow(QWidget):
         self.progressBar = QtWidgets.QProgressBar(self)
         self.progressBar.setMinimum(0)
         self.progressBar.setMaximumWidth(200)
-        self.progressBar.setVisible(False) 
+        self.progressBar.setVisible(False)
         self.progressBar.setValue(0)
         return self.progressBar
-    
+
     def startProgress(self):
         self.progressBar.setRange(0, 100)
         self.progressBar.setVisible(True)
         self.buttonStop.setVisible(True)
 
     def stopProgress(self):
-        self.progressBar.setVisible(False)   
+        self.progressBar.setVisible(False)
         self.buttonStop.setVisible(False)
-        self.progressBar.setValue(0);           
+        self.progressBar.setValue(0);
 
     def enableUserActions(self, enable):
         self.ui_Dial.setEnabled(enable)
@@ -498,13 +498,14 @@ class LayoutWindow(QWidget):
         iconList = QtWidgets.QListWidget()
         iconList.setAlternatingRowColors(True)
         iconList.setContextMenuPolicy(QtCore.Qt.CustomContextMenu)
-        #TODO: Respect colors - needs delegate
-        iconList.setStyleSheet("QListView{outline:none;} QListWidget::item:selected { background: #28D9FF;} ")  # that text color seems not to work!
+        # TODO: Respect colors - needs delegate
+        iconList.setStyleSheet(
+            "QListView{outline:none;} QListWidget::item:selected { background: #28D9FF;} ")  # that text color seems not to work!
         fontM = QtGui.QFontMetrics(iconList.font())
         self.ITEM_HEIGHT = fontM.height() * ITEM_ROW_COUNT
         return iconList
 
-    #---List widget context menu
+    # ---List widget context menu
     def _removeMarker(self, whatis):
         selectionList = self.ui_List.selectedIndexes()
         if len(selectionList) == 0:
@@ -512,7 +513,7 @@ class LayoutWindow(QWidget):
         item = selectionList[0]
         self.ui_List.takeItem(item.row())
         self.__videoController.removeVideoCutIndex(item.row())
-  
+
     def clearMarkerList(self):
         self.ui_List.clear()
 
@@ -520,96 +521,87 @@ class LayoutWindow(QWidget):
     def purgeMarker(self):
         self.ui_List.clear()
         self.__videoController.purgeVideoCuts()
-        
+
     def _gotoFromMarker(self, whatis):
         selectionList = self.ui_List.selectedIndexes()
         if len(selectionList) == 0:
             return
         item = selectionList[0]
         self.__videoController.gotoCutIndex(item.row())
-        
+
     def _openListMenu(self, position):
         selectionList = self.ui_List.selectedIndexes()
         if len(selectionList) == 0:
             return
-        self._listMenu.exec_(self.ui_List.viewport().mapToGlobal(position)) 
-        
+        self._listMenu.exec_(self.ui_List.viewport().mapToGlobal(position))
+
 
 class MainFrame(QtWidgets.QMainWindow):
-    
-    def __init__(self, qapp,aPath=None):
-        self._isStarted=False
-        self.__qapp=qapp
-        
+
+    def __init__(self, qapp, aPath=None):
+        self._isStarted = False
+        self.__qapp = qapp
+
         super(MainFrame, self).__init__()
         self.setWindowIcon(getAppIcon())
         self.settings = SettingsModel(self)
-        self._videoController = VideoControl(self,aPath)
+        self._videoController = VideoControl(self, aPath)
         self._widgets = self.initUI()
         self._widgets.hookEvents(self._videoController)
         self.settings.update()
-        
+
         self.centerWindow()
         self._widgets.enableUserActions(False)
         self.show()
-        qapp.applicationStateChanged.connect(self.__queueStarted) 
-    
+        qapp.applicationStateChanged.connect(self.__queueStarted)
+
     def initUI(self):
-        
-        #self.exitAction = QtWidgets.QAction(QtGui.QIcon('icons/window-close.png'), 'Exit', self)
-        self.exitAction = QtWidgets.QAction(QtGui.QIcon(ICOMAP.ico("buttonStop")), 'Exit', self)
+
+        self.exitAction = QtWidgets.QAction(QtGui.QIcon(ICOMAP.ico("buttonStop")), get_lang_str("init_ui.exit"), self)
         self.exitAction.setShortcut('Ctrl+Q')
         self.exitAction.triggered.connect(QApplication.quit)
-        
-        #self.loadAction = QtWidgets.QAction(QtGui.QIcon('./icons/loadfile.png'), 'Load Video', self)
-        self.loadAction = QtWidgets.QAction(QtGui.QIcon(ICOMAP.ico("loadAction")), 'Load Video', self)
+
+        self.loadAction = QtWidgets.QAction(QtGui.QIcon(ICOMAP.ico("loadAction")), get_lang_str("init_ui.open"), self)
         self.loadAction.setShortcut('Ctrl+L')
         self.loadAction.triggered.connect(self.loadFile)
 
-        #self.startAction = QtWidgets.QAction(QtGui.QIcon('./icons/start-icon.png'), 'Include from here', self)
-        self.startAction = QtWidgets.QAction(QtGui.QIcon(ICOMAP.ico("startAction")), 'Include from here', self)
+        self.startAction = QtWidgets.QAction(QtGui.QIcon(ICOMAP.ico("startAction")), get_lang_str("init_ui.include-from"), self)
         self.startAction.setShortcut('Ctrl+G')
         self.startAction.triggered.connect(self._videoController.addStartMarker)
 
-        #self.stopAction = QtWidgets.QAction(QtGui.QIcon('./icons/stop-red-icon.png'), 'Exclude from here', self)
-        self.stopAction = QtWidgets.QAction(QtGui.QIcon(ICOMAP.ico("stopAction")), 'Exclude from here', self)
+        self.stopAction = QtWidgets.QAction(QtGui.QIcon(ICOMAP.ico("stopAction")), get_lang_str("init_ui.include-to"), self)
         self.stopAction.setShortcut('Ctrl+H')
         self.stopAction.triggered.connect(self._videoController.addStopMarker)
-        
-        #self.saveAction = QtWidgets.QAction(QtGui.QIcon('./icons/save-as-icon.png'), 'Save the video', self)
-        self.saveAction = QtWidgets.QAction(QtGui.QIcon(ICOMAP.ico("saveAction")), 'Save the video', self)
+
+        self.saveAction = QtWidgets.QAction(QtGui.QIcon(QtGui.QIcon(ICOMAP.ico("saveAction"))), get_lang_str("init_ui.save"), self)
         self.saveAction.setShortcut('Ctrl+S')
         self.saveAction.triggered.connect(self.saveVideo)
-        
-        #self.infoAction = QtWidgets.QAction(QtGui.QIcon('./icons/info.png'), 'Codec info', self)
-        self.infoAction = QtWidgets.QAction(QtGui.QIcon(ICOMAP.ico("infoAction")), 'Codec info', self)
+
+        self.infoAction = QtWidgets.QAction(QtGui.QIcon(ICOMAP.ico("infoAction")), get_lang_str("init_ui.info"), self)
         self.infoAction.setShortcut('Ctrl+I')
         self.infoAction.triggered.connect(self.showCodecInfo)
-        
-        #self.playAction = QtWidgets.QAction(QtGui.QIcon('./icons/play.png'), 'Play video', self)
-        self.playAction = QtWidgets.QAction(QtGui.QIcon(ICOMAP.ico("playStart")), 'Play video', self)
+
+        self.playAction = QtWidgets.QAction(QtGui.QIcon(ICOMAP.ico("playStart")), get_lang_str("init_ui.play-pause"), self)
         self.playAction.setShortcut('Ctrl+P')
         self.playAction.triggered.connect(self.playVideo)
-        
-        #self.photoAction = QtWidgets.QAction(QtGui.QIcon('./icons/screenshot.png'), 'Take screenshot', self)
-        self.photoAction = QtWidgets.QAction(QtGui.QIcon(ICOMAP.ico("photoAction")), 'Take screenshot', self)
+
+        self.photoAction = QtWidgets.QAction(QtGui.QIcon(ICOMAP.ico("photoAction")), get_lang_str("init_ui.screenshot"),
+                                             self)
         self.photoAction.setShortcut('Ctrl+P')
         self.photoAction.triggered.connect(self.takeScreenShot)
-        
+
         '''
         the settings menues
         '''
 #         self.extractMP3 = QtWidgets.QAction(QtGui.QIcon('./icons/stop-red-icon.png'),"Extract MP3",self)
-        #self.mediaSettings = QtWidgets.QAction(QtGui.QIcon('./icons/settings.png'), "Output settings", self)
-        self.mediaSettings = QtWidgets.QAction(QtGui.QIcon(ICOMAP.ico("mediaSettings")), "Output settings", self)
+        self.mediaSettings = QtWidgets.QAction(QtGui.QIcon(ICOMAP.ico("mediaSettings")), get_lang_str("init_ui.output-settings"), self)
         self.mediaSettings.setShortcut('Ctrl+T')
         self.mediaSettings.triggered.connect(self.openMediaSettings)
 
         '''
         audio language selection
         '''
-        #self.langSettings = QtWidgets.QAction(QtGui.QIcon('./icons/langflags.png'), "Language settings", self)
-        self.langSettings = QtWidgets.QAction(QtGui.QIcon(ICOMAP.ico("langSettings")), "Language settings", self)
+        self.langSettings = QtWidgets.QAction(QtGui.QIcon(ICOMAP.ico("langSettings")), get_lang_str("init_ui.lang-settings"), self)
         self.langSettings.setShortcut('Ctrl+L')
         self.langSettings.triggered.connect(self.openLanguageSettings)
 
@@ -628,63 +620,63 @@ class MainFrame(QtWidgets.QMainWindow):
         self.toolbar.addAction(self.playAction)
         self.toolbar.addAction(self.mediaSettings)
         self.toolbar.addAction(self.langSettings)
-                               
+
         menubar = self.menuBar()
-        fileMenu = menubar.addMenu('&File')
+        fileMenu = menubar.addMenu(f'&{get_lang_str("init_ui.file")}')
         fileMenu.addAction(self.loadAction)
         fileMenu.addAction(self.saveAction)
-        fileMenu.addSeparator();
+        fileMenu.addSeparator()
         fileMenu.addAction(self.startAction)
         fileMenu.addAction(self.stopAction)
-        fileMenu.addSeparator();
+        fileMenu.addSeparator()
         fileMenu.addAction(self.exitAction)
 
         widgets = LayoutWindow(self.settings)
-        self.setCentralWidget(widgets);
+        self.setCentralWidget(widgets)
         self.setWindowTitle("VideoCut")
-      
+
         widgets.ui_VideoFrame.trigger.connect(self._videoController._onUpdateInfo)
         self.settings.trigger.connect(self._videoController.onSettingsChanged)
-        
+
         # connect the labels to their dialogs
         # if not "self" - stops if out of scope!
-        
-        #--TOGGLE IT!
-        
+
+        # --TOGGLE IT!
+
         self.audiofilter = SignalOnEvent(widgets.ui_AudioModeLabel)
-        #self.audiofilter.clicked.connect(self.openMediaSettings)
+        # self.audiofilter.clicked.connect(self.openMediaSettings)
         self.audiofilter.clicked.connect(self.settings.toggleMute)
-        
+
         self.cutfilter = SignalOnEvent(widgets.ui_CutModeLabel)
-        #self.cutfilter.clicked.connect(self.openMediaSettings)
+        # self.cutfilter.clicked.connect(self.openMediaSettings)
         self.cutfilter.clicked.connect(self.settings.toggleEncode)
-        
+
         self.backendfilter = SignalOnEvent(widgets.ui_BackendLabel)
-        #self.backendfilter.clicked.connect(self.openMediaSettings)
+        # self.backendfilter.clicked.connect(self.openMediaSettings)
         self.backendfilter.clicked.connect(self.settings.toggleRemux)
-        self.enableActions(False) 
+        self.enableActions(False)
         return widgets
 
-    ''' this is the place to start all graphical actions. Queue is running '''
-    def __queueStarted(self,state):
-        if state==Qt.ApplicationActive:
+    ''' this is the place to start all graphical actions. Queue is running '''    
+    def __queueStarted(self, state):
+        if state == Qt.ApplicationActive:
             self.__qapp.disconnect()
-            self._isStarted=True
+            self._isStarted = True
             self._videoController.prepare()
-    
+
     def isActivated(self):
         return self._isStarted
-    
+
     def centerWindow(self):
         frameGm = self.frameGeometry()
         screen = QApplication.desktop().screenNumber(QApplication.desktop().cursor().pos())
         centerPoint = QApplication.desktop().screenGeometry(screen).center()
         frameGm.moveCenter(centerPoint)
         self.move(frameGm.topLeft())
-    
+
     def updateWindowTitle(self, text):
         self.setWindowTitle("VideoCut - " + text)
-    
+
     def openLanguageSettings(self):
         if self._videoController.streamData is None:
             return
@@ -693,7 +685,7 @@ class MainFrame(QtWidgets.QMainWindow):
         dlg = LanguageSettingsDialog(self, lang, langMap, self._videoController.getLanguages())
         if dlg.exec_():
             self.settings.setPreferedLanguageCodes(dlg.getLanguages())
-     
+
     def showInfo(self, text):
         self._widgets.showInfo(text)
 
@@ -702,7 +694,7 @@ class MainFrame(QtWidgets.QMainWindow):
 
     def syncSliderPos(self, pos):
         self._widgets.syncSliderPos(pos)
-        
+
     def setDialResolution(self, fps):
         self._widgets.setDialResolution(fps)
 
@@ -714,12 +706,12 @@ class MainFrame(QtWidgets.QMainWindow):
 
     def addCutMark(self, cutEntry, rowIndex):
         self._widgets.addCutMark(cutEntry, rowIndex)
-        
+
     def startProgress(self):
         self._widgets.startProgress()  # only the bar.
         self.toolbar.setEnabled(False)
         self._widgets.enableUserActions(False)
-        
+
     def stopProgress(self):
         self._widgets.stopProgress()
         self.toolbar.setEnabled(True)
@@ -727,59 +719,60 @@ class MainFrame(QtWidgets.QMainWindow):
 
     def showWarning(self, aMessage):
         pad = '\t'
-        QtWidgets.QMessageBox.warning(self, "Warning!", aMessage + pad)
-    
+        QtWidgets.QMessageBox.warning(self, get_lang_str("show_warning.msg"), aMessage + pad)
+
     def enableControls(self, enable):
         self._widgets.enableUserActions(enable)
-        
-    def enableActions(self,enable):
+
+    def enableActions(self, enable):
         self.saveAction.setEnabled(enable)
         self.infoAction.setEnabled(enable)
         self.playAction.setEnabled(enable)
         self.startAction.setEnabled(enable)
-        self.stopAction.setEnabled(enable)   
+        self.stopAction.setEnabled(enable)
         self.photoAction.setEnabled(enable)
         self.langSettings.setEnabled(enable)
-             
-                            
-    #-------- ACTIONS ----------
+
+    # -------- ACTIONS ----------
     def loadFile(self):
-        initalPath =self._videoController.getSourceDir()
-        result = QtWidgets.QFileDialog.getOpenFileName(parent=self, directory=initalPath, caption="Load Video");
+        initalPath = self._videoController.getSourceDir()
+        result = QtWidgets.QFileDialog.getOpenFileName(parent=self, directory=initalPath,
+                                                       caption=get_lang_str("load_file.caption"));
         if result[0]:
             fn = self.__encodeQString(result)
             self._widgets.clearMarkerList()
             self._videoController.clearVideoCutEntries()
             self._videoController.setFile(fn)  # encode error: str(result)
-            
+
     def saveVideo(self):
-        initalPath = self._videoController.getSourceFile()#The original filename...
+        initalPath = self._videoController.getSourceFile()  # The original filename...
         targetPath = self._videoController.getTargetFile()
         if not targetPath:
-            self.showWarning("Can't process file!")
+            self.showWarning(get_lang_str("save_video.process-warn-msg"))
             return
         extn = self._videoController.getAllowedExtensions()
-        fileFilter = "Video Files (%s);;All Files(*.*)" % extn
-        result = QtWidgets.QFileDialog.getSaveFileName(parent=self, directory=targetPath, filter=fileFilter, caption="Save Video");
+        result = QtWidgets.QFileDialog.getSaveFileName(parent=self, directory=targetPath,
+                                                       filter=(get_lang_str("save_video.filter") % extn),
+                                                       caption=get_lang_str("save_video.caption"));
         if result[0]:
             fn = self.__encodeQString(result)
             if initalPath == fn:
-                self.showWarning("Can't overwrite source file!")
+                self.showWarning(get_lang_str("save_video.source-file-warn-msg"))
                 return;
             self.startProgress()
             self._videoController.saveVideo(fn)
-    
+
     def __encodeQString(self, stringTuple):
         text = stringTuple[0]
         return text
-    
+
     def openMediaSettings(self):
         dlg = SettingsDialog(self, self.settings)
         dlg.show()
-    
+
     def showCodecInfo(self):
         try:
-            streamData = self._videoController.streamData 
+            streamData = self._videoController.streamData
             container = streamData.formatInfo;
             videoData = streamData.getVideoStream()
             audioData = streamData.getAudioStream()
@@ -787,24 +780,27 @@ class MainFrame(QtWidgets.QMainWindow):
                 acodec = "N.A."
             else:
                 acodec = audioData.getCodec();
-                
+
             # text = '<table border=0 cellspacing="3",cellpadding="2"><tr border=1><td><b>Video Codec:</b></td><td> %s </td></tr><td><b>Dimension:</b></td><td> %s x %s </td></tr><tr><td><b>Aspect:</b></td><td> %s </td></tr><tr><td><b>FPS:</b></td><td> %s </td></tr><tr><td><b>Duration:</b></td><td> %s </td></tr><tr><td><b>Audio codec:</b></td><td> %s </td></tr></table>' %(videoData.getCodec(),videoData.getWidth(),videoData.getHeight(),videoData.getAspectRatio(),videoData.frameRateMultiple(),videoData.duration(),audioData.getCodec())
-            text = """<table border=0 cellspacing="3",cellpadding="2">
+            text = f"""<table border=0 cellspacing="3",cellpadding="2">
                     <tr border=1><td><b>Container:</b></td><td> %s </td></tr>
-                    <tr><td><b>Bitrate:</b></td><td> %s [kb/s]</td></tr>
-                    <tr><td><b>Size:</b></td><td> %s [kb] </td></tr>
-                    <tr><td><b>is TS:</b></td><td> %s </td></tr>
-                    <tr><td><b>Video Codec:</b></td><td> %s </td></tr>
-                    <tr><td><b>Dimension:</b></td><td> %sx%s </td></tr>
-                    <tr><td><b>Aspect:</b></td><td> %s </td></tr>
-                    <tr><td><b>FPS:</b></td><td> %.2f </td></tr>
-                    <tr><td><b>Duration:</b></td><td> %.1f [sec]</td></tr>
-                    <tr><td><b>Audio codec:</b></td><td> %s </td></tr>
-                    </table>""" % (container.formatNames()[0], container.getBitRate(), container.getSizeKB(), streamData.isTransportStream(), videoData.getCodec(), videoData.getWidth(), videoData.getHeight(), videoData.getAspectRatio(), self._videoController.fps(), videoData.duration(), acodec)
+                    <tr><td><b>{get_lang_str("codec_info.bitrate")}:</b></td><td> %s [kb/s]</td></tr>
+                    <tr><td><b>{get_lang_str("codec_info.size")}:</b></td><td> %s [kb] </td></tr>
+                    <tr><td><b>{get_lang_str("codec_info.ts")}:</b></td><td> %s </td></tr>
+                    <tr><td><b>{get_lang_str("codec_info.v-codec")}:</b></td><td> %s </td></tr>
+                    <tr><td><b>{get_lang_str("codec_info.dimension")}:</b></td><td> %sx%s </td></tr>
+                    <tr><td><b>{get_lang_str("codec_info.aspect")}:</b></td><td> %s </td></tr>
+                    <tr><td><b>{get_lang_str("codec_info.fps")}:</b></td><td> %.2f </td></tr>
+                    <tr><td><b>{get_lang_str("codec_info.duration")}:</b></td><td> %.1f [sec]</td></tr>
+                    <tr><td><b>{get_lang_str("codec_info.a-codec")}:</b></td><td> %s </td></tr>
+                    </table>""" % (
+            container.formatNames()[0], container.getBitRate(), container.getSizeKB(), streamData.isTransportStream(),
+            videoData.getCodec(), videoData.getWidth(), videoData.getHeight(), videoData.getAspectRatio(),
+            self._videoController.fps(), videoData.duration(), acodec)
             entries = []
             entries.append("""<br><\br><table border=0 cellspacing="3",cellpadding="2">""")
             #TODO -check the cvInfos (CvPlayer)
-            
+           
             #for key, value in cvInfo.items():
             for key, value in VideoPlugin.info().items():
                 entries.append("<tr border=1><td><b>")
@@ -813,30 +809,28 @@ class MainFrame(QtWidgets.QMainWindow):
                 entries.append(value)
                 entries.append("</td></tr>")
             entries.append("</table>");
-            
+
             text2 = ''.join(entries)
-                                        
+
         except:
             Log.exception("Invalid codec format")
-            text = "<br><b>No Information</b><br>"  
-            text2= "<br> Please select a file first"
+            text = f"<br><b>{get_lang_str('codec_info.invalid-codec-msg-1')}</b><br>"
+            text2 = f"<br> {get_lang_str('codec_info.invalid-codec-msg-2')}"
         self.__getInfoDialog(text + text2).show()
-    
+
     def takeScreenShot(self):
         self._videoController.takeScreenShot()
-        
+
     def playVideo(self):
         isPlaying = self._videoController.toggleVideoPlay()
         self.setVideoPlayerControls(isPlaying)
-    
+
     def setVideoPlayerControls(self, isPlaying):
         if isPlaying:
             self.__enableActionsOnVideoPlay(False)
-            #self.playAction.setIcon(QtGui.QIcon('./icons/pause.png'))
             self.playAction.setIcon(QtGui.QIcon(ICOMAP.ico("playPause")))
         else:
             self.__enableActionsOnVideoPlay(True)
-            #self.playAction.setIcon(QtGui.QIcon('./icons/play.png'))            
             self.playAction.setIcon(QtGui.QIcon(ICOMAP.ico("playStart")))
                
     #-------- ACTIONS  END ----------    
@@ -844,13 +838,13 @@ class MainFrame(QtWidgets.QMainWindow):
     def __enableActionsOnVideoPlay(self, enable):
         self.enableControls(enable)
         self.loadAction.setEnabled(enable)
-        self.saveAction.setEnabled(enable) 
-        self._widgets.gotoAction.setEnabled(enable)        
+        self.saveAction.setEnabled(enable)
+        self._widgets.gotoAction.setEnabled(enable)
 
     def __getInfoDialog(self, text):
         dlg = QtWidgets.QDialog(self)
         dlg.setWindowModality(QtCore.Qt.WindowModal)
-        dlg.setWindowTitle("Video Infos")
+        dlg.setWindowTitle(get_lang_str("codec_info.title"))
         layout = QtWidgets.QVBoxLayout(dlg)
         label = QtWidgets.QLabel(text)
         label.sizePolicy = QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Expanding)
@@ -864,7 +858,7 @@ class MainFrame(QtWidgets.QMainWindow):
         dlg = QtWidgets.QMessageBox(self)
         dlg.setIcon(QtWidgets.QMessageBox.Warning)
         dlg.setWindowModality(QtCore.Qt.WindowModal)
-        dlg.setWindowTitle("Error")
+        dlg.setWindowTitle(get_lang_str("other.error-dialog-title"))
         dlg.setText(text)
         dlg.setInformativeText(infoText)
         dlg.setDetailedText(detailedText)
@@ -873,13 +867,13 @@ class MainFrame(QtWidgets.QMainWindow):
         layout = dlg.layout()
         layout.addItem(spacer, layout.rowCount(), 0, 1, layout.columnCount())
         return dlg
-    
+
     def getMessageDialog(self, text, infoText):
         # dlg = DialogBox(self)
         dlg = QtWidgets.QMessageBox(self)
         dlg.setIcon(QtWidgets.QMessageBox.Information)
         dlg.setWindowModality(QtCore.Qt.WindowModal)
-        dlg.setWindowTitle("Notice")
+        dlg.setWindowTitle(get_lang_str("other.msg-dialog-title"))
         dlg.setText(text)
         dlg.setInformativeText(infoText)
         dlg.setStandardButtons(QtWidgets.QMessageBox.Ok)
@@ -887,16 +881,17 @@ class MainFrame(QtWidgets.QMainWindow):
         spacer = QtWidgets.QSpacerItem(300, 0, QtWidgets.QSizePolicy.Minimum, QtWidgets.QSizePolicy.Expanding)
         layout = dlg.layout()
         layout.addItem(spacer, layout.rowCount(), 0, 1, layout.columnCount())
-        
+
         # dlg.setMinimumSize(450, 0)
         return dlg;
-    
-    def closeEvent(self,event):
+
+    def closeEvent(self, event):
         self._videoController.shutDown()
         try:
             super(MainFrame, self).closeEvent(event)
         except:
             Log.exception("Error Exit")
+
 
 '''    
 class LanguageModel():
@@ -932,18 +927,21 @@ class LanguageModel():
 
 class SettingsModel(QtCore.QObject):
     trigger = pyqtSignal(object)
-    
+
     def __init__(self, mainframe):
         # keep flags- save them later
         super(SettingsModel, self).__init__()
-        self.fastRemux = vc_config.getBoolean("useRemux",True)
-        self.reencoding = vc_config.getBoolean("recode",False)
-        self.muteAudio = vc_config.getBoolean("muteAudio",False)
-        self.iconSet = vc_config.get("icoSet",IconMapper.DEFAULT)
+        self.fastRemux = vc_config.getBoolean("useRemux", True)
+        self.reencoding = vc_config.getBoolean("recode", False)
+        self.muteAudio = vc_config.getBoolean("muteAudio", False)
+        self.iconSet = vc_config.get("icoSet", IconMapper.DEFAULT)
+        self.ui_lang = vc_config.get("ui_lang", set_lang(None))
         self.mainFrame = mainframe
-        self.showSubid=vc_config.getInt("subtitles",0)  #id if subtitle should be presented. mpv only
-        self.showGL=vc_config.getBoolean("openGL",True) #GL Widgets, mpv only
-    
+        self.showSubid = vc_config.getInt("subtitles", 0)  # id if subtitle should be presented. mpv only
+        self.showGL = vc_config.getBoolean("openGL", True)  # GL Widgets, mpv only
+
+        set_lang(self.ui_lang)
+
     def update(self):
         cutmode = "Fast"
         mode = "FFMPEG"
@@ -952,16 +950,16 @@ class SettingsModel(QtCore.QObject):
             mode = "REMUX"
         if self.reencoding:
             cutmode = "Exact"
-        
+
         if self.muteAudio:
-            audio=self.mainFrame._widgets.pixAudioOff
-        
-        #self.ui_AudioModeLabel.setPixmap(pix)
-        
+            audio = self.mainFrame._widgets.pixAudioOff
+
+        # self.ui_AudioModeLabel.setPixmap(pix)
+
         self.mainFrame._widgets.ui_AudioModeLabel.setPixmap(audio)
         self.mainFrame._widgets.ui_CutModeLabel.setText(cutmode)
         self.mainFrame._widgets.ui_BackendLabel.setText(mode)
-        
+
         if self.fastRemux:
             vc_config.set("useRemux", "True")
         else:
@@ -971,24 +969,27 @@ class SettingsModel(QtCore.QObject):
             vc_config.set("recode", "True")
         else:
             vc_config.set("recode", "False")
-        vc_config.set("subtitles",str(self.showSubid))
-        
+        vc_config.set("subtitles", str(self.showSubid))
+
         if self.showGL:
             vc_config.set("openGL", "True")
         else:
             vc_config.set("openGL", "False")
-            
+
         if self.muteAudio:
             vc_config.set("muteAudio", "True")
         else:
             vc_config.set("muteAudio", "False")
-        
+
         #SET the icoset
         vc_config.set("icoSet", self.iconSet)
-        
+
+        #Set language
+        vc_config.set("ui_lang", self.ui_lang)
+
         vc_config.store()
         self.trigger.emit(self)
-        
+
     def getPreferedLanguageCodes(self):
         lang = vc_config.get("LANG")
         if lang is None:
@@ -998,13 +999,13 @@ class SettingsModel(QtCore.QObject):
         return lang
 
     def processSubtitles(self):
-        return self.showSubid>0
+        return self.showSubid > 0
 
     def setPreferedLanguageCodes(self, langList):
         vc_config.set("LANG", json.dumps(langList))
         vc_config.store()
-    
-    #UI toggle functions
+
+    # UI toggle functions
     def toggleRemux(self):
         self.fastRemux = not self.fastRemux
         self.update()
@@ -1015,10 +1016,9 @@ class SettingsModel(QtCore.QObject):
 
     def toggleMute(self):
         self.muteAudio = not self.muteAudio
-        self.update()    
-    
-       
-        
+        self.update()
+
+
 class SettingsDialog(QtWidgets.QDialog):
 
     def __init__(self, parent, model):
@@ -1045,105 +1045,132 @@ class SettingsDialog(QtWidgets.QDialog):
         frame1 = QtWidgets.QFrame()
         frame1.setFrameStyle(QtWidgets.QFrame.Box | QtWidgets.QFrame.Sunken)
         frame1.setLineWidth(1)
-       
+
         frame2 = QtWidgets.QFrame()
         frame2.setFrameStyle(QtWidgets.QFrame.Box | QtWidgets.QFrame.Sunken)
         frame2.setLineWidth(1)
-       
-        #frame3 = QtWidgets.QFrame()
-        #frame3.setFrameStyle(QtWidgets.QFrame.Box | QtWidgets.QFrame.Sunken)
-        #frame3.setLineWidth(1)
-       
+
+        # frame3 = QtWidgets.QFrame()
+        # frame3.setFrameStyle(QtWidgets.QFrame.Box | QtWidgets.QFrame.Sunken)
+        # frame3.setLineWidth(1)
+
         encodeBox = QtWidgets.QVBoxLayout(frame1)
-        self.check_reencode = QtWidgets.QCheckBox("Reencode (Slow!)")
-        self.check_reencode.setToolTip("Force exact cut. Makes it real slow!")
+        self.check_reencode = QtWidgets.QCheckBox(get_lang_str("init_ui.settings.reencode"))
+        self.check_reencode.setToolTip(get_lang_str("init_ui.settings.reencode-popup"))
         self.check_reencode.setChecked(self.model.reencoding)
         # connect
         self.check_reencode.stateChanged.connect(self.on_reencodeChanged)
-        self.exRemux = QtWidgets.QCheckBox("VideoCut Muxer")
-        self.exRemux.setToolTip("Uses the fast remux code instead of ffmpeg commandline")
+        self.exRemux = QtWidgets.QCheckBox(get_lang_str("init_ui.settings.remux"))
+        self.exRemux.setToolTip(get_lang_str("init_ui.settings.remux-popup"))
         self.exRemux.setChecked(self.model.fastRemux)
         self.exRemux.stateChanged.connect(self.on_fastRemuxChanged)
 
-        self.muteAudio = QtWidgets.QCheckBox("Mute audio - Video only")
-        self.muteAudio.setToolTip("Cut the video without any audio tracks")
+        self.muteAudio = QtWidgets.QCheckBox(get_lang_str("init_ui.settings.mute"))
+        self.muteAudio.setToolTip(get_lang_str("init_ui.settings.mute-popup"))
         self.muteAudio.setChecked(self.model.muteAudio)
-        self.muteAudio.stateChanged.connect(self._onAudioChanged)  
+        self.muteAudio.stateChanged.connect(self._onAudioChanged)
 
-        self.showSub = QtWidgets.QCheckBox("Show subtitles")
-        self.showSub.setToolTip("Toggle show subtitles (mpv only)")
-        self.showSub.setChecked(self.model.showSubid>0)
+        self.showSub = QtWidgets.QCheckBox(get_lang_str("init_ui.settings.subtitles"))
+        self.showSub.setToolTip(get_lang_str("init_ui.settings.subtitles-popup"))
+        self.showSub.setChecked(self.model.showSubid > 0)
         self.showSub.stateChanged.connect(self._onSubChanged)
-        
-        self.showGL = QtWidgets.QCheckBox("Use GL Widgets(mpv only) Restart required")
-        self.showGL.setToolTip("Use GL widgets - must be activated for wayland\n Restart app on change")
-        self.showGL.setChecked(self.model.showGL>0)
-        self.showGL.stateChanged.connect(self._onGLChanged)        
 
+        self.showGL = QtWidgets.QCheckBox(get_lang_str("init_ui.settings.gl-widgets"))
+        self.showGL.setToolTip(get_lang_str("init_ui.settings.gl-widgets-popup"))
+        self.showGL.setChecked(self.model.showGL > 0)
+        self.showGL.stateChanged.connect(self._onGLChanged)
 
-        lbl = QtWidgets.QLabel("< Icon theme. Restart required")
+        # Icon theme changer
+        lbl = QtWidgets.QLabel(get_lang_str("init_ui.settings.icon-theme"))
         self.setIconTheme = QtWidgets.QComboBox()
-        themes=ICOMAP.themes()
-        for item in themes:
-            self.setIconTheme.addItem(item)
+        themes = ICOMAP.themes()
+        self.setIconTheme.addItems(themes)
         self.setIconTheme.setCurrentText(self.model.iconSet)
         self.setIconTheme.currentTextChanged.connect(self._onIconThemeChanged)
-        self.setIconTheme.setToolTip("Select icon theme - restart to take effect")
-        comboBox= QtWidgets.QHBoxLayout()
-        comboBox.addWidget(self.setIconTheme)
-        comboBox.addWidget(lbl)
+        self.setIconTheme.setToolTip(get_lang_str("init_ui.settings.icon-theme-popup"))
+        iconComboBox = QtWidgets.QHBoxLayout()
+        iconComboBox.addWidget(self.setIconTheme)
+        iconComboBox.addWidget(lbl)
 
-        
+        # Language selector
+        lbl = QtWidgets.QLabel(get_lang_str("init_ui.settings.ui-lang"))
+        self.setLang = QtWidgets.QComboBox()
+        lang_index = 0
+        current_lang = vc_config.get('ui_lang', set_lang(None))
+        set_lang(current_lang)
+
+        langs = map(lambda item: [item[2] + ' (' + item[1] + ')', item[0]], get_lang_list())
+        itr = 0
+        for lang in langs:
+            self.setLang.addItem(lang[0], lang[1])
+            if current_lang == lang[1]:
+                lang_index = itr
+
+            itr += 1
+
+        self.setLang.setCurrentIndex(lang_index)
+        self.setLang.currentIndexChanged.connect(self._onLangChanged)
+        self.setLang.setToolTip(get_lang_str("init_ui.settings.ui-lang-popup"))
+        langComboBox = QtWidgets.QHBoxLayout()
+        langComboBox.addWidget(self.setLang)
+        langComboBox.addWidget(lbl)
+
         encodeBox.addWidget(self.check_reencode)
         encodeBox.addWidget(self.exRemux)
         encodeBox.addWidget(self.muteAudio)
-        #expoBox = QtWidgets.QVBoxLayout(frame2)
-        #expoBox.addWidget(self.exRemux)
-        
-        subBox= QtWidgets.QVBoxLayout(frame2)
+        # expoBox = QtWidgets.QVBoxLayout(frame2)
+        # expoBox.addWidget(self.exRemux)
+
+        subBox = QtWidgets.QVBoxLayout(frame2)
         subBox.addWidget(self.showSub)
         subBox.addWidget(self.showGL)
-        subBox.addLayout(comboBox)
-        
+        subBox.addLayout(iconComboBox)
+        subBox.addLayout(langComboBox)
+
         outBox.addLayout(versionBox)
         outBox.addWidget(frame1)
         outBox.addWidget(frame2)
         self.setLayout(outBox)
         # make it wider...
         self.setMinimumSize(400, 0)
-        
-#     def on_combobox_selected(self,value):
-#         self.model.selectedContainer=value
-#         self.model.update()
-    
+
+    #     def on_combobox_selected(self,value):
+    #         self.model.selectedContainer=value
+    #         self.model.update()
+
     def on_reencodeChanged(self, reencode):
         self.model.reencoding = QtCore.Qt.Checked == reencode
         # self.combo.setEnabled(self.model.reencoding)
         self.model.update()
-        
+
     def on_fastRemuxChanged(self, isFastRemux):
         self.model.fastRemux = QtCore.Qt.Checked == isFastRemux
-        self.model.update() 
-    
-    def _onSubChanged(self,showsub):
-        if showsub:
-            val=1
-        else:
-            val=0
-        self.model.showSubid=val
-        self.model.update()       
+        self.model.update()
 
-    def _onGLChanged(self,useGL):
-        self.model.showGL=QtCore.Qt.Checked == useGL
-        self.model.update() 
-        
-    def _onAudioChanged(self,muteAudio):
+    def _onSubChanged(self, showsub):
+        if showsub:
+            val = 1
+        else:
+            val = 0
+        self.model.showSubid = val
+        self.model.update()
+
+    def _onGLChanged(self, useGL):
+        self.model.showGL = QtCore.Qt.Checked == useGL
+        self.model.update()
+
+    def _onAudioChanged(self, muteAudio):
         self.model.muteAudio = QtCore.Qt.Checked == muteAudio
         self.model.update()
         
-    def _onIconThemeChanged(self,text):
-        self.model.iconSet=text
+    def _onIconThemeChanged(self, text):
+        self.model.iconSet = text
         self.model.update()
+
+    def _onLangChanged(self, ndx):
+        self.model.ui_lang = self.setLang.itemData(ndx)
+        self.model.update()
+
         
 class LanguageSettingsDialog(QtWidgets.QDialog):
 
@@ -1151,20 +1178,20 @@ class LanguageSettingsDialog(QtWidgets.QDialog):
         """Init UI."""
         super(LanguageSettingsDialog, self).__init__(parent)
         self.iso639 = langData
-        self.available3LetterCodes=videoCodes
+        self.available3LetterCodes = videoCodes
         self.setupLanguages(defCodes)
         self.init_ui()
-    
+
     def init_ui(self):
         self.setWindowModality(QtCore.Qt.WindowModal)
-        self.setWindowTitle("Language")
+        self.setWindowTitle(get_lang_str("language_settings.title"))
         frame1 = QtWidgets.QFrame()
         frame1.setFrameStyle(QtWidgets.QFrame.Box | QtWidgets.QFrame.Sunken)
         frame1.setLineWidth(1)
-        
+
         vBox = QtWidgets.QVBoxLayout()
         hBox = QtWidgets.QHBoxLayout(frame1)
-        dlgBox = QtWidgets.QVBoxLayout() 
+        dlgBox = QtWidgets.QVBoxLayout()
         self.btnup = QtWidgets.QPushButton()
         self.btnup.clicked.connect(self.onButtonUp)
         self.btnup.setIcon(QtGui.QIcon.fromTheme("up"))
@@ -1175,18 +1202,17 @@ class LanguageSettingsDialog(QtWidgets.QDialog):
         vBox.addWidget(self.btnup, 0)
         vBox.addWidget(self.btndown, 0)
         vBox.addStretch(1)
-        
+
         self.listWidget = QtWidgets.QListWidget()
         self.listWidget.setAlternatingRowColors(True)
         self.listWidget.itemSelectionChanged.connect(self.onItemSelectionChanged)
         self.listWidget.itemChanged.connect(self.onChange)
         hBox.addWidget(self.listWidget)
         hBox.addLayout(vBox, 0)
-        
+
         btnHBox = QtWidgets.QHBoxLayout()
-        self.lbl = QtWidgets.QLabel("3 Languages max")
+        self.lbl = QtWidgets.QLabel(get_lang_str("language_settings.max-lang-label"))
         pix = QtGui.QPixmap()
-        #pix.load("icons/info.png")
         pix.load(ICOMAP.ico("infoAction"))
         pix = pix.scaledToWidth(32, mode=Qt.SmoothTransformation)
         info = QtWidgets.QLabel("")
@@ -1198,45 +1224,45 @@ class LanguageSettingsDialog(QtWidgets.QDialog):
         self.button_box.accepted.connect(self.accept)
         self.button_box.rejected.connect(self.reject)
         btnHBox.addWidget(self.button_box)
-        
+
         dlgBox.addWidget(frame1)
         dlgBox.addLayout(btnHBox)
-        
+
         self.setLayout(dlgBox)
         self.setSizePolicy(QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Expanding)
-        self.setMinimumSize(400, 0)   
+        self.setMinimumSize(400, 0)
         self.setModelData()
         item = self.listWidget.item(0)
         item.setSelected(True)
-    
+
     def onChange(self, widget):
         state = widget.checkState()
         if state == Qt.Checked:
             self._limitCheckedItems()
-    
+
     def _limitCheckedItems(self):
         selected = []
         for index in range(self.listWidget.count()):
             item = self.listWidget.item(index)
             if item.checkState() == Qt.Checked:
                 selected.append(item)
-                
+
         if len(selected) > 3:
             test = selected.pop()
             test.setCheckState(Qt.Unchecked)
-        
+
     @QtCore.pyqtSlot()
     def onItemSelectionChanged(self):
         sel = len(self.listWidget.selectedIndexes())
         count = self.listWidget.count()
         if count > 1 and sel == 1:
             self.btnup.setDisabled(False)
-            self.btndown.setDisabled(False) 
+            self.btndown.setDisabled(False)
         else:
             self.btnup.setDisabled(True)
-            self.btndown.setDisabled(True) 
-        
-    @QtCore.pyqtSlot()        
+            self.btndown.setDisabled(True)
+
+    @QtCore.pyqtSlot()
     def onButtonDown(self):
         currItem = self._getSelectedItem()
         if currItem is None:
@@ -1248,35 +1274,35 @@ class LanguageSettingsDialog(QtWidgets.QDialog):
             nextSel = count - 1
         if nextSel == currSel:
             return
-        self.listWidget.takeItem(currSel) 
+        self.listWidget.takeItem(currSel)
         self.listWidget.insertItem(nextSel, currItem)
         self.listWidget.setCurrentRow(nextSel)
-     
-    @QtCore.pyqtSlot()        
+
+    @QtCore.pyqtSlot()
     def onButtonUp(self):
         currItem = self._getSelectedItem()
         if currItem is None:
             return
-        currSel = self.listWidget.currentRow()        
+        currSel = self.listWidget.currentRow()
         nextSel = currSel - 1
         if nextSel < 0:
             nextSel = 0
         if nextSel == currSel:
             return
-        self.listWidget.takeItem(currSel) 
+        self.listWidget.takeItem(currSel)
         self.listWidget.insertItem(nextSel, currItem)
         self.listWidget.setCurrentRow(nextSel)
-    
+
     def _getSelectedItem(self):
         sellist = self.listWidget.selectedItems()
         if len(sellist) == 0:
             return None
         return sellist[0]
-                 
+
     def setModelData(self):
         if len(self.avail) == 0:
-            item = QtWidgets.QListWidgetItem()                
-            item.setText("No language data available")
+            item = QtWidgets.QListWidgetItem()
+            item.setText(get_lang_str("language_settings.no-data"))
             self.listWidget.addItem(item)
             return 0
         primMix = [None, None, None]
@@ -1286,13 +1312,13 @@ class LanguageSettingsDialog(QtWidgets.QDialog):
                 primMix[idx] = lang
             else:
                 primMix.append(lang)
-            
-        cnt = 0    
+
+        cnt = 0
         for lang in primMix:
             if lang is None:
                 continue
 
-            item = QtWidgets.QListWidgetItem()                
+            item = QtWidgets.QListWidgetItem()
             item.setText(lang)
             item.setFlags(item.flags() | QtCore.Qt.ItemIsUserCheckable)
             if lang in self.defaultCodes:
@@ -1301,62 +1327,63 @@ class LanguageSettingsDialog(QtWidgets.QDialog):
                 item.setCheckState(QtCore.Qt.Unchecked)
             self.listWidget.addItem(item)
             cnt += 1
-        
-        return self.listWidget.count() 
-    
+
+        return self.listWidget.count()
+
     def getLanguages(self):
         lang = []
         for index in range(self.listWidget.count()):
             item = self.listWidget.item(index)
             if item.checkState() == Qt.Checked:
-                #code= self.iso639.codeForCountry(item.text(),self.available3LetterCodes)
-                lang.append(item.text()) #save the intl language
-        
+                # code= self.iso639.codeForCountry(item.text(),self.available3LetterCodes)
+                lang.append(item.text())  # save the intl language
+
         return lang
 
-    #defCodes = saved user selected codes (INTL name), avail = Codes in film
-    def setupLanguages(self,defCodes): 
+    # defCodes = saved user selected codes (INTL name), avail = Codes in film
+    def setupLanguages(self, defCodes):
         self.avail = []
         self.defaultCodes = []
         for intlName in defCodes:
-            #self.defaultCodes.append(self.iso639.countryForCode(code))
+            # self.defaultCodes.append(self.iso639.countryForCode(code))
             self.defaultCodes.append(intlName)
-             
+
         for code in self.available3LetterCodes:
-            #self.avail.append(codeToLang.get(code,code))
+            # self.avail.append(codeToLang.get(code,code))
             self.avail.append(self.iso639.countryForCode(code))
-     
-        
-             
+
+
 '''
   handles the events from the GUI, connecting to the VideoPlayer and the VideoWidget... 
-'''        
+'''
+
+
 class VideoControl(QtCore.QObject):
 
-    def __init__(self, mainFrame,aPath):
+    def __init__(self, mainFrame, aPath):
         super(VideoControl, self).__init__()
         self.player = None
         self.gui = mainFrame
         self._initTimer()
         self.videoCuts = []
         self.currentPath = OSTools().getHomeDirectory()
-        self._currentFile=aPath
+        self._currentFile = aPath
         self.streamData = None
         self.lastError = None
-        VideoPlugin.controller=self
+        VideoPlugin.controller = self
 
-    #the queue should be running now
+    # the queue should be running now
     def prepare(self):
         if self._currentFile is None:
             VideoPlugin.showBanner()
         else:
             self.setFile(self._currentFile)
-            
+
     def _initTimer(self):
-        self._dialThread=DialThread(self._dxDialFrame)#exec in dial thread
-        #self._dialThread.triggered.connect(self._dxDialFrame) #if in main thread-blocks any input
-   
-    #Why use soureextension? This may not be the original one.
+        self._dialThread = DialThread(self._dxDialFrame)  # exec in dial thread
+        # self._dialThread.triggered.connect(self._dxDialFrame) #if in main thread-blocks any input
+
+    # Why use source extension? This may not be the original one.
     def getSourceFile(self):
         if self.streamData is not None:
             return self._currentFile
@@ -1375,13 +1402,13 @@ class VideoControl(QtCore.QObject):
         if self.streamData is not None:
             ext = self.streamData.getTargetExtension()
             if ext is None:
-                return None 
-            target= self.currentPath + "." + ext
+                return None
+            target = self.currentPath + "." + ext
             if target is None:
-                return None 
+                return None
             if self._currentFile == target:
-                target= self.currentPath + "-cut." + ext
-            return target 
+                target = self.currentPath + "-cut." + ext
+            return target
 
         return self.currentPath + "-vc.mp4"
 
@@ -1390,17 +1417,17 @@ class VideoControl(QtCore.QObject):
             return self.streamData.getDialogFileExtensions()
         else:
             return "*.*"
-    
+
     def getLanguages(self):
         return self.streamData.getLanguages()
-     
+
     def displayWarningMessage(self):
         if self.lastError is None:
             return
-        self.gui.showWarning(self.lastError+"\nCheck log in .config/VideoCut for details")
+        self.gui.showWarning(self.lastError + "\n" + get_lang_str("video_control.check-log"))
         self.lastError = None
-        
-    #-- Menu handling ---    
+
+    # -- Menu handling ---
     def setFile(self, filePath):
         if self.player is not None:
             VideoPlugin.closePlayer()
@@ -1408,63 +1435,61 @@ class VideoControl(QtCore.QObject):
         try:
             self.streamData = FFStreamProbe(filePath)
             self.currentPath = OSTools().getPathWithoutExtension(filePath);
-            self._currentFile=filePath 
+            self._currentFile = filePath
             if not self.streamData:
-                raise Exception('Invalid file')
-            
+                raise Exception(get_lang_str("video_control.check-log"))
+
             QApplication.setOverrideCursor(QtCore.Qt.WaitCursor)
             self.player = VideoPlugin.initPlayer(filePath, self.streamData)
             VideoPlugin.validate()
-            
+
             self.__initSliderTicks()
             self.gui.enableControls(True)
             self.gui.enableActions(True)
-            
+
             self.onSettingsChanged(self.gui.settings)
             self.gui.updateWindowTitle(OSTools().getFileNameOnly(filePath))
             self._initVideoViews()
         except Exception as ex:
             Log.exception("Setting file")
             if not OSTools().fileExists(filePath):
-                self.lastError = "File not found"
+                self.lastError = get_lang_str("video_control.file-not-found")
             else:
                 self.lastError = str(ex)
-            
+
             VideoPlugin.showBanner()
             self.gui.enableControls(False)
             if self.gui.isActivated():
                 self.displayWarningMessage()
         finally:
-            QApplication.restoreOverrideCursor() 
-    
+            QApplication.restoreOverrideCursor()
+
     def statusbar(self):
         return self.gui._widgets.statusMessenger
-    
+
     def addStartMarker(self):
-        #TODO switch to timebase: ts=self.player.getCurrentFrameTime()
-        pos=self.player.getCurrentFrameNumber()
-        self._createVideoCutEntry(pos,VideoCutEntry.MODE_START)
-        self.statusbar().say("Start video")
+        # TODO switch to timebase: ts=self.player.getCurrentFrameTime()
+        pos = self.player.getCurrentFrameNumber()
+        self._createVideoCutEntry(pos, get_lang_str("point_list.start"))
+        self.statusbar().say(get_lang_str("video_control.start"))
 
     def addStopMarker(self):
-        #TODO switch to timebase: ts=self.player.getCurrentFrameTime()
-        pos=self.player.getCurrentFrameNumber()
-        self._createVideoCutEntry(pos,VideoCutEntry.MODE_STOP)
-        self.statusbar().say("Stop video")
+        # TODO switch to timebase: ts=self.player.getCurrentFrameTime()
+        pos = self.player.getCurrentFrameNumber()
+        self._createVideoCutEntry(pos, get_lang_str("point_list.stop"))
+        self.statusbar().say(get_lang_str("video_control.stop"))
 
     def _createVideoCutEntry(self, pos, mode):
         cutEntry = VideoCutEntry(pos, -1, mode)
         VideoPlugin.setCutEntry(cutEntry)
         self._addVideoCut(cutEntry, True)
-        
-        
-    def _restoreVideoCutEntry(self,cutEntry,mode):
-        isLegacy = cutEntry.pixmap() is None 
-        if isLegacy: #compatibility: read data and generate a thumbnail
-            VideoPlugin.setCutEntry(cutEntry,restore=True)
+
+    def _restoreVideoCutEntry(self, cutEntry, mode):
+        isLegacy = cutEntry.pixmap() is None
+        if isLegacy:  # compatibility: read data and generate a thumbnail
+            VideoPlugin.setCutEntry(cutEntry, restore=True)
         self._addVideoCut(cutEntry, isLegacy)
         return isLegacy
-                
 
     def _addVideoCut(self, cutEntry, updateXML):
         rowIndex = len(self.videoCuts)
@@ -1474,7 +1499,7 @@ class VideoControl(QtCore.QObject):
             if testNbr < frameNbr:
                 rowIndex = idx
                 break
-        
+
         self.videoCuts.insert(rowIndex, cutEntry)
         self.gui.addCutMark(cutEntry, rowIndex)
         if updateXML:
@@ -1482,49 +1507,49 @@ class VideoControl(QtCore.QObject):
 
     def _initVideoViews(self):
         VideoPlugin.showFirstFrame()
-        #messages are not ready here...
+        # messages are not ready here...
         self.restoreVideoCuts()
-        self.statusbar().say(("Ready"))
-        
+        self.statusbar().say(get_lang_str("video_control.ready"))
 
     def restoreVideoCuts(self):
         QApplication.setOverrideCursor(QtCore.Qt.WaitCursor)
-        recover=False
+        recover = False
         try:
             cutList = XMLAccessor(self.currentPath).readXML()
         except Exception as error:
             print(error)
-            Log.exception("Error restore:")  
-            return  
+            Log.exception("Error restore:")
+            return
         for cut in cutList:
-            mode = VideoCutEntry.MODE_STOP
+            mode = get_lang_str("point_list.stop")
             if cut.isStartMode():
-                mode = VideoCutEntry.MODE_START
-            recover = self._restoreVideoCutEntry(cut,mode)
-        if recover:    
+                mode = get_lang_str("point_list.start")
+            recover = self._restoreVideoCutEntry(cut, mode)
+        if recover:
             VideoPlugin.showFirstFrame()
 
-        QApplication.restoreOverrideCursor()          
-    
-    # remove/clear all cuts but leave the file untouched
+        QApplication.restoreOverrideCursor()
+
+        # remove/clear all cuts but leave the file untouched
+
     def clearVideoCutEntries(self):
         self.videoCuts = []
 
     # clear all cuts and its persistence
     def purgeVideoCuts(self):
         self.clearVideoCutEntries()
-        XMLAccessor(self.currentPath).clear()        
-    
+        XMLAccessor(self.currentPath).clear()
+
     def removeVideoCutIndex(self, index):
         cut = self.videoCuts[index]
         self.videoCuts.remove(cut)
         XMLAccessor(self.currentPath).writeXML(self.videoCuts)
-    
+
     def gotoCutIndex(self, index):
         cut = self.videoCuts[index]
-        #self.__dispatchShowFrame(cut.frameNumber)
+        # self.__dispatchShowFrame(cut.frameNumber)
         self._gotoFrame(cut.frameNumber)
-    
+
     # callback from stop button
     def killSaveProcessing(self):
         if self.cutter is None:
@@ -1536,7 +1561,7 @@ class VideoControl(QtCore.QObject):
         spanns = []
         block = None
         for cutEntry in self.videoCuts:
-            
+
             if cutEntry.isStartMode():
                 if block:
                     Log.info("Start invalid: %s" % (cutEntry.getTimeString()))
@@ -1550,13 +1575,13 @@ class VideoControl(QtCore.QObject):
                     block = None
                 else:
                     Log.info("Stop ignored:" + cutEntry.getTimeString())
-        #src = self.player._file
+        # src = self.player._file
         src = self._currentFile
         # need that without extension!
         self.cutAsync(src, path, spanns)
-    
-    #-- Menu handling end ---
-    #-- Exec cutting ---
+
+    # -- Menu handling end ---
+    # -- Exec cutting ---
     def calculateNewVideoTime(self, spanns):
         delta = 0;
         for index, cutmark in enumerate(spanns):
@@ -1574,33 +1599,36 @@ class VideoControl(QtCore.QObject):
             worker = LongRunningOperation(self.__makeCuts, srcPath, targetPath, spanns, settings)
         worker.signal.connect(self._cleanupWorker)
         # start the worker thread. 
-        worker.startOperation()  
+        worker.startOperation()
 
     def _cleanupWorker(self, worker):
         # QThread: Destroyed while thread is still running
-        msg = worker.msg 
+        msg = worker.msg
         self.gui.stopProgress()
         worker.quit()
         worker.wait();
         if self.cutter is None or self.cutter.wasAborted():
-            self.gui.getMessageDialog("Operation failed", "Cut aborted").show()
+            self.gui.getMessageDialog(get_lang_str("video_control.operation-failed-title"),
+                                      get_lang_str("video_control.operation-failed-msg")).show()
         elif self.cutter.hasErrors():
-            self.lastError = "Remux failed: %s " % (self.cutter.getErrors()[0])
+            self.lastError = get_lang_str("video_control.remux-failed") + self.cutter.getErrors()[0]
             self.displayWarningMessage()
         elif msg is not None:
-            self.lastError = "Remux failed: %s " % (msg)
+            self.lastError = get_lang_str("video_control.remux-failed") + (msg)
             self.displayWarningMessage()
         else:
             dx = time() - self.cutTimeStart
             delta = Cutter.timedeltaToFFMPEGString(timedelta(seconds=dx))
-            self.gui.getMessageDialog("Operation done", "Cutting time: %s" % delta,).show()
-        self.cutter = None 
+            self.gui.getMessageDialog(get_lang_str("video_control.operation-done"),
+                                      get_lang_str("video_control.cut-time") + delta, ).show()
+        self.cutter = None
 
     '''
     FFMPEG cutting API
-    '''    
+    '''
+
     def __makeCuts(self, srcPath, targetPath, spanns, settings):
-        config = CuttingConfig(srcPath, targetPath, settings.getPreferedLanguageCodes(),settings.processSubtitles())
+        config = CuttingConfig(srcPath, targetPath, settings.getPreferedLanguageCodes(), settings.processSubtitles())
         config.streamData = self.streamData
         config.reencode = settings.reencoding
         config.messenger = self.statusbar()
@@ -1616,25 +1644,25 @@ class VideoControl(QtCore.QObject):
             if not hasSucess:
                 Log.error("***Cutting failed***")
                 return
-        self.cutter.join()  
-        
+        self.cutter.join()
+
     '''
     new VCCutter API
     '''
+
     def __directCut(self, srcPath, targetPath, spanns, settings):
-        zTime=VideoPlugin.hasVideoOffset()
-        config = CuttingConfig(srcPath, targetPath, settings.getPreferedLanguageCodes(),settings.processSubtitles(),zTime)
+        zTime = VideoPlugin.hasVideoOffset()
+        config = CuttingConfig(srcPath, targetPath, settings.getPreferedLanguageCodes(), settings.processSubtitles(),
+                               zTime)
         config.streamData = self.streamData
         config.messenger = self.statusbar()
         config.reencode = settings.reencoding
         config.muteAudio = settings.muteAudio
-        
+
         self.cutter = VCCutter(config)
         if self.cutter.setupBinary():
             self.cutter.cut(spanns)
-    
-    
-    
+
     # we want 1 minute per single step
     def __initSliderTicks(self):
         _fps = self.fps()
@@ -1642,7 +1670,7 @@ class VideoControl(QtCore.QObject):
             ratio = round(LayoutWindow.SLIDER_RESOLUTION * 60 * _fps / self.player.framecount, 1)
             self.gui.setSliderTicks(round(ratio))
             self.gui.setGotoMaximum(int(self.player.framecount))
-        
+
     # connected to slider-called whenever position is changed.
     def sliderMoved(self, pos):
         if self.player is None or not self.player.isValid():
@@ -1653,98 +1681,97 @@ class VideoControl(QtCore.QObject):
         self.__dispatchShowFrame(frameNumber)
 
     # display Frame with syncing the slider pos. Called by spinbutton/thumb selection.
-    #some frames may not be moved. Make sure the spin button is NOT updated.
+    # some frames may not be moved. Make sure the spin button is NOT updated.
     def _gotoFrame(self, frameNumber=0):
         VideoPlugin.setFrameDirect(frameNumber)
-    
+
     def __dispatchShowFrame(self, frameNumber):
         VideoPlugin.enqueueFrame(frameNumber)
-    
+
     # connected to the dial
     def dialChanged(self, pos):
         if pos == 0:
-            self._dialThread.dialStep(0,0)
+            self._dialThread.dialStep(0, 0)
             return
 
-        res = math.exp((-0.2*abs(pos) +7.0)/ 3.0)
-        steps = math.copysign(1, pos)*math.ceil(abs(pos)/5)
-        ts=round(res*20)
-        self._dialThread.dialStep(int(ts),steps)
- 
-    #called by dialThread-via "func" runs in dial thread, (via signal in main)
-    def _dxDialFrame(self,pos):
+        res = math.exp((-0.2 * abs(pos) + 7.0) / 3.0)
+        steps = math.copysign(1, pos) * math.ceil(abs(pos) / 5)
+        ts = round(res * 20)
+        self._dialThread.dialStep(int(ts), steps)
+
+    # called by dialThread-via "func" runs in dial thread, (via signal in main)
+    def _dxDialFrame(self, pos):
         QApplication.processEvents()
         VideoPlugin.onDial(pos)
-    
-    
+
     def takeScreenShot(self):
         if self.player is None:
             return;
-        index=self.player.getCurrentFrameNumber()
-        path = self.currentPath+str(int(index))+'.jpg'
+        index = self.player.getCurrentFrameNumber()
+        path = self.currentPath + str(int(index)) + '.jpg'
         if self.player.takeScreenShot(path):
-            self.gui.getMessageDialog("Screenshot saved at:", path).show()
-             
+            self.gui.getMessageDialog(get_lang_str("video_control.screenshot-saved") + path).show()
+
     def toggleVideoPlay(self):
         if self.streamData is None:
             return False
         isPlaying = VideoPlugin.toggleVideoPlay()
         self.gui.setVideoPlayerControls(isPlaying)
         return isPlaying
- 
+
     def shutDown(self):
         VideoPlugin.shutDown()
         self._dialThread.stop()
- 
-    #callback settings
-    def onSettingsChanged(self,settingsModel):
-        VideoPlugin.changeSettings("subtitle",settingsModel.showSubid)
+
+    # callback settings
+    def onSettingsChanged(self, settingsModel):
+        VideoPlugin.changeSettings("subtitle", settingsModel.showSubid)
 
     '''
     plugin callbacks
     '''
-    #called by plugin: self.updateUI.emit(frameNumber,self.player.framecount,timeinfo)
-    def _onUpdateInfo(self,frameNbr,frameCount,timeMS):
+
+    # called by plugin: self.updateUI.emit(frameNumber,self.player.framecount,timeinfo)
+    def _onUpdateInfo(self, frameNbr, frameCount, timeMS):
         s = int(timeMS / 1000)
         ms = int(timeMS % 1000)
         ts = '{:02}:{:02}:{:02}.{:03}'.format(s // 3600, s % 3600 // 60, s % 60, ms)
-        out = "<b>Frame:</b> %08d of %d <b>Time:</b> %s " % (frameNbr, int(frameCount) , ts)
+        out = get_lang_str("frame_info.line") % (frameNbr, int(frameCount), ts)
         if not frameCount:
-            sliderPos=0
+            sliderPos = 0
         else:
             sliderPos = int(frameNbr * LayoutWindow.SLIDER_RESOLUTION / frameCount)
         self.gui.showInfo(out)
-        self.gui.syncSpinButton(frameNbr) 
+        self.gui.syncSpinButton(frameNbr)
         self.gui.syncSliderPos(sliderPos)
-                
-    def syncVideoPlayerControls(self,enabled):
+
+    def syncVideoPlayerControls(self, enabled):
         self.gui.setVideoPlayerControls(enabled)
 
 
 # -- threads
 
-#Delegates a message into the main queue...Main loop must be present..
+# Delegates a message into the main queue...Main loop must be present..
 class Delegator(QtCore.QThread):
     kick = pyqtSignal()
-    def __init__(self,func):
+
+    def __init__(self, func):
         QtCore.QThread.__init__(self)
-        self.func=func
+        self.func = func
 
     def run(self):
-        self.kick.emit()  
+        self.kick.emit()
         self.quit()
         self.deleteLater()
-        
+
     def go(self):
         self.kick.connect(self.func)
         self.start()
 
 
-
-
 class SignalOnEvent(QtCore.QObject):
     clicked = pyqtSignal()
-    
+
     def __init__(self, widget):
         QtCore.QObject.__init__(self)
         self.widget = widget
@@ -1753,32 +1780,34 @@ class SignalOnEvent(QtCore.QObject):
     def eventFilter(self, anyObject, event):
         if anyObject == self.widget:
             if event.type() == QtCore.QEvent.MouseButtonRelease and anyObject.rect().contains(event.pos()):
-                    self.clicked.emit()
-                    return True
+                self.clicked.emit()
+                return True
             return False
         else:
             return super(SignalOnEvent, self).eventFilter(anyObject, event)
-   
+
     def doit(self):
         self.widget.installEventFilter(self)
 
-    
-''' Long running operations for actions that do not draw or paint '''        
+
+''' Long running operations for actions that do not draw or paint '''
+
+
 class LongRunningOperation(QtCore.QThread):
-    signal = pyqtSignal(object) 
+    signal = pyqtSignal(object)
 
     def __init__(self, func, *args):
         QtCore.QThread.__init__(self)
         self.function = func
         self.arguments = args
-        self.msg=None
+        self.msg = None
 
     def run(self):
         try:
             self.function(*self.arguments)
         except Exception as ex:
             Log.exception("***Error in LongRunningOperation***")
-            self.msg = "Error while converting: "+str(ex)
+            self.msg = get_lang_str("long_running_operation.converting-error") + str(ex)
         finally:
             self.signal.emit(self)
 
@@ -1788,49 +1817,49 @@ class LongRunningOperation(QtCore.QThread):
         QtCore.QCoreApplication.processEvents()
 
 
-
-#Standard QT thread impl: starts thread in an infinite loop
-#waits on mutex until woken. 
+# Standard QT thread impl: starts thread in an infinite loop
+# waits on mutex until woken.
 class DialThread(QtCore.QThread):
-    triggered=pyqtSignal(int)
-    def __init__(self,func):
+    triggered = pyqtSignal(int)
+
+    def __init__(self, func):
         QtCore.QThread.__init__(self)
-        self.delay=0
+        self.delay = 0
         self.condition = QtCore.QWaitCondition()
         self.mutex = QtCore.QMutex()
-        self.func=func #function will be executed here, not in main thread
-        self.step=0
-        self.__running=True
+        self.func = func  # function will be executed here, not in main thread
+        self.step = 0
+        self.__running = True
         self.start()
-        
+
     def run(self):
         while self.__running:
             if self.delay > 0.0:
-                #self.triggered.emit(self.step)#would pass execution to the main thread->massive afterrun
-                self.func(self.step) #Pro: no queue build up
-                self.msleep(self.delay)#any other sleep breaks!
+                # self.triggered.emit(self.step)#would pass execution to the main thread->massive afterrun
+                self.func(self.step)  # Pro: no queue build up
+                self.msleep(self.delay)  # any other sleep breaks!
             else:
-                self.__wait() #wait until needed
-    
+                self.__wait()  # wait until needed
+
     def __wait(self):
         self.mutex.lock()
         self.condition.wait(self.mutex)
         self.mutex.unlock()
-    
+
     def stop(self):
-        self.__running=False
+        self.__running = False
         self.condition.wakeOne()
-    
-    def dialStep(self,delay,step):
-        self.step=step
+
+    def dialStep(self, delay, step):
+        self.step = step
         if delay == 0:
-            self.delay=0
+            self.delay = 0
             return
-        if self.delay==delay:
+        if self.delay == delay:
             return
-        self.delay=delay
-        self.condition.wakeOne()#wake up the long wait
-                   
+        self.delay = delay
+        self.condition.wakeOne()  # wake up the long wait
+
 
 class StatusDispatcher(QtCore.QObject):
     signal = pyqtSignal(str)
@@ -1838,10 +1867,10 @@ class StatusDispatcher(QtCore.QObject):
 
     def __init__(self):
         QtCore.QObject.__init__(self)
-    
+
     def say(self, aString):
         self.signal.emit(aString)
-    
+
     def progress(self, percent):
         self.progressSignal.emit(round(percent))
 
@@ -1853,7 +1882,7 @@ class IconMapper():
         self._read()
         
     def _read(self):
-        ipath=OSTools().joinPathes(OSTools().getWorkingDirectory(),"icons","icomap.json")
+        ipath = OSTools().joinPathes(OSTools().getWorkingDirectory(),"icons","icomap.json")
         with open(ipath) as fn:
             self.map = json.load(fn)
             
@@ -1870,74 +1899,82 @@ class IconMapper():
 
 WIN = None  
 
+
 def handle_exception(exc_type, exc_value, exc_traceback):
     """ handle all exceptions """
     if WIN is not None:
         infoText = str(exc_value)
         detailText = "*".join(traceback.format_exception(exc_type, exc_value, exc_traceback))
-        WIN.getErrorDialog("Unexpected error", infoText, detailText).show()
+        WIN.getErrorDialog(get_lang_str("other.unexpected-error"), infoText, detailText).show()
         Log.error("Uncaught exception", exc_info=(exc_type, exc_value, exc_traceback))
 
+
 def parseOptions(args):
-    res={}
-    res["mpv"]=True
-    res["logConsole"]=False
-    res["file"]=None
+    res = {}
+    res["mpv"] = True
+    res["logConsole"] = False
+    res["file"] = None
     try:
-        opts,args=getopt.getopt(args[1:], "cdp:", ["console","debug","player="])
-        if len(args)==1:
-            res["file"]=args[0]
+        opts, args = getopt.getopt(args[1:], "cdp:", ["console", "debug", "player="])
+        if len(args) == 1:
+            res["file"] = args[0]
     except getopt.GetoptError as err:
         print(err)
         sys.exit(2)
-    
-    for o,a in opts:
-        if o in ("-d","--debug"):
+
+    for o, a in opts:
+        if o in ("-d", "--debug"):
             FFMPEGTools.setLogLevel("Debug")
-        elif o in ("-p","--player"):
+        elif o in ("-p", "--player"):
             if a in "cv":
-                res["mpv"]=False
-        elif o in ("-c","--console"):
-            res["logConsole"]=True
+                res["mpv"] = False
+        elif o in ("-c", "--console"):
+            res["logConsole"] = True
         else:
-            print("Undef:",o) 
+            print("Undef:", o)
     return res
-                                           
+
+
 def main():
     try:
         global WIN
         global ICOMAP
         global VideoPlugin
         global vc_config
-        localPath = OSTools().getActiveDirectory() #won't work after setting WD
-        wd= OSTools().getLocalPath(__file__)
+        localPath = OSTools().getActiveDirectory()  # won't work after setting WD
+        wd = OSTools().getLocalPath(__file__)
         OSTools().setMainWorkDir(wd)
-        vc_config = ConfigAccessor("VideoCut","vc.ini","videocut") #folder,name&section
+        vc_config = ConfigAccessor("VideoCut", "vc.ini", "videocut")  # folder,name&section
         vc_config.read();
 
         argv = sys.argv
         app = QApplication(argv)
         app.setWindowIcon(getAppIcon())
-        res=parseOptions(argv)
-        FFMPEGTools.setupRotatingLogger("VideoCut",res["logConsole"])
-        VideoPlugin=setUpVideoPlugin(res["mpv"])
-        ICOMAP=IconMapper(vc_config.get("icoSet","default"))
-        fn =res["file"]
+        res = parseOptions(argv)
+        FFMPEGTools.setupRotatingLogger("VideoCut", res["logConsole"])
+        VideoPlugin = setUpVideoPlugin(res["mpv"])
+        ICOMAP=IconMapper(vc_config.get("icoSet", "default"))
+        ui_lang=vc_config.get('ui_lang', set_lang(None))
+        vc_config.set('ui_lang', ui_lang)
+        set_lang(ui_lang)
+
+        fn = res["file"]
         if fn is None:
             WIN = MainFrame(app)  # keep python reference!
         else:
             if not OSTools().isAbsolute(fn):
-                fn=OSTools().joinPathes(localPath,fn)
-            WIN = MainFrame(app,fn)  
+                fn = OSTools().joinPathes(localPath, fn)
+            WIN = MainFrame(app, fn)
         app.exec_()
-        #logging.shutdown()
+        # logging.shutdown()
     except:
         Log.exception("Error in main:")
-        #ex_type, ex_value, ex_traceback
+        # ex_type, ex_value, ex_traceback
         sys_tuple = sys.exc_info()
-        QtWidgets.QMessageBox.critical(None,"Error!",str(sys_tuple[1]))
+        QtWidgets.QMessageBox.critical(None, "Error!", str(sys_tuple[1]))
 
-#TODO: Respect theme
+
+# TODO: Respect theme
 def stylesheet():
     # return "QSlider{margin:1px;padding:1px;background:yellow}" #to view the focus border QSlider:focus{border: 1px solid  #000}
     # No focus and no ticks are available using stylesheets.
@@ -2004,7 +2041,6 @@ def stylesheet():
         }"""
 
 
-        
 if __name__ == '__main__':
     sys.excepthook = handle_exception
     sys.exit(main())
