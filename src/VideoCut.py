@@ -281,10 +281,10 @@ class LayoutWindow(QWidget):
         self.ui_AudioModeLabel.setToolTip("Toggle if audio should be saved")
         
         self.pixAudioOn = QtGui.QPixmap()
-        self.pixAudioOn.load("icons/sound.svg")
+        self.pixAudioOn.load("icons/speaker-high.png")
         self.pixAudioOn = self.pixAudioOn.scaledToWidth(32, mode=Qt.SmoothTransformation)
         self.pixAudioOff = QtGui.QPixmap()
-        self.pixAudioOff.load("icons/mute.svg")
+        self.pixAudioOff.load("icons/speaker-muted.png")
         self.pixAudioOff = self.pixAudioOff.scaledToWidth(32, mode=Qt.SmoothTransformation)
         
         self.ui_CutModeLabel = QtWidgets.QLabel(self)
@@ -441,11 +441,11 @@ class LayoutWindow(QWidget):
      
     def _hookListActions(self):
         # TOO bad-the list model -should be here... 
-        rmAction = QtWidgets.QAction(QtGui.QIcon('icons/remove.svg'), 'Delete', self)
+        rmAction = QtWidgets.QAction(QtGui.QIcon('icons/close-x.png'), 'Delete', self)
         rmAction.triggered.connect(self._removeMarker)
-        rmAllAction = QtWidgets.QAction(QtGui.QIcon('icons/remove_all.svg'), 'Remove all', self)
+        rmAllAction = QtWidgets.QAction(QtGui.QIcon('icons/clear-all.png'), 'Remove all', self)
         rmAllAction.triggered.connect(self.purgeMarker)
-        self.gotoAction = QtWidgets.QAction(QtGui.QIcon('icons/goto.svg'), 'Goto', self)
+        self.gotoAction = QtWidgets.QAction(QtGui.QIcon('icons/go-next.png'), 'Goto', self)
         self.gotoAction.triggered.connect(self._gotoFromMarker)
   
         # menus      
@@ -555,31 +555,31 @@ class MainFrame(QtWidgets.QMainWindow):
         self.exitAction.setShortcut('Ctrl+Q')
         self.exitAction.triggered.connect(QApplication.quit)
         
-        self.loadAction = QtWidgets.QAction(QtGui.QIcon('./icons/open.svg'), 'Load Video', self)
+        self.loadAction = QtWidgets.QAction(QtGui.QIcon('./icons/loadfile.png'), 'Load Video', self)
         self.loadAction.setShortcut('Ctrl+L')
         self.loadAction.triggered.connect(self.loadFile)
 
-        self.startAction = QtWidgets.QAction(QtGui.QIcon('./icons/start-cut.svg'), 'Include from here', self)
+        self.startAction = QtWidgets.QAction(QtGui.QIcon('./icons/start-icon.png'), 'Include from here', self)
         self.startAction.setShortcut('Ctrl+G')
         self.startAction.triggered.connect(self._videoController.addStartMarker)
 
-        self.stopAction = QtWidgets.QAction(QtGui.QIcon('./icons/stop-cut.svg'), 'Exclude from here', self)
+        self.stopAction = QtWidgets.QAction(QtGui.QIcon('./icons/stop-red-icon.png'), 'Exclude from here', self)
         self.stopAction.setShortcut('Ctrl+H')
         self.stopAction.triggered.connect(self._videoController.addStopMarker)
         
-        self.saveAction = QtWidgets.QAction(QtGui.QIcon('./icons/save.svg'), 'Save the video', self)
+        self.saveAction = QtWidgets.QAction(QtGui.QIcon('./icons/save-as-icon.png'), 'Save the video', self)
         self.saveAction.setShortcut('Ctrl+S')
         self.saveAction.triggered.connect(self.saveVideo)
         
-        self.infoAction = QtWidgets.QAction(QtGui.QIcon('./icons/info.svg'), 'Codec info', self)
+        self.infoAction = QtWidgets.QAction(QtGui.QIcon('./icons/info.png'), 'Codec info', self)
         self.infoAction.setShortcut('Ctrl+I')
         self.infoAction.triggered.connect(self.showCodecInfo)
         
-        self.playAction = QtWidgets.QAction(QtGui.QIcon('./icons/play.svg'), 'Play video', self)
+        self.playAction = QtWidgets.QAction(QtGui.QIcon('./icons/play.png'), 'Play video', self)
         self.playAction.setShortcut('Ctrl+P')
         self.playAction.triggered.connect(self.playVideo)
         
-        self.photoAction = QtWidgets.QAction(QtGui.QIcon('./icons/screenshot.svg'), 'Take screenshot', self)
+        self.photoAction = QtWidgets.QAction(QtGui.QIcon('./icons/screenshot.png'), 'Take screenshot', self)
         self.photoAction.setShortcut('Ctrl+P')
         self.photoAction.triggered.connect(self.takeScreenShot)
         
@@ -587,7 +587,7 @@ class MainFrame(QtWidgets.QMainWindow):
         the settings menues
         '''
 #         self.extractMP3 = QtWidgets.QAction(QtGui.QIcon('./icons/stop-red-icon.png'),"Extract MP3",self)
-        self.mediaSettings = QtWidgets.QAction(QtGui.QIcon('./icons/settings.svg'), "Output settings", self)
+        self.mediaSettings = QtWidgets.QAction(QtGui.QIcon('./icons/settings.png'), "Output settings", self)
         self.mediaSettings.setShortcut('Ctrl+T')
         self.mediaSettings.triggered.connect(self.openMediaSettings)
 
@@ -817,10 +817,10 @@ class MainFrame(QtWidgets.QMainWindow):
     def setVideoPlayerControls(self, isPlaying):
         if isPlaying:
             self.__enableActionsOnVideoPlay(False)
-            self.playAction.setIcon(QtGui.QIcon('./icons/pause.svg'))
+            self.playAction.setIcon(QtGui.QIcon('./icons/pause.png'))
         else:
             self.__enableActionsOnVideoPlay(True)
-            self.playAction.setIcon(QtGui.QIcon('./icons/play.svg'))
+            self.playAction.setIcon(QtGui.QIcon('./icons/play.png'))            
                
     #-------- ACTIONS  END ----------    
 
@@ -1148,7 +1148,7 @@ class LanguageSettingsDialog(QtWidgets.QDialog):
         btnHBox = QtWidgets.QHBoxLayout()
         self.lbl = QtWidgets.QLabel("3 Languages max")
         pix = QtGui.QPixmap()
-        pix.load("icons/info.svg")
+        pix.load("icons/info.png")
         pix = pix.scaledToWidth(32, mode=Qt.SmoothTransformation)
         info = QtWidgets.QLabel("")
         info.setPixmap(pix)
