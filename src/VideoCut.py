@@ -27,7 +27,6 @@ import FFMPEGTools
 import Cutter
 from time import sleep, time
 import xml.etree.cElementTree as CT
-from I8N import get_lang_str, get_lang
 #####################################################
 Version = "@xxx@"
 #####################################################
@@ -45,7 +44,7 @@ saneCheck = FFmpegVersion()
 if not saneCheck.confirmFFmpegInstalled():
     app = QApplication(sys.argv)
     QtWidgets.QMessageBox.critical(None, "FFMPEG",
-        (get_lang_str("loading.ffmpeg-error")))
+        ("FFMPEG must be installed to run VideoCut."))
     sys.exit(1)
 
 def setUpVideoPlugin(mpv):
@@ -191,10 +190,9 @@ class VideoDial(QtWidgets.QDial):
         qp.drawLine(center.x() - s * minSize, center.y() + c * minSize, center.x() - s * maxSize, center.y() + c * maxSize)
     '''
 
-
 class VideoCutEntry():
-    MODE_START = get_lang_str("point_list.start")
-    MODE_STOP = get_lang_str("point_list.stop")
+    MODE_START = "Start"
+    MODE_STOP = "Stop"
 
     def __init__(self, frameNbr, timepos, markerType,pix=None):
         self.frameNumber = frameNbr;
@@ -217,8 +215,7 @@ class VideoCutEntry():
 
     def timeDelta(self):
         return timedelta(milliseconds=self.timePosMS)
-
-
+    
 class VCSpinbox(QtWidgets.QSpinBox):
 
     def __init__(self, parent=None):
@@ -253,7 +250,7 @@ class LayoutWindow(QWidget):
         
         self.ui_Slider.setMinimum(0)
         self.ui_Slider.setMaximum(self.SLIDER_RESOLUTION)
-        self.ui_Slider.setToolTip(get_lang_str("slider.popup"))
+        self.ui_Slider.setToolTip("Video track")
         self.ui_Slider.setTickPosition(QtWidgets.QSlider.TicksAbove)
         self.ui_Slider.setTickInterval(0)
         
@@ -264,24 +261,24 @@ class LayoutWindow(QWidget):
         self.ui_Dial.setNotchesVisible(True)
         self.ui_Dial.setWrapping(False)
         self.ui_Dial.setNotchTarget(5.0)
-        self.ui_Dial.setToolTip(get_lang_str("dial.popup"))
+        self.ui_Dial.setToolTip("Fine tuning")
         #styles don't work:
         #no gradients: self.ui_Dial.setStyleSheet("QDial { background-color: qradialgradient(cx:0, cy:0, radius: 1,fx:0.5, fy:0.5, stop:0 white, stop:1 green); }")
         self.setDialResolution(self.DIAL_RESOLUTION)
 
         self.ui_GotoField = VCSpinbox(self)
         self.ui_GotoField.setValue(0)
-        self.ui_GotoField.setToolTip(get_lang_str("goto_field.popup"))
+        self.ui_GotoField.setToolTip("Goto Frame")
         
         self.ui_InfoLabel = QtWidgets.QLabel(self)
         self.ui_InfoLabel.setStyleSheet("QLabel { border: 1px solid darkgray; border-radius: 3px; color: inherit; background: lightblue} ");
         self.ui_InfoLabel.setText("")
-        self.ui_InfoLabel.setToolTip(get_lang_str("frame_info.popup"))
+        self.ui_InfoLabel.setToolTip("Infos about the video position")
         
         self.ui_AudioModeLabel = QtWidgets.QLabel(self)
-        self.ui_AudioModeLabel.setStyleSheet("QLabel { border: 1px solid darkgray; border-radius: 3px; color: inherit; background: lightgreen} ");
+        self.ui_AudioModeLabel.setStyleSheet("QLabel { border: 1px solid darkgray; border-radius: 3px; color: inherit; background: darkgreen} ");
         self.ui_AudioModeLabel.setAlignment(QtCore.Qt.AlignCenter)
-        self.ui_AudioModeLabel.setToolTip(get_lang_str("button_menu.mute"))
+        self.ui_AudioModeLabel.setToolTip("Toggle if audio should be saved")
         
         self.pixAudioOn = QtGui.QPixmap()
         self.pixAudioOn.load("icons/sound.svg")
@@ -293,12 +290,12 @@ class LayoutWindow(QWidget):
         self.ui_CutModeLabel = QtWidgets.QLabel(self)
         self.ui_CutModeLabel.setStyleSheet("QLabel { border: 1px solid darkgray; border-radius: 3px; color: inherit; background: lightgreen} ");
         self.ui_CutModeLabel.setAlignment(QtCore.Qt.AlignCenter)
-        self.ui_CutModeLabel.setToolTip(get_lang_str("button_menu.cut"))
+        self.ui_CutModeLabel.setToolTip("Toggle if exact or fast cut")
         
         self.ui_BackendLabel = QtWidgets.QLabel(self)
         self.ui_BackendLabel.setStyleSheet("QLabel { border: 1px solid darkgray; border-radius: 3px; color: inherit; background: lightgreen} ");
         self.ui_BackendLabel.setAlignment(QtCore.Qt.AlignCenter)
-        self.ui_BackendLabel.setToolTip(get_lang_str("button_menu.remux"))
+        self.ui_BackendLabel.setToolTip("Toogle if precise remux or external ffmpeg")
         
         self.statusBox = QtWidgets.QHBoxLayout()
         self.statusBox.addWidget(self.ui_AudioModeLabel)
@@ -319,7 +316,7 @@ class LayoutWindow(QWidget):
         self.buttonStop.setIcon(QtGui.QIcon('./icons/window-close.png'))
         self.buttonStop.setIconSize(QtCore.QSize(20, 20))
         self.buttonStop.setVisible(False)
-        self.buttonStop.setToolTip(get_lang_str("button_stop.popup"))
+        self.buttonStop.setToolTip("Stop processing")
         self.statusbar.addPermanentWidget(self.buttonStop, 0)
         self.setLayout(self.makeGridLayout())
         self.adjustSize()
@@ -341,8 +338,7 @@ class LayoutWindow(QWidget):
         gridLayout.setRowStretch(1, 1)
 
         return gridLayout
-
-    # unused
+    #unused
     def makeBoxLayout(self):
         vbox = QtWidgets.QVBoxLayout()
         vbox.addWidget(self.ui_VideoFrame)
@@ -445,11 +441,11 @@ class LayoutWindow(QWidget):
      
     def _hookListActions(self):
         # TOO bad-the list model -should be here... 
-        rmAction = QtWidgets.QAction(QtGui.QIcon('icons/remove.svg'), get_lang_str("hook_list.delete"), self)
+        rmAction = QtWidgets.QAction(QtGui.QIcon('icons/remove.svg'), 'Delete', self)
         rmAction.triggered.connect(self._removeMarker)
-        rmAllAction = QtWidgets.QAction(QtGui.QIcon('icons/remove_all.svg'), get_lang_str("hook_list.remove-all"), self)
+        rmAllAction = QtWidgets.QAction(QtGui.QIcon('icons/remove_all.svg'), 'Remove all', self)
         rmAllAction.triggered.connect(self.purgeMarker)
-        self.gotoAction = QtWidgets.QAction(QtGui.QIcon('icons/goto.svg'), get_lang_str("hook_list.goto"), self)
+        self.gotoAction = QtWidgets.QAction(QtGui.QIcon('icons/goto.svg'), 'Goto', self)
         self.gotoAction.triggered.connect(self._gotoFromMarker)
   
         # menus      
@@ -555,35 +551,35 @@ class MainFrame(QtWidgets.QMainWindow):
     
     def initUI(self):
         
-        self.exitAction = QtWidgets.QAction(QtGui.QIcon('icons/window-close.png'), get_lang_str("init_ui.exit"), self)
+        self.exitAction = QtWidgets.QAction(QtGui.QIcon('icons/window-close.png'), 'Exit', self)
         self.exitAction.setShortcut('Ctrl+Q')
         self.exitAction.triggered.connect(QApplication.quit)
         
-        self.loadAction = QtWidgets.QAction(QtGui.QIcon('./icons/open.svg'), get_lang_str("init_ui.open"), self)
+        self.loadAction = QtWidgets.QAction(QtGui.QIcon('./icons/open.svg'), 'Load Video', self)
         self.loadAction.setShortcut('Ctrl+L')
         self.loadAction.triggered.connect(self.loadFile)
 
-        self.startAction = QtWidgets.QAction(QtGui.QIcon('./icons/start-cut.svg'), get_lang_str("init_ui.include-from"), self)
+        self.startAction = QtWidgets.QAction(QtGui.QIcon('./icons/start-cut.svg'), 'Include from here', self)
         self.startAction.setShortcut('Ctrl+G')
         self.startAction.triggered.connect(self._videoController.addStartMarker)
 
-        self.stopAction = QtWidgets.QAction(QtGui.QIcon('./icons/stop-cut.svg'), get_lang_str("init_ui.include-to"), self)
+        self.stopAction = QtWidgets.QAction(QtGui.QIcon('./icons/stop-cut.svg'), 'Exclude from here', self)
         self.stopAction.setShortcut('Ctrl+H')
         self.stopAction.triggered.connect(self._videoController.addStopMarker)
         
-        self.saveAction = QtWidgets.QAction(QtGui.QIcon('./icons/save.svg'), get_lang_str("init_ui.save"), self)
+        self.saveAction = QtWidgets.QAction(QtGui.QIcon('./icons/save.svg'), 'Save the video', self)
         self.saveAction.setShortcut('Ctrl+S')
         self.saveAction.triggered.connect(self.saveVideo)
         
-        self.infoAction = QtWidgets.QAction(QtGui.QIcon('./icons/info.svg'), get_lang_str("init_ui.info"), self)
+        self.infoAction = QtWidgets.QAction(QtGui.QIcon('./icons/info.svg'), 'Codec info', self)
         self.infoAction.setShortcut('Ctrl+I')
         self.infoAction.triggered.connect(self.showCodecInfo)
         
-        self.playAction = QtWidgets.QAction(QtGui.QIcon('./icons/play.svg'), get_lang_str("init_ui.play-pause"), self)
+        self.playAction = QtWidgets.QAction(QtGui.QIcon('./icons/play.svg'), 'Play video', self)
         self.playAction.setShortcut('Ctrl+P')
         self.playAction.triggered.connect(self.playVideo)
         
-        self.photoAction = QtWidgets.QAction(QtGui.QIcon('./icons/screenshot.svg'), get_lang_str("init_ui.screenshot"), self)
+        self.photoAction = QtWidgets.QAction(QtGui.QIcon('./icons/screenshot.svg'), 'Take screenshot', self)
         self.photoAction.setShortcut('Ctrl+P')
         self.photoAction.triggered.connect(self.takeScreenShot)
         
@@ -591,14 +587,14 @@ class MainFrame(QtWidgets.QMainWindow):
         the settings menues
         '''
 #         self.extractMP3 = QtWidgets.QAction(QtGui.QIcon('./icons/stop-red-icon.png'),"Extract MP3",self)
-        self.mediaSettings = QtWidgets.QAction(QtGui.QIcon('./icons/settings.svg'), get_lang_str("init_ui.output-settings"), self)
+        self.mediaSettings = QtWidgets.QAction(QtGui.QIcon('./icons/settings.svg'), "Output settings", self)
         self.mediaSettings.setShortcut('Ctrl+T')
         self.mediaSettings.triggered.connect(self.openMediaSettings)
 
         '''
         audio language selection
         '''
-        self.langSettings = QtWidgets.QAction(QtGui.QIcon('./icons/langflags.png'), get_lang_str("init_ui.lang-settings"), self)
+        self.langSettings = QtWidgets.QAction(QtGui.QIcon('./icons/langflags.png'), "Language settings", self)
         self.langSettings.setShortcut('Ctrl+L')
         self.langSettings.triggered.connect(self.openLanguageSettings)
 
@@ -619,7 +615,7 @@ class MainFrame(QtWidgets.QMainWindow):
         self.toolbar.addAction(self.langSettings)
                                
         menubar = self.menuBar()
-        fileMenu = menubar.addMenu(f'&{get_lang_str("init_ui.file")}')
+        fileMenu = menubar.addMenu('&File')
         fileMenu.addAction(self.loadAction)
         fileMenu.addAction(self.saveAction)
         fileMenu.addSeparator();
@@ -716,7 +712,7 @@ class MainFrame(QtWidgets.QMainWindow):
 
     def showWarning(self, aMessage):
         pad = '\t'
-        QtWidgets.QMessageBox.warning(self, get_lang_str("show_warning.msg"), aMessage + pad)
+        QtWidgets.QMessageBox.warning(self, "Warning!", aMessage + pad)
     
     def enableControls(self, enable):
         self._widgets.enableUserActions(enable)
@@ -734,7 +730,7 @@ class MainFrame(QtWidgets.QMainWindow):
     #-------- ACTIONS ----------
     def loadFile(self):
         initalPath =self._videoController.getSourceDir()
-        result = QtWidgets.QFileDialog.getOpenFileName(parent=self, directory=initalPath, caption=get_lang_str("load_file.caption"));
+        result = QtWidgets.QFileDialog.getOpenFileName(parent=self, directory=initalPath, caption="Load Video");
         if result[0]:
             fn = self.__encodeQString(result)
             self._widgets.clearMarkerList()
@@ -745,14 +741,15 @@ class MainFrame(QtWidgets.QMainWindow):
         initalPath = self._videoController.getSourceFile()#The original filename...
         targetPath = self._videoController.getTargetFile()
         if not targetPath:
-            self.showWarning(get_lang_str("save_video.process-warn-msg"))
+            self.showWarning("Can't process file!")
             return
         extn = self._videoController.getAllowedExtensions()
-        result = QtWidgets.QFileDialog.getSaveFileName(parent=self, directory=targetPath, filter=(get_lang_str("save_video.filter") % extn), caption=get_lang_str("save_video.caption"));
+        fileFilter = "Video Files (%s);;All Files(*.*)" % extn
+        result = QtWidgets.QFileDialog.getSaveFileName(parent=self, directory=targetPath, filter=fileFilter, caption="Save Video");
         if result[0]:
             fn = self.__encodeQString(result)
             if initalPath == fn:
-                self.showWarning(get_lang_str("save_video.source-file-warn-msg"))
+                self.showWarning("Can't overwrite source file!")
                 return;
             self.startProgress()
             self._videoController.saveVideo(fn)
@@ -777,17 +774,17 @@ class MainFrame(QtWidgets.QMainWindow):
                 acodec = audioData.getCodec();
                 
             # text = '<table border=0 cellspacing="3",cellpadding="2"><tr border=1><td><b>Video Codec:</b></td><td> %s </td></tr><td><b>Dimension:</b></td><td> %s x %s </td></tr><tr><td><b>Aspect:</b></td><td> %s </td></tr><tr><td><b>FPS:</b></td><td> %s </td></tr><tr><td><b>Duration:</b></td><td> %s </td></tr><tr><td><b>Audio codec:</b></td><td> %s </td></tr></table>' %(videoData.getCodec(),videoData.getWidth(),videoData.getHeight(),videoData.getAspectRatio(),videoData.frameRateMultiple(),videoData.duration(),audioData.getCodec())
-            text = f"""<table border=0 cellspacing="3",cellpadding="2">
+            text = """<table border=0 cellspacing="3",cellpadding="2">
                     <tr border=1><td><b>Container:</b></td><td> %s </td></tr>
-                    <tr><td><b>{get_lang_str("codec_info.bitrate")}:</b></td><td> %s [kb/s]</td></tr>
-                    <tr><td><b>{get_lang_str("codec_info.size")}:</b></td><td> %s [kb] </td></tr>
-                    <tr><td><b>{get_lang_str("codec_info.ts")}:</b></td><td> %s </td></tr>
-                    <tr><td><b>{get_lang_str("codec_info.v-codec")}:</b></td><td> %s </td></tr>
-                    <tr><td><b>{get_lang_str("codec_info.dimension")}:</b></td><td> %sx%s </td></tr>
-                    <tr><td><b>{get_lang_str("codec_info.aspect")}:</b></td><td> %s </td></tr>
-                    <tr><td><b>{get_lang_str("codec_info.fps")}:</b></td><td> %.2f </td></tr>
-                    <tr><td><b>{get_lang_str("codec_info.duration")}:</b></td><td> %.1f [sec]</td></tr>
-                    <tr><td><b>{get_lang_str("codec_info.a-codec")}:</b></td><td> %s </td></tr>
+                    <tr><td><b>Bitrate:</b></td><td> %s [kb/s]</td></tr>
+                    <tr><td><b>Size:</b></td><td> %s [kb] </td></tr>
+                    <tr><td><b>is TS:</b></td><td> %s </td></tr>
+                    <tr><td><b>Video Codec:</b></td><td> %s </td></tr>
+                    <tr><td><b>Dimension:</b></td><td> %sx%s </td></tr>
+                    <tr><td><b>Aspect:</b></td><td> %s </td></tr>
+                    <tr><td><b>FPS:</b></td><td> %.2f </td></tr>
+                    <tr><td><b>Duration:</b></td><td> %.1f [sec]</td></tr>
+                    <tr><td><b>Audio codec:</b></td><td> %s </td></tr>
                     </table>""" % (container.formatNames()[0], container.getBitRate(), container.getSizeKB(), streamData.isTransportStream(), videoData.getCodec(), videoData.getWidth(), videoData.getHeight(), videoData.getAspectRatio(), self._videoController.fps(), videoData.duration(), acodec)
             entries = []
             entries.append("""<br><\br><table border=0 cellspacing="3",cellpadding="2">""")
@@ -806,8 +803,8 @@ class MainFrame(QtWidgets.QMainWindow):
                                         
         except:
             Log.exception("Invalid codec format")
-            text = f"<br><b>{get_lang_str('codec_info.invalid-codec-msg-1')}</b><br>"
-            text2= f"<br> {get_lang_str('codec_info.invalid-codec-msg-2')}"
+            text = "<br><b>No Information</b><br>"  
+            text2= "<br> Please select a file first"
         self.__getInfoDialog(text + text2).show()
     
     def takeScreenShot(self):
@@ -836,7 +833,7 @@ class MainFrame(QtWidgets.QMainWindow):
     def __getInfoDialog(self, text):
         dlg = QtWidgets.QDialog(self)
         dlg.setWindowModality(QtCore.Qt.WindowModal)
-        dlg.setWindowTitle(get_lang_str("codec_info.title"))
+        dlg.setWindowTitle("Video Infos")
         layout = QtWidgets.QVBoxLayout(dlg)
         label = QtWidgets.QLabel(text)
         label.sizePolicy = QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Expanding)
@@ -850,7 +847,7 @@ class MainFrame(QtWidgets.QMainWindow):
         dlg = QtWidgets.QMessageBox(self)
         dlg.setIcon(QtWidgets.QMessageBox.Warning)
         dlg.setWindowModality(QtCore.Qt.WindowModal)
-        dlg.setWindowTitle(get_lang_str("other.error-dialog-title"))
+        dlg.setWindowTitle("Error")
         dlg.setText(text)
         dlg.setInformativeText(infoText)
         dlg.setDetailedText(detailedText)
@@ -865,7 +862,7 @@ class MainFrame(QtWidgets.QMainWindow):
         dlg = QtWidgets.QMessageBox(self)
         dlg.setIcon(QtWidgets.QMessageBox.Information)
         dlg.setWindowModality(QtCore.Qt.WindowModal)
-        dlg.setWindowTitle(get_lang_str("other.msg-dialog-title"))
+        dlg.setWindowTitle("Notice")
         dlg.setText(text)
         dlg.setInformativeText(infoText)
         dlg.setStandardButtons(QtWidgets.QMessageBox.Ok)
@@ -1037,28 +1034,28 @@ class SettingsDialog(QtWidgets.QDialog):
         #frame3.setLineWidth(1)
        
         encodeBox = QtWidgets.QVBoxLayout(frame1)
-        self.check_reencode = QtWidgets.QCheckBox(get_lang_str("init_ui.settings.reencode"))
-        self.check_reencode.setToolTip(get_lang_str("init_ui.settings.reencode-popup"))
+        self.check_reencode = QtWidgets.QCheckBox("Reencode (Slow!)")
+        self.check_reencode.setToolTip("Force exact cut. Makes it real slow!")
         self.check_reencode.setChecked(self.model.reencoding)
         # connect
         self.check_reencode.stateChanged.connect(self.on_reencodeChanged)
-        self.exRemux = QtWidgets.QCheckBox(get_lang_str("init_ui.settings.remux"))
-        self.exRemux.setToolTip(get_lang_str("init_ui.settings.remux-popup"))
+        self.exRemux = QtWidgets.QCheckBox("VideoCut Muxer")
+        self.exRemux.setToolTip("Uses the fast remux code instead of ffmpeg commandline")
         self.exRemux.setChecked(self.model.fastRemux)
         self.exRemux.stateChanged.connect(self.on_fastRemuxChanged)
 
-        self.muteAudio = QtWidgets.QCheckBox(get_lang_str("init_ui.settings.mute"))
-        self.muteAudio.setToolTip(get_lang_str("init_ui.settings.mute-popup"))
+        self.muteAudio = QtWidgets.QCheckBox("Mute audio - Video only")
+        self.muteAudio.setToolTip("Cut the video without any audio tracks")
         self.muteAudio.setChecked(self.model.muteAudio)
         self.muteAudio.stateChanged.connect(self._onAudioChanged)  
 
-        self.showSub = QtWidgets.QCheckBox(get_lang_str("init_ui.settings.subtitles"))
-        self.showSub.setToolTip(get_lang_str("init_ui.settings.subtitles-popup"))
+        self.showSub = QtWidgets.QCheckBox("Show subtitles")
+        self.showSub.setToolTip("Toggle show subtitles (mpv only)")
         self.showSub.setChecked(self.model.showSubid>0)
         self.showSub.stateChanged.connect(self._onSubChanged)
         
-        self.showGL = QtWidgets.QCheckBox(get_lang_str("init_ui.settings.gl-widgets"))
-        self.showGL.setToolTip(get_lang_str("init_ui.settings.gl-widgets-popup"))
+        self.showGL = QtWidgets.QCheckBox("Use GL Widgets(mpv only) Restart required")
+        self.showGL.setToolTip("Use GL widgets - must be activated for wayland\n Restart app on change")
         self.showGL.setChecked(self.model.showGL>0)
         self.showGL.stateChanged.connect(self._onGLChanged)        
 
@@ -1122,7 +1119,7 @@ class LanguageSettingsDialog(QtWidgets.QDialog):
     
     def init_ui(self):
         self.setWindowModality(QtCore.Qt.WindowModal)
-        self.setWindowTitle(get_lang_str("language_settings.title"))
+        self.setWindowTitle("Language")
         frame1 = QtWidgets.QFrame()
         frame1.setFrameStyle(QtWidgets.QFrame.Box | QtWidgets.QFrame.Sunken)
         frame1.setLineWidth(1)
@@ -1149,7 +1146,7 @@ class LanguageSettingsDialog(QtWidgets.QDialog):
         hBox.addLayout(vBox, 0)
         
         btnHBox = QtWidgets.QHBoxLayout()
-        self.lbl = QtWidgets.QLabel(get_lang_str("language_settings.max-lang-label"))
+        self.lbl = QtWidgets.QLabel("3 Languages max")
         pix = QtGui.QPixmap()
         pix.load("icons/info.svg")
         pix = pix.scaledToWidth(32, mode=Qt.SmoothTransformation)
@@ -1240,7 +1237,7 @@ class LanguageSettingsDialog(QtWidgets.QDialog):
     def setModelData(self):
         if len(self.avail) == 0:
             item = QtWidgets.QListWidgetItem()                
-            item.setText(get_lang_str("language_settings.no-data"))
+            item.setText("No language data available")
             self.listWidget.addItem(item)
             return 0
         primMix = [None, None, None]
@@ -1361,7 +1358,7 @@ class VideoControl(QtCore.QObject):
     def displayWarningMessage(self):
         if self.lastError is None:
             return
-        self.gui.showWarning(self.lastError + "\n" + get_lang_str("video_control.check-log"))
+        self.gui.showWarning(self.lastError+"\nCheck log in .config/VideoCut for details")
         self.lastError = None
         
     #-- Menu handling ---    
@@ -1374,7 +1371,7 @@ class VideoControl(QtCore.QObject):
             self.currentPath = OSTools().getPathWithoutExtension(filePath);
             self._currentFile=filePath 
             if not self.streamData:
-                raise Exception(get_lang_str("video_control.check-log"))
+                raise Exception('Invalid file')
             
             QApplication.setOverrideCursor(QtCore.Qt.WaitCursor)
             self.player = VideoPlugin.initPlayer(filePath, self.streamData)
@@ -1390,7 +1387,7 @@ class VideoControl(QtCore.QObject):
         except Exception as ex:
             Log.exception("Setting file")
             if not OSTools().fileExists(filePath):
-                self.lastError = get_lang_str("video_control.file-not-found")
+                self.lastError = "File not found"
             else:
                 self.lastError = str(ex)
             
@@ -1408,13 +1405,13 @@ class VideoControl(QtCore.QObject):
         #TODO switch to timebase: ts=self.player.getCurrentFrameTime()
         pos=self.player.getCurrentFrameNumber()
         self._createVideoCutEntry(pos,VideoCutEntry.MODE_START)
-        self.statusbar().say(get_lang_str("video_control.start"))
+        self.statusbar().say("Start video")
 
     def addStopMarker(self):
         #TODO switch to timebase: ts=self.player.getCurrentFrameTime()
         pos=self.player.getCurrentFrameNumber()
         self._createVideoCutEntry(pos,VideoCutEntry.MODE_STOP)
-        self.statusbar().say(get_lang_str("video_control.stop"))
+        self.statusbar().say("Stop video")
 
     def _createVideoCutEntry(self, pos, mode):
         cutEntry = VideoCutEntry(pos, -1, mode)
@@ -1448,7 +1445,7 @@ class VideoControl(QtCore.QObject):
         VideoPlugin.showFirstFrame()
         #messages are not ready here...
         self.restoreVideoCuts()
-        self.statusbar().say(get_lang_str("video_control.ready"))
+        self.statusbar().say(("Ready"))
         
 
     def restoreVideoCuts(self):
@@ -1547,17 +1544,17 @@ class VideoControl(QtCore.QObject):
         worker.quit()
         worker.wait();
         if self.cutter is None or self.cutter.wasAborted():
-            self.gui.getMessageDialog(get_lang_str("video_control.operation-failed-title"), get_lang_str("video_control.operation-failed-msg")).show()
+            self.gui.getMessageDialog("Operation failed", "Cut aborted").show()
         elif self.cutter.hasErrors():
-            self.lastError = get_lang_str("video_control.remux-failed") + self.cutter.getErrors()[0]
+            self.lastError = "Remux failed: %s " % (self.cutter.getErrors()[0])
             self.displayWarningMessage()
         elif msg is not None:
-            self.lastError = get_lang_str("video_control.remux-failed") + (msg)
+            self.lastError = "Remux failed: %s " % (msg)
             self.displayWarningMessage()
         else:
             dx = time() - self.cutTimeStart
             delta = Cutter.timedeltaToFFMPEGString(timedelta(seconds=dx))
-            self.gui.getMessageDialog(get_lang_str("video_control.operation-done"), get_lang_str("video_control.cut-time") + delta,).show()
+            self.gui.getMessageDialog("Operation done", "Cutting time: %s" % delta,).show()
         self.cutter = None 
 
     '''
@@ -1647,7 +1644,7 @@ class VideoControl(QtCore.QObject):
         index=self.player.getCurrentFrameNumber()
         path = self.currentPath+str(int(index))+'.jpg'
         if self.player.takeScreenShot(path):
-            self.gui.getMessageDialog(get_lang_str("video_control.screenshot-saved") + path).show()
+            self.gui.getMessageDialog("Screenshot saved at:", path).show()
              
     def toggleVideoPlay(self):
         if self.streamData is None:
@@ -1672,7 +1669,7 @@ class VideoControl(QtCore.QObject):
         s = int(timeMS / 1000)
         ms = int(timeMS % 1000)
         ts = '{:02}:{:02}:{:02}.{:03}'.format(s // 3600, s % 3600 // 60, s % 60, ms)
-        out = get_lang_str("frame_info.line") % (frameNbr, int(frameCount), ts)
+        out = "<b>Frame:</b> %08d of %d <b>Time:</b> %s " % (frameNbr, int(frameCount) , ts)
         if not frameCount:
             sliderPos=0
         else:
@@ -1742,7 +1739,7 @@ class LongRunningOperation(QtCore.QThread):
             self.function(*self.arguments)
         except Exception as ex:
             Log.exception("***Error in LongRunningOperation***")
-            self.msg = get_lang_str("long_running_operation.converting-error") + str(ex)
+            self.msg = "Error while converting: "+str(ex)
         finally:
             self.signal.emit(self)
 
@@ -1818,7 +1815,7 @@ def handle_exception(exc_type, exc_value, exc_traceback):
     if WIN is not None:
         infoText = str(exc_value)
         detailText = "*".join(traceback.format_exception(exc_type, exc_value, exc_traceback))
-        WIN.getErrorDialog(get_lang_str("other.unexpected-error"), infoText, detailText).show()
+        WIN.getErrorDialog("Unexpected error", infoText, detailText).show()
         Log.error("Uncaught exception", exc_info=(exc_type, exc_value, exc_traceback))
 
 def parseOptions(args):
