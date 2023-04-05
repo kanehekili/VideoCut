@@ -1,0 +1,7 @@
+<svg width="256" height="256" version="1.1" viewBox="0 0 256 256" xmlns="http://www.w3.org/2000/svg">
+ <rect y="240" width="256" height="16" style="paint-order:markers fill stroke"/>
+ <circle cx="128" cy="220" r="15" style="paint-order:markers fill stroke"/>
+ <rect x="120.28" y="9.3739" width="15.393" height="188.65" stroke-width="1.3224" style="paint-order:markers fill stroke"/>
+ <rect transform="matrix(.91997 .39198 -.61617 .78761 0 0)" x="222.41" y="16.401" width="14.491" height="117.12" stroke-width="1.3454" style="paint-order:markers fill stroke"/>
+ <rect transform="matrix(-.91998 .39198 .61617 .78761 0 0)" x="13.747" y="120.25" width="14.491" height="117.12" stroke-width="1.3454" style="paint-order:markers fill stroke"/>
+</svg>
