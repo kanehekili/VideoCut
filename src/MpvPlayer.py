@@ -325,21 +325,17 @@ class MpvPlayer():
             if dialStep == -1:
                 self.mediaPlayer.frame_back_step()
                 return
+            fix=0.4*dialStep*dialStep
+            nxt=(dialStep/self.fps)*fix
             if dialStep > 0:
-                #self.mediaPlayer.frame_step() #crash at end/fills queue with afterruns
-                fix=0.8
-                if dialStep > 3:
-                    fix=1.0
-                nxt=(dialStep/self.fps)*fix
                 if self.timePos()+nxt>self.duration:
                     return
             else:
                 if self.timePos()>self.duration:
                     nxt=-1/self.fps*1.8
-                else:
-                    nxt=(dialStep/self.fps)*1.2
+                    
             self.mediaPlayer.seek(nxt,"relative+exact")
-            #print("seek step1 %f time:%f dur:%f"%(nxt,self.timePos(),self.duration)) 
+            #print("seek dial %d step1 %f time:%f dur:%f"%(dialStep,nxt,self.timePos(),self.duration)) 
             self._waitSeekDone()
             #print("seekStep2 %f dial: %d currTime:%f"%(nxt,dialStep,self.timePos()))
         else:

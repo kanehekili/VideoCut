@@ -34,7 +34,6 @@ Version = "@xxx@"
 global Log
 Log = FFMPEGTools.Log
 
-
 # sizes ..
 SIZE_ICON = 80
 ITEM_ROW_COUNT = 3
@@ -59,7 +58,6 @@ def setUpVideoPlugin(mpv):
 
 def getAppIcon():
     return QtGui.QIcon('icons/movie-icon.png')
-    
 
 def timedeltaToString(deltaTime):
     s = deltaTime.seconds
@@ -276,15 +274,17 @@ class LayoutWindow(QWidget):
         self.ui_InfoLabel.setToolTip("Infos about the video position")
         
         self.ui_AudioModeLabel = QtWidgets.QLabel(self)
-        self.ui_AudioModeLabel.setStyleSheet("QLabel { border: 1px solid darkgray; border-radius: 3px; color: inherit; background: darkgreen} ");
+        self.ui_AudioModeLabel.setStyleSheet("QLabel { border: 1px solid darkgray; border-radius: 3px; color: inherit; background: lightgreen} ");
         self.ui_AudioModeLabel.setAlignment(QtCore.Qt.AlignCenter)
         self.ui_AudioModeLabel.setToolTip("Toggle if audio should be saved")
         
         self.pixAudioOn = QtGui.QPixmap()
-        self.pixAudioOn.load("icons/speaker-high.png")
+        #self.pixAudioOn.load("icons/speaker-high.png")
+        self.pixAudioOn.load(ICOMAP.ico("audioOn"))
         self.pixAudioOn = self.pixAudioOn.scaledToWidth(32, mode=Qt.SmoothTransformation)
         self.pixAudioOff = QtGui.QPixmap()
-        self.pixAudioOff.load("icons/speaker-muted.png")
+        #self.pixAudioOff.load("icons/speaker-muted.png")
+        self.pixAudioOff.load(ICOMAP.ico("audioOff"))
         self.pixAudioOff = self.pixAudioOff.scaledToWidth(32, mode=Qt.SmoothTransformation)
         
         self.ui_CutModeLabel = QtWidgets.QLabel(self)
@@ -313,7 +313,8 @@ class LayoutWindow(QWidget):
         self.statusbar.setSizeGripEnabled(False)
         self.statusbar.addPermanentWidget(self.__createProgressBar())
         self.buttonStop = QtWidgets.QToolButton(self)
-        self.buttonStop.setIcon(QtGui.QIcon('./icons/window-close.png'))
+        #self.buttonStop.setIcon(QtGui.QIcon('./icons/window-close.png'))
+        self.buttonStop.setIcon(QtGui.QIcon(ICOMAP.ico("buttonStop")))
         self.buttonStop.setIconSize(QtCore.QSize(20, 20))
         self.buttonStop.setVisible(False)
         self.buttonStop.setToolTip("Stop processing")
@@ -441,11 +442,15 @@ class LayoutWindow(QWidget):
      
     def _hookListActions(self):
         # TOO bad-the list model -should be here... 
-        rmAction = QtWidgets.QAction(QtGui.QIcon('icons/close-x.png'), 'Delete', self)
+        #rmAction = QtWidgets.QAction(QtGui.QIcon('icons/close-x.png'), 'Delete', self)
+        rmAction = QtWidgets.QAction(QtGui.QIcon(ICOMAP.ico("rmAction")), 'Delete', self)
+        
         rmAction.triggered.connect(self._removeMarker)
-        rmAllAction = QtWidgets.QAction(QtGui.QIcon('icons/clear-all.png'), 'Remove all', self)
+        #rmAllAction = QtWidgets.QAction(QtGui.QIcon('icons/clear-all.png'), 'Remove all', self)
+        rmAllAction = QtWidgets.QAction(QtGui.QIcon(ICOMAP.ico("rmAllAction")), 'Remove all', self)
         rmAllAction.triggered.connect(self.purgeMarker)
-        self.gotoAction = QtWidgets.QAction(QtGui.QIcon('icons/go-next.png'), 'Goto', self)
+        #self.gotoAction = QtWidgets.QAction(QtGui.QIcon('icons/go-next.png'), 'Goto', self)
+        self.gotoAction = QtWidgets.QAction(QtGui.QIcon(ICOMAP.ico("gotoAction")), 'Goto', self)
         self.gotoAction.triggered.connect(self._gotoFromMarker)
   
         # menus      
@@ -551,35 +556,43 @@ class MainFrame(QtWidgets.QMainWindow):
     
     def initUI(self):
         
-        self.exitAction = QtWidgets.QAction(QtGui.QIcon('icons/window-close.png'), 'Exit', self)
+        #self.exitAction = QtWidgets.QAction(QtGui.QIcon('icons/window-close.png'), 'Exit', self)
+        self.exitAction = QtWidgets.QAction(QtGui.QIcon(ICOMAP.ico("buttonStop")), 'Exit', self)
         self.exitAction.setShortcut('Ctrl+Q')
         self.exitAction.triggered.connect(QApplication.quit)
         
-        self.loadAction = QtWidgets.QAction(QtGui.QIcon('./icons/loadfile.png'), 'Load Video', self)
+        #self.loadAction = QtWidgets.QAction(QtGui.QIcon('./icons/loadfile.png'), 'Load Video', self)
+        self.loadAction = QtWidgets.QAction(QtGui.QIcon(ICOMAP.ico("loadAction")), 'Load Video', self)
         self.loadAction.setShortcut('Ctrl+L')
         self.loadAction.triggered.connect(self.loadFile)
 
-        self.startAction = QtWidgets.QAction(QtGui.QIcon('./icons/start-icon.png'), 'Include from here', self)
+        #self.startAction = QtWidgets.QAction(QtGui.QIcon('./icons/start-icon.png'), 'Include from here', self)
+        self.startAction = QtWidgets.QAction(QtGui.QIcon(ICOMAP.ico("startAction")), 'Include from here', self)
         self.startAction.setShortcut('Ctrl+G')
         self.startAction.triggered.connect(self._videoController.addStartMarker)
 
-        self.stopAction = QtWidgets.QAction(QtGui.QIcon('./icons/stop-red-icon.png'), 'Exclude from here', self)
+        #self.stopAction = QtWidgets.QAction(QtGui.QIcon('./icons/stop-red-icon.png'), 'Exclude from here', self)
+        self.stopAction = QtWidgets.QAction(QtGui.QIcon(ICOMAP.ico("stopAction")), 'Exclude from here', self)
         self.stopAction.setShortcut('Ctrl+H')
         self.stopAction.triggered.connect(self._videoController.addStopMarker)
         
-        self.saveAction = QtWidgets.QAction(QtGui.QIcon('./icons/save-as-icon.png'), 'Save the video', self)
+        #self.saveAction = QtWidgets.QAction(QtGui.QIcon('./icons/save-as-icon.png'), 'Save the video', self)
+        self.saveAction = QtWidgets.QAction(QtGui.QIcon(ICOMAP.ico("saveAction")), 'Save the video', self)
         self.saveAction.setShortcut('Ctrl+S')
         self.saveAction.triggered.connect(self.saveVideo)
         
-        self.infoAction = QtWidgets.QAction(QtGui.QIcon('./icons/info.png'), 'Codec info', self)
+        #self.infoAction = QtWidgets.QAction(QtGui.QIcon('./icons/info.png'), 'Codec info', self)
+        self.infoAction = QtWidgets.QAction(QtGui.QIcon(ICOMAP.ico("infoAction")), 'Codec info', self)
         self.infoAction.setShortcut('Ctrl+I')
         self.infoAction.triggered.connect(self.showCodecInfo)
         
-        self.playAction = QtWidgets.QAction(QtGui.QIcon('./icons/play.png'), 'Play video', self)
+        #self.playAction = QtWidgets.QAction(QtGui.QIcon('./icons/play.png'), 'Play video', self)
+        self.playAction = QtWidgets.QAction(QtGui.QIcon(ICOMAP.ico("playStart")), 'Play video', self)
         self.playAction.setShortcut('Ctrl+P')
         self.playAction.triggered.connect(self.playVideo)
         
-        self.photoAction = QtWidgets.QAction(QtGui.QIcon('./icons/screenshot.png'), 'Take screenshot', self)
+        #self.photoAction = QtWidgets.QAction(QtGui.QIcon('./icons/screenshot.png'), 'Take screenshot', self)
+        self.photoAction = QtWidgets.QAction(QtGui.QIcon(ICOMAP.ico("photoAction")), 'Take screenshot', self)
         self.photoAction.setShortcut('Ctrl+P')
         self.photoAction.triggered.connect(self.takeScreenShot)
         
@@ -587,14 +600,16 @@ class MainFrame(QtWidgets.QMainWindow):
         the settings menues
         '''
 #         self.extractMP3 = QtWidgets.QAction(QtGui.QIcon('./icons/stop-red-icon.png'),"Extract MP3",self)
-        self.mediaSettings = QtWidgets.QAction(QtGui.QIcon('./icons/settings.png'), "Output settings", self)
+        #self.mediaSettings = QtWidgets.QAction(QtGui.QIcon('./icons/settings.png'), "Output settings", self)
+        self.mediaSettings = QtWidgets.QAction(QtGui.QIcon(ICOMAP.ico("mediaSettings")), "Output settings", self)
         self.mediaSettings.setShortcut('Ctrl+T')
         self.mediaSettings.triggered.connect(self.openMediaSettings)
 
         '''
         audio language selection
         '''
-        self.langSettings = QtWidgets.QAction(QtGui.QIcon('./icons/langflags.png'), "Language settings", self)
+        #self.langSettings = QtWidgets.QAction(QtGui.QIcon('./icons/langflags.png'), "Language settings", self)
+        self.langSettings = QtWidgets.QAction(QtGui.QIcon(ICOMAP.ico("langSettings")), "Language settings", self)
         self.langSettings.setShortcut('Ctrl+L')
         self.langSettings.triggered.connect(self.openLanguageSettings)
 
@@ -817,10 +832,12 @@ class MainFrame(QtWidgets.QMainWindow):
     def setVideoPlayerControls(self, isPlaying):
         if isPlaying:
             self.__enableActionsOnVideoPlay(False)
-            self.playAction.setIcon(QtGui.QIcon('./icons/pause.png'))
+            #self.playAction.setIcon(QtGui.QIcon('./icons/pause.png'))
+            self.playAction.setIcon(QtGui.QIcon(ICOMAP.ico("playPause")))
         else:
             self.__enableActionsOnVideoPlay(True)
-            self.playAction.setIcon(QtGui.QIcon('./icons/play.png'))            
+            #self.playAction.setIcon(QtGui.QIcon('./icons/play.png'))            
+            self.playAction.setIcon(QtGui.QIcon(ICOMAP.ico("playStart")))
                
     #-------- ACTIONS  END ----------    
 
@@ -922,6 +939,7 @@ class SettingsModel(QtCore.QObject):
         self.fastRemux = vc_config.getBoolean("useRemux",True)
         self.reencoding = vc_config.getBoolean("recode",False)
         self.muteAudio = vc_config.getBoolean("muteAudio",False)
+        self.iconSet = vc_config.get("icoSet",IconMapper.DEFAULT)
         self.mainFrame = mainframe
         self.showSubid=vc_config.getInt("subtitles",0)  #id if subtitle should be presented. mpv only
         self.showGL=vc_config.getBoolean("openGL",True) #GL Widgets, mpv only
@@ -964,6 +982,9 @@ class SettingsModel(QtCore.QObject):
             vc_config.set("muteAudio", "True")
         else:
             vc_config.set("muteAudio", "False")
+        
+        #SET the icoset
+        vc_config.set("icoSet", self.iconSet)
         
         vc_config.store()
         self.trigger.emit(self)
@@ -1059,8 +1080,20 @@ class SettingsDialog(QtWidgets.QDialog):
         self.showGL.setChecked(self.model.showGL>0)
         self.showGL.stateChanged.connect(self._onGLChanged)        
 
-          
 
+        lbl = QtWidgets.QLabel("< Icon theme. Restart required")
+        self.setIconTheme = QtWidgets.QComboBox()
+        themes=ICOMAP.themes()
+        for item in themes:
+            self.setIconTheme.addItem(item)
+        self.setIconTheme.setCurrentText(self.model.iconSet)
+        self.setIconTheme.currentTextChanged.connect(self._onIconThemeChanged)
+        self.setIconTheme.setToolTip("Select icon theme - restart to take effect")
+        comboBox= QtWidgets.QHBoxLayout()
+        comboBox.addWidget(self.setIconTheme)
+        comboBox.addWidget(lbl)
+
+        
         encodeBox.addWidget(self.check_reencode)
         encodeBox.addWidget(self.exRemux)
         encodeBox.addWidget(self.muteAudio)
@@ -1070,6 +1103,7 @@ class SettingsDialog(QtWidgets.QDialog):
         subBox= QtWidgets.QVBoxLayout(frame2)
         subBox.addWidget(self.showSub)
         subBox.addWidget(self.showGL)
+        subBox.addLayout(comboBox)
         
         outBox.addLayout(versionBox)
         outBox.addWidget(frame1)
@@ -1105,6 +1139,10 @@ class SettingsDialog(QtWidgets.QDialog):
         
     def _onAudioChanged(self,muteAudio):
         self.model.muteAudio = QtCore.Qt.Checked == muteAudio
+        self.model.update()
+        
+    def _onIconThemeChanged(self,text):
+        self.model.iconSet=text
         self.model.update()
         
 class LanguageSettingsDialog(QtWidgets.QDialog):
@@ -1148,7 +1186,8 @@ class LanguageSettingsDialog(QtWidgets.QDialog):
         btnHBox = QtWidgets.QHBoxLayout()
         self.lbl = QtWidgets.QLabel("3 Languages max")
         pix = QtGui.QPixmap()
-        pix.load("icons/info.png")
+        #pix.load("icons/info.png")
+        pix.load(ICOMAP.ico("infoAction"))
         pix = pix.scaledToWidth(32, mode=Qt.SmoothTransformation)
         info = QtWidgets.QLabel("")
         info.setPixmap(pix)
@@ -1807,6 +1846,27 @@ class StatusDispatcher(QtCore.QObject):
         self.progressSignal.emit(round(percent))
 
 
+class IconMapper():
+    DEFAULT="default"
+    def __init__(self,section="default"):
+        self.section=section
+        self._read()
+        
+    def _read(self):
+        ipath=OSTools().joinPathes(OSTools().getWorkingDirectory(),"icons","icomap.json")
+        with open(ipath) as fn:
+            self.map = json.load(fn)
+            
+    def ico(self,name):
+        key=name.strip()
+        submap=self.map.get(self.section,self.DEFAULT)
+        return submap.get(key,self.getDefault(key))
+     
+    def getDefault(self,name):
+        return self.map[self.DEFAULT].get(name,"")   
+    
+    def themes(self):
+        return self.map.keys()
 
 WIN = None  
 
@@ -1846,6 +1906,7 @@ def parseOptions(args):
 def main():
     try:
         global WIN
+        global ICOMAP
         global VideoPlugin
         global vc_config
         localPath = OSTools().getActiveDirectory() #won't work after setting WD
@@ -1860,6 +1921,7 @@ def main():
         res=parseOptions(argv)
         FFMPEGTools.setupRotatingLogger("VideoCut",res["logConsole"])
         VideoPlugin=setUpVideoPlugin(res["mpv"])
+        ICOMAP=IconMapper(vc_config.get("icoSet","default"))
         fn =res["file"]
         if fn is None:
             WIN = MainFrame(app)  # keep python reference!
