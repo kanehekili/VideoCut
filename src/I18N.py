@@ -7,54 +7,71 @@ from os import listdir
 from os.path import isfile, join
 
 global lang
-lang = None
+
+__DEFAULT_LOCALES_FILE_PATH = 'data/lang/'
+__DEFAULT_LANG_CODE = 'en_EN'
 
 
 # Determines current system locale
 def set_lang(code):
-    #TODO: Use seperate files
+
     global lang
 
     lang_code = code or locale.getdefaultlocale()[0]
-    i18n_file = open('data/i18n.json')
-    i18n = json.load(i18n_file)
-    i18n_file.close()
-
-    if code is not None:
-        for lang_name in i18n:
-            if lang_name == lang_code:
-                if "alias" in i18n[lang_name]:
-                    lang_code = i18n[lang_name]['alias']
-                lang = i18n[lang_code]
-                break
-    else:
-        if lang is None:
-            set_lang('en_EN')
+    lang = __get_lang(lang_code)
 
     return lang_code
 
-def __scan_files():
-    onlyfiles = [f for f in listdir(mypath) if isfile(join(mypath, f))]
-    return;
+def __get_lang(lang_code):
+    available_locale_files = __get_available_lang_lang_list(None)
+    lang_file = None
+
+    for local in available_locale_files:
+        if local == lang_code + '.json':
+            lang_file = __read_lang_file(lang_code + '.json')
+
+    if lang_file is None:
+        lang_file = __read_lang_file(__DEFAULT_LANG_CODE + '.json')
+
+    if 'alias' in lang_file:
+        lang_file = __get_lang(lang_file['alias'])
+
+    return lang_file
+
+
+def __read_lang_file(file_name):
+    i18n_file = open(__DEFAULT_LOCALES_FILE_PATH + file_name)
+    i18n = json.load(i18n_file)
+    i18n_file.close()
+    return i18n
+
+
+def __get_available_lang_lang_list(path):
+    if path is None:
+        path = __DEFAULT_LOCALES_FILE_PATH
+    available_locale_files = [f for f in listdir(path) if isfile(join(path, f))]
+    return available_locale_files
+
 
 # List of current supported locales
 def get_lang_list():
-    i18n_file = open('data/i18n.json')
-    i18n = json.load(i18n_file)
-    i18n_file.close()
     lang_list = []
 
-    for lang in i18n:
-        code = lang
-        native = i18n[lang]['name']
+    for locale_file in __get_available_lang_lang_list(None):
+        i18n_file = open(__DEFAULT_LOCALES_FILE_PATH + locale_file)
+        i18n = json.load(i18n_file)
+        i18n_file.close()
 
-        if 'alias' in i18n[code]:
-            code = i18n[code]['alias']
+        code = locale_file.split('.')[0]
+        native = i18n['name']
 
-        if 'native' in i18n[code]:
-            native = i18n[code]['native']
+        if 'alias' in i18n:
+            code = i18n['alias']
 
-        lang_list.append([lang, i18n[lang]['name'], native])
+        if 'native' in i18n:
+            native = i18n['native']
+
+        lang_list.append([code, i18n['name'], native])
 
     return lang_list
 
@@ -87,4 +104,3 @@ def __get_lang_str_inner(path, obj):
 # Public function for resolving localized string in JSON xPath like way
 def get_lang_str(path):
     return __get_lang_str_inner(path, None)
-

@@ -1,0 +1,125 @@
+{
+    "name": "English",
+    "native": "English",
+    "loading": {
+        "ffmpeg-error": "FFMPEG must be installed to run VideoCut."
+    },
+    "init_ui": {
+        "exit": "Exit",
+        "open": "Open video",
+        "save": "Save video",
+        "include-from": "Include from here",
+        "include-to": "Exclude from here",
+        "screenshot": "Take screenshot",
+        "info": "Codec info",
+        "play-pause": "Play video",
+        "output-settings": "Output settings",
+        "lang-settings": "Language settings",
+        "file": "File",
+
+        "settings": {
+            "reencode": "Reencode (Slow!)",
+            "reencode-popup": "Force exact cut. Makes it real slow!",
+            "remux": "VideoCut Muxer",
+            "remux-popup": "Uses the fast remux code instead of ffmpeg commandline",
+            "mute": "Mute audio - Video only",
+            "mute-popup": "Cut the video without any audio tracks",
+            "subtitles": "Show subtitles",
+            "subtitles-popup": "Toggle show subtitles (mpv only)",
+            "gl-widgets": "Use GL Widgets(mpv only) Restart required",
+            "gl-widgets-popup": "Use GL widgets - must be activated for wayland\\n Restart app on change",
+            "icon-theme": "Icon theme. Restart required",
+            "icon-theme-popup": "Select icon theme - restart to take effect",
+            "ui-lang": "App language select. Restart required",
+            "ui-lang-popup": "Select app language - restart to take effect"
+        }
+    },
+    "point_list": {
+        "start": "Start",
+        "stop": "Stop",
+        "frame": "F",
+        "time": "T"
+    },
+    "goto_field": {
+        "popup": "Go to frame"
+    },
+    "frame_info": {
+        "line": "<b>Frame:</b> %08d of %d <b>Time:</b> %s ",
+        "popup": "Info about the video position"
+    },
+    "button_menu": {
+        "mute": "Toggle if audio should be saved",
+        "cut": "Toggle if exact or fast cut",
+        "remux": "Toogle if precise remux or external ffmpeg"
+    },
+    "status_line": {
+        "start": "Start video"
+    },
+    "slider": {
+        "popup": "Video track"
+    },
+    "dial": {
+        "popup": "Fine tune"
+    },
+    "hook_list": {
+        "delete": "Delete",
+        "remove-all": "Remove all",
+        "goto": "Go to"
+    },
+    "button_stop": {
+        "popup": "Stop processing"
+    },
+    "show_warning": {
+        "msg": "Warning!"
+    },
+    "load_file":{
+        "caption": "Load Video"
+    },
+    "save_video": {
+        "process-warn-msg": "Can't process file!",
+        "filter": "Video Files (%s);;All Files(*.*)",
+        "caption": "Save Video",
+        "source-file-warn-msg": "Can't overwrite source file!"
+    },
+    "codec_info": {
+        "title": "Video info",
+        "bitrate": "Bitrate",
+        "size": "Size",
+        "ts": "is TS",
+        "v-codec": "Video codec",
+        "dimension": "Dimension",
+        "aspect": "Aspect",
+        "fps": "FPS",
+        "duration": "Duration",
+        "a-codec": "Audio codec",
+        "invalid-codec-msg-1": "No data",
+        "invalid-codec-msg-2": "Select file first"
+    },
+    "language_settings": {
+        "title": "Language",
+        "max-lang-label": "3 Languages max",
+        "no-data": "No language data available"
+    },
+    "video_control": {
+        "check-log": "Check log in .config/VideoCut for details",
+        "invalid-file": "Invalid file",
+        "file-not-found": "File not found",
+        "start": "Start video",
+        "stop": "Stop video",
+        "ready": "Ready",
+        "operation-failed-title": "Operation failed",
+        "operation-failed-msg": "Cut aborted",
+        "remux-failed": "Remux failed: ",
+        "operation-done": "Operation done",
+        "cut-time": "Cutting time: ",
+        "screenshot-saved": "Screenshot saved at: "
+    },
+    "long_running_operation": {
+        "converting-error": "Error while converting: "
+    },
+    "other": {
+        "error-dialog-title": "Error!",
+        "unexpected-error": "Unexpected error",
+        "msg-dialog-title": "Notice"
+    }
+}
