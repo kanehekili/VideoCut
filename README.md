@@ -16,10 +16,10 @@ VideoCut supports the cutting of subtitles when "Show subtitles"  in the setting
 The current version is written in python3 and uses the qt5 widget kit.  
 
 ### Prerequisites
-* Arch: python3, python-pillow and mpv
-* Debian/Mint/Ubuntu: python3 python3-pil libmpv1 python3-pyqt5.qtopengl (no-recommends)
+* Arch: python3 and mpv
+* Debian/Mint/Ubuntu: python3 libmpv1 python3-pyqt5.qtopengl (no-recommends)
   #not working for Ubuntu 18.4: libmpv - use python3-opencv instead
-* Fedora: python3-pillow-qt and mpv-libs.x86_64
+* Fedora: mpv-libs.x86_64
 * ffmpeg > 3.X to 5.X
 * python3-pyqt5
 * optional:(legacy) OpenCV 2.4 up to OpenCV 4.x (must be build with ffmpeg - with all its dependencies)
@@ -125,13 +125,13 @@ Select video and open it with "Open with ->VideoCut", oder via terminal "VideoCu
 
 #### Install dependencies manually on Linux Mint or Ubuntu (tested from 20.04 to 22.04)
 ```
-sudo apt –no-install-recommends install python3-pyqt5 ffmpeg python3-pil libmpv1
+sudo apt –no-install-recommends install python3-pyqt5 ffmpeg libmpv1
 ```
 libmpv1 won't work on Ubuntu 18.04 - no bindings for the old libs - use opencv instead
 
 #### Install dependencies on Fedora
 ```
-sudo dnf python3-qt5 ffmpeg python3-pillow-qt mpv-libs.x86_64
+sudo dnf python3-qt5 ffmpeg mpv-libs.x86_64
 ```
 
 ### How to install with a terminal

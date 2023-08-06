@@ -752,46 +752,6 @@ class GeneratorStream:
         self._read_iter = iter([]) # make next read() call return EOF
 
 
-class ImageOverlay:
-    def __init__(self, m, overlay_id, img=None, pos=(0, 0)):
-        self.m = m
-        self.overlay_id = overlay_id
-        self.pos = pos
-        self._size = None
-        if img is not None:
-            self.update(img)
-
-    def update(self, img=None, pos=None):
-        from PIL import Image
-        if img is not None:
-            self.img = img
-        img = self.img
-
-        w, h = img.size
-        stride = w*4
-
-        if pos is not None:
-            self.pos = pos
-        x, y = self.pos
-
-        # Pre-multiply alpha channel
-        bg = Image.new('RGBA', (w, h),  (0, 0, 0, 0))
-        out = Image.alpha_composite(bg, img)
-
-        # Copy image to ctypes buffer
-        if img.size != self._size:
-            self._buf = create_string_buffer(w*h*4)
-            self._size = img.size
-
-        ctypes.memmove(self._buf, out.tobytes('raw', 'BGRA'), w*h*4)
-        source = '&' + str(addressof(self._buf))
-
-        self.m.overlay_add(self.overlay_id, x, y, source, 0, 'bgra', w, h, stride)
-
-    def remove(self):
-        self.m.remove_overlay(self.overlay_id)
-
-
 class FileOverlay:
     def __init__(self, m, overlay_id, filename=None, size=None, stride=None, pos=(0,0)):
         self.m = m
@@ -1269,15 +1229,17 @@ class MPV(object):
         self.command('screenshot_to_file', filename.encode(fs_enc), includes)
 
     def screenshot_raw(self, includes='subtitles'):
-        """Mapped mpv screenshot_raw command, see man mpv(1). Returns a pillow Image object."""
-        from PIL import Image
+        """Mapped mpv screenshot_raw command, see man mpv(1). Returns a PyQt QImage object."""
+        from PyQt5.QtGui import QImage
         res = self.command('screenshot-raw', includes)
         if res['format'] != 'bgr0':
             raise ValueError('Screenshot in unknown format "{}". Currently, only bgr0 is supported.'
                     .format(res['format']))
-        img = Image.frombytes('RGBA', (res['stride']//4, res['h']), res['data'])
-        b,g,r,a = img.split()
-        return Image.merge('RGB', (r,g,b))
+        # Read the BGR0 as RGBA, swap R and B so they are correct, and then remove the alpha
+        img = QImage(res['data'], res['stride']//4, res['h'], res['stride'], QImage.Format_RGBA8888) \
+                  .rgbSwapped() \
+                  .convertToFormat(QImage.Format_RGB32)
+        return img
 
     def allocate_overlay_id(self):
         free_ids = set(range(64)) - self.overlay_ids
@@ -1293,12 +1255,6 @@ class MPV(object):
     def create_file_overlay(self, filename=None, size=None, stride=None, pos=(0,0)):
         overlay_id = self.allocate_overlay_id()
         overlay = FileOverlay(self, overlay_id, filename, size, stride, pos)
-        self.overlays[overlay_id] = overlay
-        return overlay
-
-    def create_image_overlay(self, img=None, pos=(0,0)):
-        overlay_id = self.allocate_overlay_id()
-        overlay = ImageOverlay(self, overlay_id, img, pos)
         self.overlays[overlay_id] = overlay
         return overlay
 

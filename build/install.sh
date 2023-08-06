@@ -11,10 +11,10 @@ sudo mkdir -p /opt/videocut;
 sudo cp -r $DIR/* /opt/videocut/;
 sudo ln -s /opt/videocut/VideoCut.py /usr/bin/VideoCut
 
-echo "######################################################################"
-echo "#                  Ensure you have installed:                        #"                     
-echo "#    debian/ubuntu/mint: python3-pyqt5 ffmpeg python3-pil libmpv1    #"
-echo "#    arch &derivates:    python-pyqt5 ffmpeg python-pillow mpv       #"
-echo "######################################################################"
+echo "##########################################################"
+echo "#               Ensure you have installed:               #"
+echo "#    debian/ubuntu/mint: python3-pyqt5 ffmpeg libmpv1    #"
+echo "#    arch &derivates:    python-pyqt5  ffmpeg mpv        #"
+echo "##########################################################"
 
 echo "App installed."

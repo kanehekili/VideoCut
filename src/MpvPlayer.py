@@ -19,7 +19,6 @@ import locale
 
 
 from PyQt5.QtOpenGL import QGLContext    
-from PIL.ImageQt import ImageQt #Not there by default...
 from lib.mpv import (MPV,MpvGlGetProcAddressFn,MpvRenderContext,MpvEventEndFile)
     
 
@@ -348,8 +347,7 @@ class MpvPlayer():
         return self.screenshotImage()
     
     def screenshotImage(self):
-        im=self.mediaPlayer.screenshot_raw(includes="video")
-        return ImageQt(im)#scale? ==QImage        
+        return self.mediaPlayer.screenshot_raw(includes="video")
 
     def takeScreenShot(self,path):
         self.mediaPlayer.screenshot_to_file(path,includes="video")
@@ -589,13 +587,13 @@ class MpvPlugin():
     def setCutEntry(self,cutEntry,restore=False): #this is a cv restore hack
         if restore: #legacy: create a pix from old entry 
             cutEntry.frameNumber=cutEntry.frameNumber-1 #cv compensation
-            pilImage = self.player.screenshotAtFrame(cutEntry.frameNumber)
+            qImage = self.player.screenshotAtFrame(cutEntry.frameNumber)
         else: #create a new one
-            pilImage = self.player.screenshotImage()
+            qImage = self.player.screenshotImage()
 
             #set: cutEntry.frameNumber=self.player.getCurrentFrameNumber()    
         cutEntry.timePosMS=self.player.timePos()*1000 #Beware +1!
-        cutEntry.pix = self._makeThumbnail(pilImage)
+        cutEntry.pix = self._makeThumbnail(qImage)
     
     def info(self):
         data={}
