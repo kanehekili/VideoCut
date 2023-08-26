@@ -19,7 +19,6 @@ import locale
 
 
 from PyQt5.QtOpenGL import QGLContext    
-from PIL.ImageQt import ImageQt #Not there by default...
 from lib.mpv import (MPV,MpvGlGetProcAddressFn,MpvRenderContext,MpvEventEndFile)
     
 
