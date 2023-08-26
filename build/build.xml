@@ -38,6 +38,7 @@
 		<property name="srcffmpeg" value="${source}/ffmpeg"/>
 		<property name="srcdata" value="${source}/data"/>
 		<property name="srcmpv" value="${source}/lib"/>
+		<property name="srcmpvlegacy" value="${source}/lib/focal"/>
 		
 		<!-- get currentt yt-dlp via wget or curl -->  
 		<exec dir="." executable="/bin/bash" os="Linux">
@@ -119,6 +120,55 @@
 		<tstamp>
     	 	<format property="time.stamp" pattern="EEE, d LLL yyyy HH:mm:ss"/>
 		</tstamp>
+
+		<!-- DEBBUILD ubu0-->
+		<copy todir="${ubu0Target}">
+			<fileset dir="DEB-template"/>
+			<filterset>
+				<filter token="ubu" value="${ubu0}"/>
+				<filter token="xxx" value="${version}"/>
+				<filter token="xpkgrelx" value="${pkgrelease}"/>
+				<filter token="xtsx" value="${time.stamp}"/>	
+                <filter token="xlibsx" value=" python3, ffmpeg, python3-pyqt5, python3-pil, qt5-style-plugins, libmpv1, python3-pyqt5.qtopengl"/>															
+			</filterset>			
+		</copy>
+		
+		<mkdir dir="${ubu0Target}/addons"/>
+		<mkdir dir="${ubu0Target}/debian"/>
+		<mkdir dir="${ubu0Target}/src"/>
+		<mkdir dir="${ubu0Target}/src/ffmpeg/bin/V4"/>
+		<copy todir="${ubu0Target}/src/icons">
+			<fileset dir="${srcIcons}">
+			</fileset>
+		</copy>		
+		<copy todir="${ubu0Target}/src/data">
+			<fileset file="${srcdata}\countryIso639.json"/>
+		</copy>	
+		<copy todir="${ubu0Target}/src/ffmpeg/src">
+			<fileset file="${srcffmpeg}/src/remux5.c"/>
+		</copy>				
+		<copy todir="${ubu0Target}/src/lib">
+			<fileset file="${srcmpvlegacy}\mpv.py"/>
+		</copy>		
+		<copy todir="${ubu0Target}/src">
+			<fileset file="${source}/*.py" />
+			<filterset>
+			    <filter token="xxx" value="${version}"/>
+			</filterset>
+		</copy>
+		
+		<chmod file="${ubu0Target}/src/VideoCut.py" perm="ug+rwx"/>
+		
+		<copy todir="${ubu0Target}/addons">
+			<fileset file="*.desktop"/>
+		</copy>
+		<exec executable="tar" output="/dev/null" os="Linux">
+			<arg value="-cp"/>
+			<arg value="--file=${debTarget}/${ubu0Build}.tar"/>
+			<arg value="--directory=${stage}"/>
+			<arg value="${ubu0Build}"/>
+		</exec>
+
 		
 		<!-- DEBBUILD ubu1-->
 		<copy todir="${ubu1Target}">
@@ -127,7 +177,8 @@
 				<filter token="ubu" value="${ubu1}"/>
 				<filter token="xxx" value="${version}"/>
 				<filter token="xpkgrelx" value="${pkgrelease}"/>
-				<filter token="xtsx" value="${time.stamp}"/>				
+				<filter token="xtsx" value="${time.stamp}"/>
+				<filter token="xlibsx" value=" python3, ffmpeg, python3-pyqt5, python3-pil, qt5-style-plugins, libmpv1, python3-pyqt5.qtopengl"/>					
 			</filterset>			
 		</copy>
 		
@@ -146,7 +197,7 @@
 			<fileset file="${srcffmpeg}/src/remux5.c"/>
 		</copy>				
 		<copy todir="${ubu1Target}/src/lib">
-			<fileset file="${srcmpv}\mpv.py"/>
+			<fileset file="${srcmpvlegacy}\mpv.py"/>
 		</copy>		
 		<copy todir="${ubu1Target}/src">
 			<fileset file="${source}/*.py" />
@@ -175,7 +226,8 @@
 				<filter token="ubu" value="${ubu2}"/>
 				<filter token="xxx" value="${version}"/>
 				<filter token="xpkgrelx" value="${pkgrelease}"/>
-				<filter token="xtsx" value="${time.stamp}"/>				
+				<filter token="xtsx" value="${time.stamp}"/>
+				<filter token="xlibsx" value="python3, ffmpeg, python3-pyqt5, python3-pil, qt5-style-plugins, libmpv2, python3-pyqt5.qtopengl"/>					
 			</filterset>			
 			
 		</copy>

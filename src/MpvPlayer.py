@@ -349,7 +349,18 @@ class MpvPlayer():
     
     def screenshotImage(self):
         im=self.mediaPlayer.screenshot_raw(includes="video")
-        return ImageQt(im)#scale? ==QImage        
+        temp = im.convert('RGBA')
+        return QtGui.QImage(
+        temp.tobytes('raw', "RGBA"),
+        temp.size[0],
+        temp.size[1],
+        QtGui.QImage.Format.Format_RGBA8888)
+        
+        #empty
+        #data=im.tobytes("raw","RGBA")
+        #qim = QtGui.QImage(data, im.size[0], im.size[1], QtGui.QImage.Format_ARGB32)
+        #return qim
+        #return ImageQt(im)#scale? ==QImage        
 
     def takeScreenShot(self,path):
         self.mediaPlayer.screenshot_to_file(path,includes="video")

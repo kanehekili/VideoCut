@@ -17,6 +17,8 @@
 #
 # You can find copies of the GPLv2 and LGPLv2.1 licenses in the project repository's LICENSE.GPL and LICENSE.LGPL files.
 
+__version__ = '1.0.3'
+
 from ctypes import *
 import ctypes.util
 import threading
@@ -441,9 +443,14 @@ class MpvEventLogMessage(Structure):
         return lazy_decoder(self._text)
 
 class MpvEventEndFile(Structure):
-    _fields_ = [('reason', c_int),
-                ('error', c_int)]
-
+    _fields_ = [
+        ('reason', c_int),
+        ('error', c_int),
+        ('playlist_entry_id', c_ulonglong),
+        ('playlist_insert_id', c_ulonglong),
+        ('playlist_insert_num_entries', c_int),
+    ]
+    
     EOF                 = 0
     RESTARTED           = 1
     ABORTED             = 2
@@ -1446,7 +1453,7 @@ class MPV(object):
         """Mapped mpv discnav command, see man mpv(1)."""
         self.command('discnav', command)
 
-    def mouse(x, y, button=None, mode='single'):
+    def mouse(self, x, y, button=None, mode='single'):
         """Mapped mpv mouse command, see man mpv(1)."""
         if button is None:
             self.command('mouse', x, y, mode)
