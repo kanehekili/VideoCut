@@ -99,11 +99,11 @@ Note that this selection is ignored if audio is muted.
 
 ##Install
 
-#### Install via ppa on Linux Mint or Ubuntu (focal/jammy/Mint20 only)
+#### Install via ppa on Linux Mint or Ubuntu (focal/jammy/Mint20 and newer versions)
 ```
 sudo add-apt-repository ppa:jentiger-moratai/mediatools
 sudo apt update
-sudo apt install --no-install-recommends install videocut
+sudo apt install --no-install-recommends videocut
 ```
 (--no-install-recommends will install only what is required)
 Select video and open it with "Open with ->VideoCut", oder via terminal "VideoCut"
