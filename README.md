@@ -125,9 +125,10 @@ Select video and open it with "Open with ->VideoCut", oder via terminal "VideoCu
 
 #### Install dependencies manually on Linux Mint or Ubuntu (tested from 20.04 to 22.04)
 ```
-sudo apt –no-install-recommends install python3-pyqt5 ffmpeg python3-pil libmpv1
+sudo apt –no-install-recommends install python3-pyqt5 ffmpeg python3-pil python3-pyqt5.qtopengl libmpv1
 ```
 libmpv1 won't work on Ubuntu 18.04 - no bindings for the old libs - use opencv instead
+For Ubuntu 23.04 or Debian 12 and newer libmpv2 should be used.
 
 #### Install dependencies on Fedora
 ```
