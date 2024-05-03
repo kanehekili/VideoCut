@@ -4,9 +4,9 @@ Opencv related stuff
 @author: kanehekili
 '''
 
-from PyQt5.QtWidgets import QApplication
-from PyQt5.QtCore import pyqtSignal
-from PyQt5 import QtWidgets,QtGui,QtCore
+from PyQt6.QtWidgets import QApplication
+from PyQt6.QtCore import pyqtSignal
+from PyQt6 import QtWidgets,QtGui,QtCore
 import sys
 from datetime import timedelta
 import FFMPEGTools
@@ -145,7 +145,7 @@ class CVImage(QtGui.QImage):
         bytesPerLine = bytesPerComponent * width
             
         OPENCV.setColor(dst)
-        super(CVImage, self).__init__(dst.data, width, height, bytesPerLine, QtGui.QImage.Format_RGB888)
+        super(CVImage, self).__init__(dst.data, width, height, bytesPerLine, QtGui.QImage.Format.Format_RGB888)
     
     def getRotation(self):
         #seems to be fixed in opencv 4.5... 
@@ -160,10 +160,10 @@ class VideoWidget(QtWidgets.QFrame):
         QtWidgets.QFrame.__init__(self, parent)
         self._defaultHeight = 576
         self._defaultWidth = 720
-        self.setSizePolicy(QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Expanding)
+        self.setSizePolicy(QtWidgets.QSizePolicy.Policy.Expanding, QtWidgets.QSizePolicy.Policy.Expanding)
         self._image = None
         self.imageRatio = 16.0 / 9.0
-        self.setFrameStyle(QtWidgets.QFrame.Panel | QtWidgets.QFrame.Sunken)
+        self.setFrameStyle(QtWidgets.QFrame.Shape.Panel | QtWidgets.QFrame.Shadow.Sunken)
         self.setLineWidth(1)
 
     def paintEvent(self, event):

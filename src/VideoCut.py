@@ -15,11 +15,11 @@
 
 import sys, traceback, math, getopt
 
-from PyQt5.QtCore import pyqtSignal
-from PyQt5 import QtCore, QtGui, QtWidgets
-from PyQt5.QtWidgets import QApplication, QWidget
+from PyQt6.QtCore import pyqtSignal
+from PyQt6 import QtCore, QtGui, QtWidgets
+from PyQt6.QtWidgets import QApplication, QWidget
 import json
-from PyQt5.Qt import Qt
+from PyQt6.QtCore import Qt
 from datetime import timedelta
 from FFMPEGTools import  FFStreamProbe,  OSTools, ConfigAccessor, FFmpegVersion
 from Cutter import FFMPEGCutter,CuttingConfig,VCCutter
@@ -134,8 +134,7 @@ class VideoDial(QtWidgets.QDial):
         self.dir=0; #1 forw, 2 back, 0 center
                     
     def sliderChange(self,sliderChange):
-        if sliderChange==3:
-                
+        if sliderChange == QtWidgets.QDial.SliderChange.SliderValueChange:
             pos = self.value()
             if self.dir==0 and pos > 0:
                 self.dir=1
@@ -241,15 +240,15 @@ class LayoutWindow(QWidget):
     def initWidgets(self,settings):
         self.ui_VideoFrame = VideoPlugin.createWidget(settings.showGL,self) 
         
-        self.ui_Slider = QtWidgets.QSlider(QtCore.Qt.Horizontal)
-        self.ui_Slider.setFocusPolicy(QtCore.Qt.StrongFocus)
+        self.ui_Slider = QtWidgets.QSlider(QtCore.Qt.Orientation.Horizontal)
+        self.ui_Slider.setFocusPolicy(QtCore.Qt.FocusPolicy.StrongFocus)
         # contribution:
         self.ui_Slider.setStyleSheet(stylesheet())
         
         self.ui_Slider.setMinimum(0)
         self.ui_Slider.setMaximum(self.SLIDER_RESOLUTION)
         self.ui_Slider.setToolTip("Video track")
-        self.ui_Slider.setTickPosition(QtWidgets.QSlider.TicksAbove)
+        self.ui_Slider.setTickPosition(QtWidgets.QSlider.TickPosition.TicksAbove)
         self.ui_Slider.setTickInterval(0)
         
         #self.ui_Dial = QtWidgets.QDial(self)
@@ -275,26 +274,26 @@ class LayoutWindow(QWidget):
         
         self.ui_AudioModeLabel = QtWidgets.QLabel(self)
         self.ui_AudioModeLabel.setStyleSheet("QLabel { border: 1px solid darkgray; border-radius: 3px; color: inherit; background: lightgreen} ");
-        self.ui_AudioModeLabel.setAlignment(QtCore.Qt.AlignCenter)
+        self.ui_AudioModeLabel.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
         self.ui_AudioModeLabel.setToolTip("Toggle if audio should be saved")
         
         self.pixAudioOn = QtGui.QPixmap()
         #self.pixAudioOn.load("icons/speaker-high.png")
         self.pixAudioOn.load(ICOMAP.ico("audioOn"))
-        self.pixAudioOn = self.pixAudioOn.scaledToWidth(32, mode=Qt.SmoothTransformation)
+        self.pixAudioOn = self.pixAudioOn.scaledToWidth(32, mode=Qt.TransformationMode.SmoothTransformation)
         self.pixAudioOff = QtGui.QPixmap()
         #self.pixAudioOff.load("icons/speaker-muted.png")
         self.pixAudioOff.load(ICOMAP.ico("audioOff"))
-        self.pixAudioOff = self.pixAudioOff.scaledToWidth(32, mode=Qt.SmoothTransformation)
+        self.pixAudioOff = self.pixAudioOff.scaledToWidth(32, mode=Qt.TransformationMode.SmoothTransformation)
         
         self.ui_CutModeLabel = QtWidgets.QLabel(self)
         self.ui_CutModeLabel.setStyleSheet("QLabel { border: 1px solid darkgray; border-radius: 3px; color: inherit; background: lightgreen} ");
-        self.ui_CutModeLabel.setAlignment(QtCore.Qt.AlignCenter)
+        self.ui_CutModeLabel.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
         self.ui_CutModeLabel.setToolTip("Toggle if exact or fast cut")
         
         self.ui_BackendLabel = QtWidgets.QLabel(self)
         self.ui_BackendLabel.setStyleSheet("QLabel { border: 1px solid darkgray; border-radius: 3px; color: inherit; background: lightgreen} ");
-        self.ui_BackendLabel.setAlignment(QtCore.Qt.AlignCenter)
+        self.ui_BackendLabel.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
         self.ui_BackendLabel.setToolTip("Toogle if precise remux or external ffmpeg")
         
         self.statusBox = QtWidgets.QHBoxLayout()
@@ -324,7 +323,7 @@ class LayoutWindow(QWidget):
 
     def makeGridLayout(self):
         gridLayout = QtWidgets.QGridLayout()
-        self.ui_List.setSizePolicy(QtWidgets.QSizePolicy.Preferred, QtWidgets.QSizePolicy.Expanding)
+        self.ui_List.setSizePolicy(QtWidgets.QSizePolicy.Policy.Preferred, QtWidgets.QSizePolicy.Policy.Expanding)
         self.ui_List.setMaximumWidth(round(SIZE_ICON * 2.6))
         gridLayout.addWidget(self.ui_List, 0, 0, 5, 1)
         # from row,from col, rowSpan, columnSpan
@@ -351,7 +350,7 @@ class LayoutWindow(QWidget):
 
         midHBox = QtWidgets.QHBoxLayout()
         midHBox.addWidget(self.ui_List)
-        self.ui_List.setSizePolicy(QtWidgets.QSizePolicy.Minimum, QtWidgets.QSizePolicy.Expanding)
+        self.ui_List.setSizePolicy(QtWidgets.QSizePolicy.Policy.Minimum, QtWidgets.QSizePolicy.Policy.Expanding)
         midHBox.addLayout(vbox)
         
         mainVBox = QtWidgets.QVBoxLayout()
@@ -389,10 +388,6 @@ class LayoutWindow(QWidget):
         self.ui_GotoField.setMaximum(count)
         self.ui_GotoField.blockSignals(False)
     
-    def clearVideoFrame(self):
-        self.ui_VideoFrame.showFrame(None)
- 
- 
     #add cutmark with pixmap sized SIZE_ICON
     def addCutMark(self,cutEntry,rowIndex):
         item = QtWidgets.QListWidgetItem()
@@ -442,15 +437,15 @@ class LayoutWindow(QWidget):
      
     def _hookListActions(self):
         # TOO bad-the list model -should be here... 
-        #rmAction = QtWidgets.QAction(QtGui.QIcon('icons/close-x.png'), 'Delete', self)
-        rmAction = QtWidgets.QAction(QtGui.QIcon(ICOMAP.ico("rmAction")), 'Delete', self)
+        #rmAction = QtGui.QAction(QtGui.QIcon('icons/close-x.png'), 'Delete', self)
+        rmAction = QtGui.QAction(QtGui.QIcon(ICOMAP.ico("rmAction")), 'Delete', self)
         
         rmAction.triggered.connect(self._removeMarker)
-        #rmAllAction = QtWidgets.QAction(QtGui.QIcon('icons/clear-all.png'), 'Remove all', self)
-        rmAllAction = QtWidgets.QAction(QtGui.QIcon(ICOMAP.ico("rmAllAction")), 'Remove all', self)
+        #rmAllAction = QtGui.QAction(QtGui.QIcon('icons/clear-all.png'), 'Remove all', self)
+        rmAllAction = QtGui.QAction(QtGui.QIcon(ICOMAP.ico("rmAllAction")), 'Remove all', self)
         rmAllAction.triggered.connect(self.purgeMarker)
-        #self.gotoAction = QtWidgets.QAction(QtGui.QIcon('icons/go-next.png'), 'Goto', self)
-        self.gotoAction = QtWidgets.QAction(QtGui.QIcon(ICOMAP.ico("gotoAction")), 'Goto', self)
+        #self.gotoAction = QtGui.QAction(QtGui.QIcon('icons/go-next.png'), 'Goto', self)
+        self.gotoAction = QtGui.QAction(QtGui.QIcon(ICOMAP.ico("gotoAction")), 'Goto', self)
         self.gotoAction.triggered.connect(self._gotoFromMarker)
   
         # menus      
@@ -497,7 +492,7 @@ class LayoutWindow(QWidget):
     def __createListWidget(self):
         iconList = QtWidgets.QListWidget()
         iconList.setAlternatingRowColors(True)
-        iconList.setContextMenuPolicy(QtCore.Qt.CustomContextMenu)
+        iconList.setContextMenuPolicy(QtCore.Qt.ContextMenuPolicy.CustomContextMenu)
         #TODO: Respect colors - needs delegate
         iconList.setStyleSheet("QListView{outline:none;} QListWidget::item:selected { background: #28D9FF;} ")  # that text color seems not to work!
         fontM = QtGui.QFontMetrics(iconList.font())
@@ -532,7 +527,7 @@ class LayoutWindow(QWidget):
         selectionList = self.ui_List.selectedIndexes()
         if len(selectionList) == 0:
             return
-        self._listMenu.exec_(self.ui_List.viewport().mapToGlobal(position)) 
+        self._listMenu.exec(self.ui_List.viewport().mapToGlobal(position)) 
         
 
 class MainFrame(QtWidgets.QMainWindow):
@@ -556,60 +551,60 @@ class MainFrame(QtWidgets.QMainWindow):
     
     def initUI(self):
         
-        #self.exitAction = QtWidgets.QAction(QtGui.QIcon('icons/window-close.png'), 'Exit', self)
-        self.exitAction = QtWidgets.QAction(QtGui.QIcon(ICOMAP.ico("buttonStop")), 'Exit', self)
+        #self.exitAction = QtGui.QAction(QtGui.QIcon('icons/window-close.png'), 'Exit', self)
+        self.exitAction = QtGui.QAction(QtGui.QIcon(ICOMAP.ico("buttonStop")), 'Exit', self)
         self.exitAction.setShortcut('Ctrl+Q')
         self.exitAction.triggered.connect(QApplication.quit)
         
-        #self.loadAction = QtWidgets.QAction(QtGui.QIcon('./icons/loadfile.png'), 'Load Video', self)
-        self.loadAction = QtWidgets.QAction(QtGui.QIcon(ICOMAP.ico("loadAction")), 'Load Video', self)
+        #self.loadAction = QtGui.QAction(QtGui.QIcon('./icons/loadfile.png'), 'Load Video', self)
+        self.loadAction = QtGui.QAction(QtGui.QIcon(ICOMAP.ico("loadAction")), 'Load Video', self)
         self.loadAction.setShortcut('Ctrl+L')
         self.loadAction.triggered.connect(self.loadFile)
 
-        #self.startAction = QtWidgets.QAction(QtGui.QIcon('./icons/start-icon.png'), 'Include from here', self)
-        self.startAction = QtWidgets.QAction(QtGui.QIcon(ICOMAP.ico("startAction")), 'Include from here', self)
+        #self.startAction = QtGui.QAction(QtGui.QIcon('./icons/start-icon.png'), 'Include from here', self)
+        self.startAction = QtGui.QAction(QtGui.QIcon(ICOMAP.ico("startAction")), 'Include from here', self)
         self.startAction.setShortcut('Ctrl+G')
         self.startAction.triggered.connect(self._videoController.addStartMarker)
 
-        #self.stopAction = QtWidgets.QAction(QtGui.QIcon('./icons/stop-red-icon.png'), 'Exclude from here', self)
-        self.stopAction = QtWidgets.QAction(QtGui.QIcon(ICOMAP.ico("stopAction")), 'Exclude from here', self)
+        #self.stopAction = QtGui.QAction(QtGui.QIcon('./icons/stop-red-icon.png'), 'Exclude from here', self)
+        self.stopAction = QtGui.QAction(QtGui.QIcon(ICOMAP.ico("stopAction")), 'Exclude from here', self)
         self.stopAction.setShortcut('Ctrl+H')
         self.stopAction.triggered.connect(self._videoController.addStopMarker)
         
-        #self.saveAction = QtWidgets.QAction(QtGui.QIcon('./icons/save-as-icon.png'), 'Save the video', self)
-        self.saveAction = QtWidgets.QAction(QtGui.QIcon(ICOMAP.ico("saveAction")), 'Save the video', self)
+        #self.saveAction = QtGui.QAction(QtGui.QIcon('./icons/save-as-icon.png'), 'Save the video', self)
+        self.saveAction = QtGui.QAction(QtGui.QIcon(ICOMAP.ico("saveAction")), 'Save the video', self)
         self.saveAction.setShortcut('Ctrl+S')
         self.saveAction.triggered.connect(self.saveVideo)
         
-        #self.infoAction = QtWidgets.QAction(QtGui.QIcon('./icons/info.png'), 'Codec info', self)
-        self.infoAction = QtWidgets.QAction(QtGui.QIcon(ICOMAP.ico("infoAction")), 'Codec info', self)
+        #self.infoAction = QtGui.QAction(QtGui.QIcon('./icons/info.png'), 'Codec info', self)
+        self.infoAction = QtGui.QAction(QtGui.QIcon(ICOMAP.ico("infoAction")), 'Codec info', self)
         self.infoAction.setShortcut('Ctrl+I')
         self.infoAction.triggered.connect(self.showCodecInfo)
         
-        #self.playAction = QtWidgets.QAction(QtGui.QIcon('./icons/play.png'), 'Play video', self)
-        self.playAction = QtWidgets.QAction(QtGui.QIcon(ICOMAP.ico("playStart")), 'Play video', self)
+        #self.playAction = QtGui.QAction(QtGui.QIcon('./icons/play.png'), 'Play video', self)
+        self.playAction = QtGui.QAction(QtGui.QIcon(ICOMAP.ico("playStart")), 'Play video', self)
         self.playAction.setShortcut('Ctrl+P')
         self.playAction.triggered.connect(self.playVideo)
         
-        #self.photoAction = QtWidgets.QAction(QtGui.QIcon('./icons/screenshot.png'), 'Take screenshot', self)
-        self.photoAction = QtWidgets.QAction(QtGui.QIcon(ICOMAP.ico("photoAction")), 'Take screenshot', self)
+        #self.photoAction = QtGui.QAction(QtGui.QIcon('./icons/screenshot.png'), 'Take screenshot', self)
+        self.photoAction = QtGui.QAction(QtGui.QIcon(ICOMAP.ico("photoAction")), 'Take screenshot', self)
         self.photoAction.setShortcut('Ctrl+P')
         self.photoAction.triggered.connect(self.takeScreenShot)
         
         '''
         the settings menues
         '''
-#         self.extractMP3 = QtWidgets.QAction(QtGui.QIcon('./icons/stop-red-icon.png'),"Extract MP3",self)
-        #self.mediaSettings = QtWidgets.QAction(QtGui.QIcon('./icons/settings.png'), "Output settings", self)
-        self.mediaSettings = QtWidgets.QAction(QtGui.QIcon(ICOMAP.ico("mediaSettings")), "Output settings", self)
+#         self.extractMP3 = QtGui.QAction(QtGui.QIcon('./icons/stop-red-icon.png'),"Extract MP3",self)
+        #self.mediaSettings = QtGui.QAction(QtGui.QIcon('./icons/settings.png'), "Output settings", self)
+        self.mediaSettings = QtGui.QAction(QtGui.QIcon(ICOMAP.ico("mediaSettings")), "Output settings", self)
         self.mediaSettings.setShortcut('Ctrl+T')
         self.mediaSettings.triggered.connect(self.openMediaSettings)
 
         '''
         audio language selection
         '''
-        #self.langSettings = QtWidgets.QAction(QtGui.QIcon('./icons/langflags.png'), "Language settings", self)
-        self.langSettings = QtWidgets.QAction(QtGui.QIcon(ICOMAP.ico("langSettings")), "Language settings", self)
+        #self.langSettings = QtGui.QAction(QtGui.QIcon('./icons/langflags.png'), "Language settings", self)
+        self.langSettings = QtGui.QAction(QtGui.QIcon(ICOMAP.ico("langSettings")), "Language settings", self)
         self.langSettings.setShortcut('Ctrl+L')
         self.langSettings.triggered.connect(self.openLanguageSettings)
 
@@ -667,7 +662,7 @@ class MainFrame(QtWidgets.QMainWindow):
 
     ''' this is the place to start all graphical actions. Queue is running '''
     def __queueStarted(self,state):
-        if state==Qt.ApplicationActive:
+        if state==Qt.ApplicationState.ApplicationActive:
             self.__qapp.disconnect()
             self._isStarted=True
             self._videoController.prepare()
@@ -677,8 +672,9 @@ class MainFrame(QtWidgets.QMainWindow):
     
     def centerWindow(self):
         frameGm = self.frameGeometry()
-        screen = QApplication.desktop().screenNumber(QApplication.desktop().cursor().pos())
-        centerPoint = QApplication.desktop().screenGeometry(screen).center()
+        #screen = QApplication.desktop().screenNumber(QApplication.desktop().cursor().pos())
+        #centerPoint = QApplication.desktop().screenGeometry(screen).center()
+        centerPoint = self.screen().availableGeometry().center()
         frameGm.moveCenter(centerPoint)
         self.move(frameGm.topLeft())
     
@@ -691,7 +687,7 @@ class MainFrame(QtWidgets.QMainWindow):
         langMap = Cutter.IsoMap()
         lang = self.settings.getPreferedLanguageCodes()
         dlg = LanguageSettingsDialog(self, lang, langMap, self._videoController.getLanguages())
-        if dlg.exec_():
+        if dlg.exec():
             self.settings.setPreferedLanguageCodes(dlg.getLanguages())
      
     def showInfo(self, text):
@@ -849,27 +845,27 @@ class MainFrame(QtWidgets.QMainWindow):
 
     def __getInfoDialog(self, text):
         dlg = QtWidgets.QDialog(self)
-        dlg.setWindowModality(QtCore.Qt.WindowModal)
+        dlg.setWindowModality(QtCore.Qt.WindowModality.WindowModal)
         dlg.setWindowTitle("Video Infos")
         layout = QtWidgets.QVBoxLayout(dlg)
         label = QtWidgets.QLabel(text)
-        label.sizePolicy = QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Expanding)
+        label.sizePolicy = QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Policy.Expanding, QtWidgets.QSizePolicy.Policy.Expanding)
         label.setSizePolicy(label.sizePolicy)
         label.setMinimumSize(QtCore.QSize(450, 40))
-        layout.setSizeConstraint(QtWidgets.QLayout.SetFixedSize)
+        layout.setSizeConstraint(QtWidgets.QLayout.SizeConstraint.SetFixedSize)
         layout.addWidget(label)
         return dlg
 
     def getErrorDialog(self, text, infoText, detailedText):
         dlg = QtWidgets.QMessageBox(self)
-        dlg.setIcon(QtWidgets.QMessageBox.Warning)
-        dlg.setWindowModality(QtCore.Qt.WindowModal)
+        dlg.setIcon(QtWidgets.QMessageBox.Icon.Warning)
+        dlg.setWindowModality(QtCore.Qt.WindowModality.WindowModal)
         dlg.setWindowTitle("Error")
         dlg.setText(text)
         dlg.setInformativeText(infoText)
         dlg.setDetailedText(detailedText)
-        dlg.setStandardButtons(QtWidgets.QMessageBox.Ok)
-        spacer = QtWidgets.QSpacerItem(300, 0, QtWidgets.QSizePolicy.Minimum, QtWidgets.QSizePolicy.Expanding)
+        dlg.setStandardButtons(QtWidgets.QMessageBox.StandardButton.Ok)
+        spacer = QtWidgets.QSpacerItem(300, 0, QtWidgets.QSizePolicy.Policy.Minimum, QtWidgets.QSizePolicy.Policy.Expanding)
         layout = dlg.layout()
         layout.addItem(spacer, layout.rowCount(), 0, 1, layout.columnCount())
         return dlg
@@ -877,14 +873,14 @@ class MainFrame(QtWidgets.QMainWindow):
     def getMessageDialog(self, text, infoText):
         # dlg = DialogBox(self)
         dlg = QtWidgets.QMessageBox(self)
-        dlg.setIcon(QtWidgets.QMessageBox.Information)
-        dlg.setWindowModality(QtCore.Qt.WindowModal)
+        dlg.setIcon(QtWidgets.QMessageBox.Icon.Information)
+        dlg.setWindowModality(QtCore.Qt.WindowModality.WindowModal)
         dlg.setWindowTitle("Notice")
         dlg.setText(text)
         dlg.setInformativeText(infoText)
-        dlg.setStandardButtons(QtWidgets.QMessageBox.Ok)
+        dlg.setStandardButtons(QtWidgets.QMessageBox.StandardButton.Ok)
         # Workaround to resize a qt dialog. WTF!
-        spacer = QtWidgets.QSpacerItem(300, 0, QtWidgets.QSizePolicy.Minimum, QtWidgets.QSizePolicy.Expanding)
+        spacer = QtWidgets.QSpacerItem(300, 0, QtWidgets.QSizePolicy.Policy.Minimum, QtWidgets.QSizePolicy.Policy.Expanding)
         layout = dlg.layout()
         layout.addItem(spacer, layout.rowCount(), 0, 1, layout.columnCount())
         
@@ -952,11 +948,8 @@ class SettingsModel(QtCore.QObject):
             mode = "REMUX"
         if self.reencoding:
             cutmode = "Exact"
-        
         if self.muteAudio:
             audio=self.mainFrame._widgets.pixAudioOff
-        
-        #self.ui_AudioModeLabel.setPixmap(pix)
         
         self.mainFrame._widgets.ui_AudioModeLabel.setPixmap(audio)
         self.mainFrame._widgets.ui_CutModeLabel.setText(cutmode)
@@ -1028,12 +1021,12 @@ class SettingsDialog(QtWidgets.QDialog):
         self.init_ui()
 
     def init_ui(self):
-        self.setWindowModality(QtCore.Qt.WindowModal)
+        self.setWindowModality(QtCore.Qt.WindowModality.WindowModal)
         self.setWindowTitle("Settings")
 
         outBox = QtWidgets.QVBoxLayout()
         # outBox.addStretch(1)
-        self.setSizePolicy(QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Expanding)
+        self.setSizePolicy(QtWidgets.QSizePolicy.Policy.Expanding, QtWidgets.QSizePolicy.Policy.Expanding)
         versionBox = QtWidgets.QHBoxLayout()
         lbl = QtWidgets.QLabel("Version:")
         ver = QtWidgets.QLabel(Version)
@@ -1043,11 +1036,11 @@ class SettingsDialog(QtWidgets.QDialog):
         versionBox.addStretch(1)
 
         frame1 = QtWidgets.QFrame()
-        frame1.setFrameStyle(QtWidgets.QFrame.Box | QtWidgets.QFrame.Sunken)
+        frame1.setFrameStyle(QtWidgets.QFrame.Shape.Box | QtWidgets.QFrame.Shadow.Sunken)
         frame1.setLineWidth(1)
        
         frame2 = QtWidgets.QFrame()
-        frame2.setFrameStyle(QtWidgets.QFrame.Box | QtWidgets.QFrame.Sunken)
+        frame2.setFrameStyle(QtWidgets.QFrame.Shape.Box | QtWidgets.QFrame.Shadow.Sunken)
         frame2.setLineWidth(1)
        
         #frame3 = QtWidgets.QFrame()
@@ -1117,12 +1110,11 @@ class SettingsDialog(QtWidgets.QDialog):
 #         self.model.update()
     
     def on_reencodeChanged(self, reencode):
-        self.model.reencoding = QtCore.Qt.Checked == reencode
-        # self.combo.setEnabled(self.model.reencoding)
+        self.model.reencoding = QtCore.Qt.CheckState.Checked.value == reencode
         self.model.update()
         
     def on_fastRemuxChanged(self, isFastRemux):
-        self.model.fastRemux = QtCore.Qt.Checked == isFastRemux
+        self.model.fastRemux = QtCore.Qt.CheckState.Checked.value == isFastRemux
         self.model.update() 
     
     def _onSubChanged(self,showsub):
@@ -1134,11 +1126,11 @@ class SettingsDialog(QtWidgets.QDialog):
         self.model.update()       
 
     def _onGLChanged(self,useGL):
-        self.model.showGL=QtCore.Qt.Checked == useGL
+        self.model.showGL=QtCore.Qt.CheckState.Checked.value == useGL
         self.model.update() 
         
     def _onAudioChanged(self,muteAudio):
-        self.model.muteAudio = QtCore.Qt.Checked == muteAudio
+        self.model.muteAudio = QtCore.Qt.CheckState.Checked.value == muteAudio
         self.model.update()
         
     def _onIconThemeChanged(self,text):
@@ -1156,10 +1148,10 @@ class LanguageSettingsDialog(QtWidgets.QDialog):
         self.init_ui()
     
     def init_ui(self):
-        self.setWindowModality(QtCore.Qt.WindowModal)
+        self.setWindowModality(QtCore.Qt.WindowModality.WindowModal)
         self.setWindowTitle("Language")
         frame1 = QtWidgets.QFrame()
-        frame1.setFrameStyle(QtWidgets.QFrame.Box | QtWidgets.QFrame.Sunken)
+        frame1.setFrameStyle(QtWidgets.QFrame.Shape.Box | QtWidgets.QFrame.Shadow.Sunken)
         frame1.setLineWidth(1)
         
         vBox = QtWidgets.QVBoxLayout()
@@ -1188,13 +1180,13 @@ class LanguageSettingsDialog(QtWidgets.QDialog):
         pix = QtGui.QPixmap()
         #pix.load("icons/info.png")
         pix.load(ICOMAP.ico("infoAction"))
-        pix = pix.scaledToWidth(32, mode=Qt.SmoothTransformation)
+        pix = pix.scaledToWidth(32, mode=Qt.TransformationMode.SmoothTransformation)
         info = QtWidgets.QLabel("")
         info.setPixmap(pix)
         btnHBox.addWidget(info)
         btnHBox.addWidget(self.lbl)
         self.button_box = QtWidgets.QDialogButtonBox(self)
-        self.button_box.setStandardButtons(QtWidgets.QDialogButtonBox.Cancel | QtWidgets.QDialogButtonBox.Save)
+        self.button_box.setStandardButtons(QtWidgets.QDialogButtonBox.StandardButton.Cancel | QtWidgets.QDialogButtonBox.StandardButton.Save)
         self.button_box.accepted.connect(self.accept)
         self.button_box.rejected.connect(self.reject)
         btnHBox.addWidget(self.button_box)
@@ -1203,7 +1195,7 @@ class LanguageSettingsDialog(QtWidgets.QDialog):
         dlgBox.addLayout(btnHBox)
         
         self.setLayout(dlgBox)
-        self.setSizePolicy(QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Expanding)
+        self.setSizePolicy(QtWidgets.QSizePolicy.Policy.Expanding, QtWidgets.QSizePolicy.Policy.Expanding)
         self.setMinimumSize(400, 0)   
         self.setModelData()
         item = self.listWidget.item(0)
@@ -1211,19 +1203,19 @@ class LanguageSettingsDialog(QtWidgets.QDialog):
     
     def onChange(self, widget):
         state = widget.checkState()
-        if state == Qt.Checked:
+        if state == Qt.CheckState.Checked:
             self._limitCheckedItems()
     
     def _limitCheckedItems(self):
         selected = []
         for index in range(self.listWidget.count()):
             item = self.listWidget.item(index)
-            if item.checkState() == Qt.Checked:
+            if item.checkState() == Qt.CheckState.Checked:
                 selected.append(item)
                 
         if len(selected) > 3:
             test = selected.pop()
-            test.setCheckState(Qt.Unchecked)
+            test.setCheckState(Qt.CheckState.Unchecked)
         
     @QtCore.pyqtSlot()
     def onItemSelectionChanged(self):
@@ -1294,11 +1286,11 @@ class LanguageSettingsDialog(QtWidgets.QDialog):
 
             item = QtWidgets.QListWidgetItem()                
             item.setText(lang)
-            item.setFlags(item.flags() | QtCore.Qt.ItemIsUserCheckable)
+            item.setFlags(item.flags() | QtCore.Qt.ItemFlag.ItemIsUserCheckable)
             if lang in self.defaultCodes:
-                item.setCheckState(QtCore.Qt.Checked)
+                item.setCheckState(QtCore.Qt.CheckState.Checked)
             else:
-                item.setCheckState(QtCore.Qt.Unchecked)
+                item.setCheckState(QtCore.Qt.CheckState.Unchecked)
             self.listWidget.addItem(item)
             cnt += 1
         
@@ -1308,7 +1300,7 @@ class LanguageSettingsDialog(QtWidgets.QDialog):
         lang = []
         for index in range(self.listWidget.count()):
             item = self.listWidget.item(index)
-            if item.checkState() == Qt.Checked:
+            if item.checkState() == Qt.CheckState.Checked:
                 #code= self.iso639.codeForCountry(item.text(),self.available3LetterCodes)
                 lang.append(item.text()) #save the intl language
         
@@ -1412,7 +1404,7 @@ class VideoControl(QtCore.QObject):
             if not self.streamData:
                 raise Exception('Invalid file')
             
-            QApplication.setOverrideCursor(QtCore.Qt.WaitCursor)
+            QApplication.setOverrideCursor(QtCore.Qt.CursorShape.WaitCursor)
             self.player = VideoPlugin.initPlayer(filePath, self.streamData)
             VideoPlugin.validate()
             
@@ -1488,12 +1480,11 @@ class VideoControl(QtCore.QObject):
         
 
     def restoreVideoCuts(self):
-        QApplication.setOverrideCursor(QtCore.Qt.WaitCursor)
+        QApplication.setOverrideCursor(QtCore.Qt.CursorShape.WaitCursor)
         recover=False
         try:
             cutList = XMLAccessor(self.currentPath).readXML()
         except Exception as error:
-            print(error)
             Log.exception("Error restore:")  
             return  
         for cut in cutList:
@@ -1752,7 +1743,7 @@ class SignalOnEvent(QtCore.QObject):
 
     def eventFilter(self, anyObject, event):
         if anyObject == self.widget:
-            if event.type() == QtCore.QEvent.MouseButtonRelease and anyObject.rect().contains(event.pos()):
+            if event.type() == QtCore.QEvent.Type.MouseButtonRelease and anyObject.rect().contains(event.pos()):
                     self.clicked.emit()
                     return True
             return False
@@ -1929,7 +1920,7 @@ def main():
             if not OSTools().isAbsolute(fn):
                 fn=OSTools().joinPathes(localPath,fn)
             WIN = MainFrame(app,fn)  
-        app.exec_()
+        app.exec()
         #logging.shutdown()
     except:
         Log.exception("Error in main:")

@@ -26,13 +26,16 @@ The current version is written in python3 and uses the qt5 widget kit.
 
 #### Set GTK Theme for this QT application
 If you are running a DE with GTK/Gnome (as opposed to LXQT or KDE) you need to tweak your system:
-(Arch users may have to install qt5-styleplugins from AUR)
+* Arch users may have to install qt5-styleplugins from AUR
+* Ubuntu/Debian users may need qt5-style-plugins to get the GTK theme for QT
 
 `sudo nano /etc/environment`
 
 add the follwing line:
 
-`QT_QPA_PLATFORMTHEME=gtk2`
+`QT_QPA_PLATFORMTHEME=gtk2` or
+
+`QT_QPA_PLATFORMTHEME=qt5c` (if qt5c is installed)
 
 and logout/login (or reboot)
 

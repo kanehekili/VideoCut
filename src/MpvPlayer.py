@@ -8,27 +8,28 @@ under the
 GNU Affero General Public License v3.0
 '''
      
-from PyQt5.QtCore import Qt,QMetaObject,pyqtSlot,pyqtSignal
-from PyQt5 import QtCore,QtWidgets
-from PyQt5 import QtGui
+from PyQt6.QtCore import Qt,QMetaObject,pyqtSlot,pyqtSignal, QByteArray
+from PyQt6 import QtCore,QtWidgets
+from PyQt6 import QtGui
+from PyQt6.QtOpenGLWidgets import QOpenGLWidget
 
 from threading import Condition
 import FFMPEGTools
 import time,re
 import locale
 
+from lib.mpv import (MPV,MpvGlGetProcAddressFn,MpvRenderContext)
 
-from PyQt5.QtOpenGL import QGLContext    
-from lib.mpv import (MPV,MpvGlGetProcAddressFn,MpvRenderContext,MpvEventEndFile)
     
 
 Log=FFMPEGTools.Log
 
 def get_proc_addr(_, name):
-    glctx = QGLContext.currentContext()
+    glctx = QtGui.QOpenGLContext.currentContext()
     if glctx is None:
         return 0
-    addr = int(glctx.getProcAddress(name.decode('utf-8')))
+    qb = QByteArray(name)
+    addr = int(glctx.getProcAddress(qb))
     return addr
 
 
@@ -50,11 +51,13 @@ class VideoWidget(QtWidgets.QFrame):
     def updateUI(self,frameNumber,framecount,timeinfo):
         self.trigger.emit(frameNumber,framecount,timeinfo)
 
-class VideoGLWidget(QtWidgets.QOpenGLWidget):
+class VideoGLWidget(QOpenGLWidget):
     trigger = pyqtSignal(float,float,float)
 
     def __init__(self, parent,mpv):
-        QtWidgets.QOpenGLWidget.__init__(self, parent)
+        QOpenGLWidget.__init__(self,parent)
+        #setSurfaceType(QWindow.OpenGLSurface)
+        #QOpenGLWindow.__init__(self)
         self.ratio= 1.0 #?is that true?
         self.mpv=mpv
         self.ctx = None
@@ -261,7 +264,6 @@ class MpvPlayer():
             self._getReady()
         except Exception as ex:
             Log.exception("Open mpv file")
-            print(ex)
 
     #Test, not activated    
     def _oncallback(self,callback):
@@ -366,7 +368,8 @@ class MpvPlayer():
         return True
         
     def _onPropertyChange(self,name,pos):
-        print("        >",name,":",pos)
+        pass
+        #print("        >",name,":",pos)
     
     def _onDuration(self,name,val):
         if val is not None:
@@ -616,7 +619,7 @@ class MpvPlugin():
     
     def _makeThumbnail(self,qImage):
         pix = QtGui.QPixmap.fromImage(qImage)
-        pix = pix.scaledToWidth(self.iconSize, mode=Qt.SmoothTransformation)
+        pix = pix.scaledToWidth(self.iconSize, mode=Qt.TransformationMode.SmoothTransformation)
         return pix       
 
     def _sanityCheck(self,streamData):
