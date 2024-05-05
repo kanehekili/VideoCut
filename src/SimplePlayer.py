@@ -31,8 +31,7 @@ class Player(QOpenGLWidget):
     
     def __init__(self, parent) -> None:
         super().__init__(parent)
-        kwArgs={"log_handler":print,"loglevel" : 'debug',"audio" : "1","keep_open" : "always"}
-        #self.mpv = MPV(log_handler=print)
+        kwArgs={"log_handler":print,"log-file":"gl.txt","loglevel" : 'trace',"audio" : "1","keep_open" : "always"}
         self.mpv = MPV(**kwArgs)
         self.ctx = None
         self._proc_addr_wrapper = MpvGlGetProcAddressFn(get_process_address)
