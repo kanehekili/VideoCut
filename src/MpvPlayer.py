@@ -155,6 +155,7 @@ class MpvPlayer():
     '''    
     def __baseMpvArgs(self):
         return {   "hwdec":"auto-safe", 
+            "vo":"libmpv",                
             #video_sync="display-desync", #no effect on mkv/vc1
             "log_handler":self._passLog,
             "loglevel" : 'error',
