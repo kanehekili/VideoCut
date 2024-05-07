@@ -34,6 +34,7 @@
   * ffmpeg 5
   * #define FF_API_OLD_CHANNEL_LAYOUT   (LIBAVUTIL_VERSION_MAJOR < 58)
   * else: #include <libavutil/channel_layout.h>
+  * ?ffmpg6
   */
 #include <libavutil/timestamp.h>
 #include <libavformat/avformat.h>

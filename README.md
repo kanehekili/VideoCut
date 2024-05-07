@@ -13,26 +13,29 @@ Reencoding is possible for exact cutting as well as converting to different cont
 
 VideoCut supports the cutting of subtitles when "Show subtitles"  in the settings dialog is enabled. This flag will display the "first" subtitles stream and will cut all subtitles that have been defined in the "language" dialog.
 
-The current version is written in python3 and uses the qt5 widget kit.  
+The current version is written in python3 and uses the qt6 widget kit.  
 
 ### Prerequisites
 * Arch: python3, python-pillow and mpv
-* Debian/Mint/Ubuntu: python3 python3-pil libmpv1 python3-pyqt5.qtopengl (no-recommends)
+* Debian/Mint/Ubuntu: python3 python3-pil libmpv1 (no-recommends)
   #not working for Ubuntu 18.4: libmpv - use python3-opencv instead
 * Fedora: python3-pillow-qt and mpv-libs.x86_64
-* ffmpeg > 3.X to 5.X
-* python3-pyqt5
+* ffmpeg > 3.X to 6.X
+* python3-pyqt6
 * optional:(legacy) OpenCV 2.4 up to OpenCV 4.x (must be build with ffmpeg - with all its dependencies)
 
 #### Set GTK Theme for this QT application
 If you are running a DE with GTK/Gnome (as opposed to LXQT or KDE) you need to tweak your system:
-(Arch users may have to install qt5-styleplugins from AUR)
+* Arch users may have to install qt6-styleplugins from AUR
+* Ubuntu/Debian users will not get a uniform look GTK theme for QT anymore. (qt5 was the last)
 
 `sudo nano /etc/environment`
 
 add the follwing line:
 
-`QT_QPA_PLATFORMTHEME=gtk2`
+`QT_QPA_PLATFORMTHEME=gtk2` or
+
+`QT_QPA_PLATFORMTHEME=qt6c` (if qt6c is installed)
 
 and logout/login (or reboot)
 
@@ -117,7 +120,7 @@ Remove with:
     * Download [PKGBUILD ](https://aur.archlinux.org/cgit/aur.git/snapshot/videocut.tar.gz)
     * unpack it and go into the "videocut" folder
     * execute `makepkg -s`
-    * excute `sudo pacman -U videocut-2.x.x.x-1-x86_64.pkg.tar.zst` 
+    * excute `sudo pacman -U videocut-3.x.x.x-1-x86_64.pkg.tar.zst` 
     * uninstall via `sudo pacman -Rs videocut`
 
 Select video and open it with "Open with ->VideoCut", oder via terminal "VideoCut"
@@ -125,14 +128,14 @@ Select video and open it with "Open with ->VideoCut", oder via terminal "VideoCu
 
 #### Install dependencies manually on Linux Mint or Ubuntu (tested from 20.04 to 22.04)
 ```
-sudo apt –no-install-recommends install python3-pyqt5 ffmpeg python3-pil python3-pyqt5.qtopengl libmpv1
+sudo apt –no-install-recommends install python3-pyqt6 ffmpeg python3-pil libmpv2
 ```
 libmpv1 won't work on Ubuntu 18.04 - no bindings for the old libs - use opencv instead
 For Ubuntu 23.04 or Debian 12 and newer libmpv2 should be used.
 
 #### Install dependencies on Fedora
 ```
-sudo dnf python3-qt5 ffmpeg python3-pillow-qt mpv-libs.x86_64
+sudo dnf python3-qt6 ffmpeg python3-pillow-qt mpv-libs.x86_64
 ```
 
 ### How to install with a terminal
@@ -145,7 +148,7 @@ sudo dnf python3-qt5 ffmpeg python3-pillow-qt mpv-libs.x86_64
 * The app should be appear in a menu or "Actvities"
 * Can be openend by selecting a video file & Open with...
 * In the terminal can be started via `videocut`
-* python qt5, mpv and ffmpeg are required
+* python qt6, mpv and ffmpeg are required
 * you may now remove that download directory.
 * logs can be found in the user home ".config/VideoCut" folder
 
@@ -174,6 +177,10 @@ Copy the .desktop file and change the exec line to "Exec= python3 .../VideoCut.p
 Opencv will not be displaying subtitles nor frametypes.
 
 ### Changes 
+07.05.2024
+* Switch to pyqt6. 
+* Adaption to mpv 0.38
+
 28.03.2023
 * Fix for target extension based on the codecs
 * Added audio mute - idea by user ![RedFraction](https://github.com/RedFraction)

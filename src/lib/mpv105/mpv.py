@@ -17,7 +17,7 @@
 #
 # You can find copies of the GPLv2 and LGPLv2.1 licenses in the project repository's LICENSE.GPL and LICENSE.LGPL files.
 
-__version__ = '1.0.6'
+__version__ = '1.0.5'
 
 from ctypes import *
 import ctypes.util
@@ -893,8 +893,6 @@ class MPV(object):
             self._event_thread.start()
         else:
             self._event_thread = None
-        if (m := re.search(r'(\d+)\.(\d+)\.(\d+)', self.mpv_version)):
-            self.mpv_version_tuple = tuple(map(int, m.groups()))
 
     @contextmanager
     def _enqueue_exceptions(self):
@@ -1326,16 +1324,9 @@ class MPV(object):
     def _encode_options(options):
         return ','.join('{}={}'.format(_py_to_mpv(str(key)), str(val)) for key, val in options.items())
 
-    def loadfile(self, filename, mode='replace', index=None, **options):
+    def loadfile(self, filename, mode='replace', **options):
         """Mapped mpv loadfile command, see man mpv(1)."""
-        if self.mpv_version_tuple >= (0, 38, 0):
-            if index is None:
-                index = -1
-            self.command('loadfile', filename.encode(fs_enc), mode, index, MPV._encode_options(options))
-        else:
-            if index is not None:
-                warn(f'The index argument to the loadfile command is only supported on mpv >= 0.38.0')
-            self.command('loadfile', filename.encode(fs_enc), mode, MPV._encode_options(options))
+        self.command('loadfile', filename.encode(fs_enc), mode, MPV._encode_options(options))
 
     def loadlist(self, playlist, mode='replace'):
         """Mapped mpv loadlist command, see man mpv(1)."""

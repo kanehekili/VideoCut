@@ -227,7 +227,7 @@
 				<filter token="xxx" value="${version}"/>
 				<filter token="xpkgrelx" value="${pkgrelease}"/>
 				<filter token="xtsx" value="${time.stamp}"/>
-				<filter token="xlibsx" value="python3, ffmpeg, python3-pyqt5, python3-pil, qt5-style-plugins, libmpv2, python3-pyqt5.qtopengl"/>					
+				<filter token="xlibsx" value="python3, ffmpeg, python3-pyqt6, python3-pil,libmpv2"/>					
 			</filterset>			
 			
 		</copy>

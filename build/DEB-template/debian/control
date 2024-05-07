@@ -3,7 +3,7 @@ Maintainer: kanehekili <mat.wegmann@gmail.com>
 Section: video
 Priority: optional
 Build-Depends: debhelper, libc6-dev, libavcodec-dev, libavformat-dev
-Standards-Version: 2.0.0
+Standards-Version: 3.0.0
 
 
 
