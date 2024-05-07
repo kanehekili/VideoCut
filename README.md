@@ -1,7 +1,7 @@
 # VideoCut
-Version 2.2.1
+Version 3.0.0
 
-![Download](https://github.com/kanehekili/VideoCut/releases/download/2.2.1/videocut2.2.1.tar)
+![Download](https://github.com/kanehekili/VideoCut/releases/download/3.0.0/videocut3.0.0.tar)
 
 MP2/MP4 Cutter for Linux on base of mpv and ffmpeg. Cutting is lossless, the target file will not be reencoded. 
 
