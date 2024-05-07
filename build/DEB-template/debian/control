@@ -8,7 +8,7 @@ Standards-Version: 3.0.0
 
 
 Architecture: all
-Depends: @xlibsx@, ${shlibs:Depends}, ${misc:Depends},python3-pyqt6
+Depends: @xlibsx@, ${shlibs:Depends}, ${misc:Depends}
 Description: Fast and lossless videocutter for mp2,mp4,mkv,av-1 and more 
 Section: video
 Package: videocut

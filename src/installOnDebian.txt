@@ -1,9 +1,10 @@
-sudo apt –no-install-recommends install python3-pyqt5 ffmpeg python3-pil libmpv1
+sudo apt –no-install-recommends install python3-pyqt6 ffmpeg python3-pil libmpv2
+(or libmpv1 on older version)
 
 optional:
 sudo apt install python3-opencv (includes numpy)
-sudo apt install qt5-style-plugins
+No qt6 theming via qt5(6)-style-plugins supported by Cannonical 
 
 on gtk base DE add to:  ~/.profile or /etc/environment
-export QT_QPA_PLATFORMTHEME=gtk2
+export QT_QPA_PLATFORMTHEME=gtk2 - not possible with QT6
 
