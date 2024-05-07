@@ -242,24 +242,24 @@ def parseCVInfos(cvtext):
     lines = cvtext.splitlines(False)
     cvDict = {}
     for line in lines:
-        match = re.search("(?<=OpenCV)\s*(\d\S*[a-z]*)+", line)
+        match = re.search(r"(?<=OpenCV)\s*(\d\S*[a-z]*)+", line)
         if match: 
             cvDict["OpenCV"] = match.group(1)
             continue
             
-        match = re.search('(?<=Baseline:)\s*([ \w]+)+', line)
+        match = re.search(r'(?<=Baseline:)\s*([ \w]+)+', line)
         if match:
             cvDict["BaseLine"] = match.group(1) 
             continue
-        match = re.search("(?<=GTK\+:)\s*(\w+[(\w+ ]*[\d.]+[)]*)+", line)
+        match = re.search(r"(?<=GTK\+:)\s*(\w+[(\w+ ]*[\d.]+[)]*)+", line)
         if match: 
             cvDict["GTK+"] = match.group(1)
             continue
-        match = re.search("(?<=FFMPEG:)\s*(\w+)", line)
+        match = re.search(r"(?<=FFMPEG:)\s*(\w+)", line)
         if match:
             cvDict["FFMPEG"] = match.group(1) 
             continue
-        match = re.search("(?<=avcodec:)\s*(\w+[(\w+ ]*[\d.]+[)]*)+", line)
+        match = re.search(r"(?<=avcodec:)\s*(\w+[(\w+ ]*[\d.]+[)]*)+", line)
         if match:
             cvDict["AVCODEC"] = match.group(1) 
             continue
@@ -613,15 +613,15 @@ class FFStreamProbe():
 
         lines = result[0].decode("utf-8").split('\n')
         for a in lines:
-            if re.match('\[STREAM\]', a):
+            if re.match(r'\[STREAM\]', a):
                 datalines = []
-            elif re.match('\[\/STREAM\]', a):
+            elif re.match(r'\[\/STREAM\]', a):
                 self.streams.append(VideoStreamInfo(datalines))
                 datalines = []
 
-            elif re.match('\[FORMAT\]', a):
+            elif re.match(r'\[FORMAT\]', a):
                 datalines = []
-            elif re.match('\[\/FORMAT\]', a):
+            elif re.match(r'\[\/FORMAT\]', a):
                 self.formatInfo = VideoFormatInfo(datalines)
                 datalines = []
             else:
@@ -1142,7 +1142,7 @@ class FFFrameProbe():
             line = p.stdout.readline()
             if not line:
                 break
-            if re.match('\[\/FRAME\]', line):
+            if re.match(r'\[\/FRAME\]', line):
                 proc += 1
                 
 #             dataBucket = self.__processLine(line,dataBucket)
@@ -1151,9 +1151,9 @@ class FFFrameProbe():
 #                 print "p ",proc
             
     def __processLine(self, aString, dataBucket):
-        if re.match('\[FRAME\]', aString):
+        if re.match(r'\[FRAME\]', aString):
             dataBucket = []
-        elif re.match('\[\/FRAME\]', aString):
+        elif re.match(r'\[\/FRAME\]', aString):
             self.frames.append(VideoFrameInfo(dataBucket))
             dataBucket = []
         else:
@@ -1169,9 +1169,9 @@ class FFFrameProbe():
         
         lines = result[0].decode("utf-8").split('\n')
         for a in lines:
-            if re.match('\[FRAME\]', a):
+            if re.match(r'\[FRAME\]', a):
                 datalines = []
-            elif re.match('\[\/FRAME\]', a):
+            elif re.match(r'\[\/FRAME\]', a):
                 self.frames.append(VideoFrameInfo(datalines))
                 datalines = []
             else:
