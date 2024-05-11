@@ -152,6 +152,11 @@ class VideoDial(QtWidgets.QDial):
             self.finetune.emit(pos)
         
         super(VideoDial, self).sliderChange(sliderChange)                                                        
+
+    #GTK legacy?
+    def minimumSizeHint(self):
+        return QtCore.QSize(80,80);
+
        
     ''' That the native impl...
     from math import sin, cos, atan2, degrees, radians
@@ -308,7 +313,10 @@ class LayoutWindow(QWidget):
         
         # status bar
         self.statusbar = QtWidgets.QStatusBar(self)
-        #self.statusbar.setStyleSheet("QStatusBar { border: 1px inset inherit; border-radius: 3px;}QStatusBar::item {border-radius: 3px;} ");
+        color = self.statusbar.palette().color(QtGui.QPalette.ColorRole.Window)
+        darker = color.darker(150)
+        lighter = color.darker(90)
+        self.statusbar.setStyleSheet("QStatusBar { border: 1px inset %s; border-radius: 3px; background-color:%s;} "%(darker.name(),lighter.name()));
         self.statusbar.setSizeGripEnabled(False)
         self.statusbar.addPermanentWidget(self.__createProgressBar())
         self.buttonStop = QtWidgets.QToolButton(self)

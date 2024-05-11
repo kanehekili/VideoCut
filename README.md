@@ -157,9 +157,8 @@ sudo dnf python3-qt6 ffmpeg python3-pillow-qt mpv-libs.x86_64
 * execute `sudo /opt/videocut/uninstall.sh`
 
 ### Still on my list:
-* Exact frame cut - see comment below 
-* Differentiate between I-Fames and IDR-Frames
 * Multi language support
+* Full support for wayland
 
 ### Using ffmpeg instead of Videocut muxer
 remux5 is a c binary based on the libavcodec library, but uses an integrated approach to cut and join videos. It seems to be more precise than the ffmpeg API. It supports reencoding as well. It is activated by default and runs on all threads available. To activate FFMPEG, use the "coggs" icon (or click on the green labels) and deselect "VideoCut Muxer".
@@ -177,6 +176,10 @@ Copy the .desktop file and change the exec line to "Exec= python3 .../VideoCut.p
 Opencv will not be displaying subtitles nor frametypes.
 
 ### Changes 
+12.05.2024
+* Adapt to pythons new regex escapes
+* Some GUI for GTK improvements
+
 07.05.2024
 * Switch to pyqt6. 
 * Adaption to mpv 0.38
