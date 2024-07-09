@@ -8,15 +8,10 @@ Tested on debian buster,Linux Mint and Ubuntu, as well as Fedora, propably on ot
 
 Is activ by setting the "VideoCut Muxer" switch to on.(Toolbar ->Clogs icon)
 
-Makefile:
-remux5: remux5.o
-	gcc  -o ../bin/V4/remux5 remux5.o -g -lavutil -lavformat -lavcodec 
+The src directory contains a makefile, simply run "make" to build the executable.
 
-remux5.o: remux5.c
-	gcc -c remux5.c 
- 
 On debian derivates follwing packes are needed to compile_
- sudo apt-get install build-essential cmake git libgtk2.0-dev pkg-config libavcodec-dev libavformat-dev libswscale-dev
+ sudo apt-get install make gcc libavcodec-dev libavformat-dev
  
  The binary may be used without VideoCut. The parameters:
  remux5 inputFile outputFile -s ts1,ts2,ts3,ts4...

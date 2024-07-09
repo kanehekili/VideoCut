@@ -1,10 +1,12 @@
-remux5: remux5.o
-	gcc -o ../bin/remux5 remux5.o -g -lavutil -lavformat -lavcodec 
+CFLAGS += -g
+LDLIBS += -lavcodec -lavformat -lavutil
 
-remux5.o: remux5.c
-	gcc -c remux5.c 
+all: ./../bin/remux5
 
-.PHONY: clean
+./../bin/remux5: remux5
+	cp $< $@
+
+.PHONY: all clean
 
 clean:
 	rm -f *.o remux5
