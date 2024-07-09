@@ -11,8 +11,7 @@ source=(https://github.com/kanehekili/VideoCut/releases/download/@xxx@/videocut@
 md5sums=(@md5sum@)
 
 build() {
-make -C ${pkgname}/ffmpeg/src/ -f makefile
-make -C ${pkgname}/ffmpeg/src/ -f makefile clean
+  make -C ${pkgname}/ffmpeg/src/ -f makefile all clean
 }
 
 package(){	
@@ -22,8 +21,7 @@ package(){
   mkdir -p "${pkgdir}/usr/bin"
   rm  $srcdir/$pkgname/install.sh
   rm  $srcdir/$pkgname/uninstall.sh
-  rm -rf  $srcdir/$pkgname/ffmpeg/bin/V3/
-  rm -rf  $srcdir/$pkgname/ffmpeg/bin/V4/
+  rm -rf  $srcdir/$pkgname/ffmpeg/bin/V*/
   cp  $srcdir/$pkgname/VideoCut.desktop "${pkgdir}/usr/share/applications"
   cp -r $srcdir/$pkgname/* "${pkgdir}/opt/${pkgname}"
   ln -s /opt/videocut/VideoCut.py  ${pkgdir}/usr/bin/videocut
