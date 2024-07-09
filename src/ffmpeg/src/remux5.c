@@ -22,20 +22,20 @@
  */
 
 /*
-  * Versions supported: (libavutil/version.h)
-  * ffmpeg 3.4.2
-  * #define LIBAVCODEC_VERSION_MAJOR  57	 	
-  * #define LIBAVCODEC_VERSION_MINOR 107
-  * 
-  * ffmpeg 4.x
-  * #define LIBAVCODEC_VERSION_MAJOR  58
-  * #define LIBAVCODEC_VERSION_MINOR 18
-  *
-  * ffmpeg 5
-  * #define FF_API_OLD_CHANNEL_LAYOUT   (LIBAVUTIL_VERSION_MAJOR < 58)
-  * else: #include <libavutil/channel_layout.h>
-  * ?ffmpg6
-  */
+ * Versions supported:
+ * ffmpeg 3.4.x  LIBAVCODEC_VERSION_MAJOR=57 _MINOR=107
+ * ffmpeg 4.x    LIBAVCODEC_VERSION_MAJOR=58
+ * ffmpeg 5.x    LIBAVCODEC_VERSION_MAJOR=59
+ * ffmpeg 6.x    LIBAVCODEC_VERSION_MAJOR=60
+ */
+#include <libavcodec/version.h>
+#if (LIBAVCODEC_VERSION_MAJOR < 57)
+  #error "Ffmpeg 3.4 or newer is required"
+#endif
+#if (LIBAVCODEC_VERSION_MAJOR == 57)
+  #define FFMPEG_REGISTER 1
+#endif
+
 #include <libavutil/timestamp.h>
 #include <libavformat/avformat.h>
 #include <libavcodec/avcodec.h>
@@ -46,12 +46,6 @@
 #include <sys/sysinfo.h>
 #include <stdio.h>
 
-#if (LIBAVCODEC_VERSION_MAJOR == 57)
-#define FFMPEG_REGISTER 1
-#endif
-#if (LIBAVCODEC_VERSION_MAJOR < 57)
-#error "Ffmpeg 3.4 or newer is required"
-#endif 
 #define max(a,b) (a>b?a:b)
 #define min(a,b) (a<b?a:b)
 #define round(x) ((x)>=0?(long)((x)+0.5):(long)((x)-0.5))
