@@ -27,6 +27,7 @@
  * ffmpeg 4.x    LIBAVCODEC_VERSION_MAJOR=58
  * ffmpeg 5.x    LIBAVCODEC_VERSION_MAJOR=59
  * ffmpeg 6.x    LIBAVCODEC_VERSION_MAJOR=60
+ * ffmpeg 7.x    LIBAVCODEC_VERSION_MAJOR=61
  */
 #include <libavcodec/version.h>
 #if (LIBAVCODEC_VERSION_MAJOR < 57)
@@ -34,6 +35,15 @@
 #endif
 #if (LIBAVCODEC_VERSION_MAJOR == 57)
   #define FFMPEG_REGISTER 1
+#endif
+#if (LIBAVCODEC_VERSION_MAJOR <= 60)
+  #define AVCODECPARAMETERS_CHANNELS channels
+  #define AVFRAME_PKTDURATION pkt_duration
+  #define AVCODECCONTEXT_FRAMENUMBER frame_number
+#else
+  #define AVCODECPARAMETERS_CHANNELS ch_layout.nb_channels
+  #define AVFRAME_PKTDURATION duration
+  #define AVCODECCONTEXT_FRAMENUMBER frame_num
 #endif
 
 #include <libavutil/timestamp.h>
@@ -194,9 +204,7 @@ static int _collectAllStreams(){
     	        return -1;
     	    }
     	}else if (in_codecpar->codec_type == AVMEDIA_TYPE_AUDIO){
-           int channels = in_codecpar->channels;
-			//LIBAVUTIL_VERSION_MAJOR > 57
-            //int channels= in_codecpar->ch_layout>nb_channels;
+           int channels = in_codecpar->AVCODECPARAMETERS_CHANNELS;
             int sr = in_codecpar->sample_rate;
         	currLang = av_dict_get(ifmt_ctx->streams[i]->metadata, "language", NULL,0);
         	int audioIndex= currLang!=NULL?getLanguageIndex(currLang->value):-1;
@@ -1325,7 +1333,7 @@ static int flushFrames(struct StreamInfo *info, AVFrame *frame){
                 int ret2;
                 ret2=avcodec_send_frame(info->out_codec_ctx,frame);
                 if (ret2==0){
-                    av_log(NULL, AV_LOG_VERBOSE,"flush Frame sent: P:%ld dur:%ld\n",frame->pts,frame->pkt_duration);
+                    av_log(NULL, AV_LOG_VERBOSE,"flush Frame sent: P:%ld dur:%ld\n",frame->pts,frame->AVFRAME_PKTDURATION);
                     AVPacket enc_pkt;
                     enc_pkt.data = NULL;
                     enc_pkt.size = 0;
@@ -1503,7 +1511,7 @@ static int transcode( int64_t start, int64_t stop){
 				char ptype = av_get_picture_type_char(frame->pict_type);
 				double_t fptime= av_q2d(info->inStream->time_base)*(pts);
 				//DTS is always==PTS- since its decoded...
-				av_log(NULL, AV_LOG_VERBOSE,"[%d]%d) decode key: %d (%d) type: %c, pts: %ld time: %.3f frm dur %ld",frame->coded_picture_number,info->in_codec_ctx->frame_number,frame->key_frame,pkt.flags,ptype,pts,fptime,frame->pkt_duration);
+				av_log(NULL, AV_LOG_VERBOSE,"%d) decode key: %d (%d) type: %c, pts: %ld time: %.3f frm dur %ld",info->in_codec_ctx->AVCODECCONTEXT_FRAMENUMBER,frame->key_frame,pkt.flags,ptype,pts,fptime,frame->AVFRAME_PKTDURATION);
         	}
 			//if (frame->pts != AV_NOPTS_VALUE && frame->pts < start){
             if (pts < tcStart){
@@ -1666,7 +1674,7 @@ static int dumpDecodingData(){
                 char ptype = av_get_picture_type_char(frame->pict_type);
                 double_t fptime= av_q2d(streamInfo->outStream->time_base)*(frame->pts - streamInfo->inStream->start_time);  
                 //DTS is always==PTS- since its decoded...
-                av_log(NULL, AV_LOG_INFO,"%d)FRM key: %d(%d) type:%c,pts:%ld time:%.3f\n",streamInfo->in_codec_ctx->frame_number,frame->key_frame,pkt.flags,ptype,frame->pts,fptime);
+                av_log(NULL, AV_LOG_INFO,"%d)FRM key: %d(%d) type:%c,pts:%ld time:%.3f\n",streamInfo->in_codec_ctx->AVCODECCONTEXT_FRAMENUMBER,frame->key_frame,pkt.flags,ptype,frame->pts,fptime);
             }else {
                 double_t dtime= av_q2d(streamInfo->outStream->time_base)*(pkt.dts - streamInfo->inStream->start_time);  
                 av_log(NULL, AV_LOG_INFO,"Buffer pkt: isKey:%d p:%ld d:%ld [%.3f]\n",pkt.flags, pkt.pts,pkt.dts,dtime);            
