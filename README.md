@@ -1,5 +1,5 @@
 # VideoCut
-Version 3.0.0
+Version 3.0.2
 
 ![Download](https://github.com/kanehekili/VideoCut/releases/download/3.0.2/videocut3.0.2.tar)
 
@@ -177,8 +177,9 @@ Opencv will not be displaying subtitles nor frametypes.
 
 ### Changes 
 13.07.24
-* Latest mpv
+* mpv 1.0.7
 * support ffmpeg V7 (Courtesy of Corubba)
+
 12.05.2024
 * Adapt to pythons new regex escapes
 * Some GUI for GTK improvements
