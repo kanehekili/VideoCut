@@ -20,7 +20,7 @@ The current version is written in python3 and uses the qt6 widget kit.
 * Debian/Mint/Ubuntu: python3 python3-pil libmpv1 (no-recommends)
   #not working for Ubuntu 18.4: libmpv - use python3-opencv instead
 * Fedora: python3-pillow-qt and mpv-libs.x86_64
-* ffmpeg > 3.X to 6.X
+* ffmpeg > 3.X to 7.X
 * python3-pyqt6
 * optional:(legacy) OpenCV 2.4 up to OpenCV 4.x (must be build with ffmpeg - with all its dependencies)
 
