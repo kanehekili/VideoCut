@@ -75,7 +75,9 @@
 		<chmod file="${ffmpeg}/bin/V3/remux5" perm="uo+rwx"/>
 		<chmod file="${ffmpeg}/bin/V4/remux5" perm="uo+rwx"/>
 		<chmod file="${ffmpeg}/bin/V5/remux5" perm="uo+rwx"/>
-
+		<chmod file="${ffmpeg}/bin/V6/remux5" perm="uo+rwx"/>
+		<chmod file="${ffmpeg}/bin/V7/remux5" perm="uo+rwx"/>
+		
 		<copy todir="${rootDir}">
 			<fileset file="${source}/*.py" >
 			   <exclude name="VideoCut.py"/>
@@ -146,6 +148,7 @@
 		</copy>	
 		<copy todir="${ubu0Target}/src/ffmpeg/src">
 			<fileset file="${srcffmpeg}/src/remux5.c"/>
+			<fileset file="${srcffmpeg}/src/makefile"/>
 		</copy>				
 		<copy todir="${ubu0Target}/src/lib">
 			<fileset file="${srcmpvlegacy}\mpv.py"/>
@@ -195,6 +198,7 @@
 		</copy>	
 		<copy todir="${ubu1Target}/src/ffmpeg/src">
 			<fileset file="${srcffmpeg}/src/remux5.c"/>
+			<fileset file="${srcffmpeg}/src/makefile"/>
 		</copy>				
 		<copy todir="${ubu1Target}/src/lib">
 			<fileset file="${srcmpvlegacy}\mpv.py"/>
@@ -244,6 +248,7 @@
 		</copy>	
 		<copy todir="${ubu2Target}/src/ffmpeg/src">
 			<fileset file="${srcffmpeg}/src/remux5.c"/>
+			<fileset file="${srcffmpeg}/src/makefile"/>
 		</copy>				
 		<copy todir="${ubu2Target}/src/lib">
 			<fileset file="${srcmpv}\mpv.py"/>
