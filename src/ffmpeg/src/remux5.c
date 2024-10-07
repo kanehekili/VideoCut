@@ -1,6 +1,6 @@
 /*
  * MPEG/H264 muxer/cutter/trancoder
- * Copyright (c) 2018-2021 Kanehekili
+ * Copyright (c) 2018-2024 Kanehekili
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
