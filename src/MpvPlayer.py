@@ -386,7 +386,8 @@ class MpvPlayer():
         self.fps=newFPS
         self.framecount=self.duration*newFPS #framecount prop not reliable
         #often a difference between the mpv fps and the fmmpeg fps
-        self.mediaPlayer["fps"]=newFPS
+        property_name='container-fps-override' if self.mediaPlayer.mpv_version_tuple >= (0,39,0) else 'fps'
+        self.mediaPlayer[property_name]=newFPS
     
     '''            
     def _onFps(self,name,val):
