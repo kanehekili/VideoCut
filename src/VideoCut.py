@@ -490,7 +490,6 @@ class LayoutWindow(QWidget):
 
     def enableUserActions(self, enable):
         self.ui_Dial.setEnabled(enable)
-        self.ui_Slider.setEnabled(enable)
         self.gotoAction.setEnabled(enable)
         self.ui_GotoField.setEnabled(enable)
 
