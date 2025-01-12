@@ -490,7 +490,7 @@ class LayoutWindow(QWidget):
 
     def enableUserActions(self, enable):
         self.ui_Dial.setEnabled(enable)
-        self.ui_Slider.setEnabled(enable)
+        #self.ui_Slider.setEnabled(enable)
         self.gotoAction.setEnabled(enable)
         self.ui_GotoField.setEnabled(enable)
 
@@ -1442,15 +1442,19 @@ class VideoControl(QtCore.QObject):
     
     def addStartMarker(self):
         #TODO switch to timebase: ts=self.player.getCurrentFrameTime()
+        QApplication.setOverrideCursor(QtCore.Qt.CursorShape.WaitCursor)
         pos=self.player.getCurrentFrameNumber()
         self._createVideoCutEntry(pos,VideoCutEntry.MODE_START)
         self.statusbar().say("Start video")
+        QApplication.restoreOverrideCursor()
 
     def addStopMarker(self):
         #TODO switch to timebase: ts=self.player.getCurrentFrameTime()
+        QApplication.setOverrideCursor(QtCore.Qt.CursorShape.WaitCursor)
         pos=self.player.getCurrentFrameNumber()
         self._createVideoCutEntry(pos,VideoCutEntry.MODE_STOP)
         self.statusbar().say("Stop video")
+        QApplication.restoreOverrideCursor()
 
     def _createVideoCutEntry(self, pos, mode):
         cutEntry = VideoCutEntry(pos, -1, mode)
@@ -1515,14 +1519,18 @@ class VideoControl(QtCore.QObject):
         XMLAccessor(self.currentPath).clear()        
     
     def removeVideoCutIndex(self, index):
+        QApplication.setOverrideCursor(QtCore.Qt.CursorShape.WaitCursor)
         cut = self.videoCuts[index]
         self.videoCuts.remove(cut)
         XMLAccessor(self.currentPath).writeXML(self.videoCuts)
+        QApplication.restoreOverrideCursor()   
     
     def gotoCutIndex(self, index):
+        QApplication.setOverrideCursor(QtCore.Qt.CursorShape.WaitCursor)
         cut = self.videoCuts[index]
         #self.__dispatchShowFrame(cut.frameNumber)
         self._gotoFrame(cut.frameNumber)
+        QApplication.restoreOverrideCursor()   
     
     # callback from stop button
     def killSaveProcessing(self):
@@ -1704,6 +1712,7 @@ class VideoControl(QtCore.QObject):
     '''
     #called by plugin: self.updateUI.emit(frameNumber,self.player.framecount,timeinfo)
     def _onUpdateInfo(self,frameNbr,frameCount,timeMS):
+        frameNbr = min(frameNbr,sys.maxsize) #Might happen on remote files
         s = int(timeMS / 1000)
         ms = int(timeMS % 1000)
         ts = '{:02}:{:02}:{:02}.{:03}'.format(s // 3600, s % 3600 // 60, s % 60, ms)
