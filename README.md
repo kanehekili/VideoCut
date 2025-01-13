@@ -1,7 +1,7 @@
 # VideoCut
-Version 3.0.3
+Version 3.0.4
 
-![Download](https://github.com/kanehekili/VideoCut/releases/download/3.0.3/videocut3.0.3.tar)
+![Download](https://github.com/kanehekili/VideoCut/releases/download/3.0.4/videocut3.0.4.tar)
 
 MP2/MP4 Cutter for Linux on base of mpv and ffmpeg. Cutting is lossless, the target file will not be reencoded. 
 
@@ -176,6 +176,9 @@ Copy the .desktop file and change the exec line to "Exec= python3 .../VideoCut.p
 Opencv will not be displaying subtitles nor frametypes.
 
 ### Changes 
+13.01.25
+* Display wait time on remote files. Changed slider behavior according to [tex](https://github.com/tex) - Thank you.
+
 22.09.24
 * mpv 0.39 fps property switch (Corubba again. Thanks a lot)
 

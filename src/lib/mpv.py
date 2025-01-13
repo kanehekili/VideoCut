@@ -1698,9 +1698,10 @@ class MPV(object):
     def _binding_name(callback_or_cmd):
         return 'py_kb_{:016x}'.format(hash(callback_or_cmd)&0xffffffffffffffff)
 
-    def on_key_press(self, keydef, mode='force'):
+    def on_key_press(self, keydef, mode='force', repetition=False):
         """Function decorator to register a simplified key binding. The callback is called whenever the key given is
-        *pressed*.
+        *pressed*. When the ``repetition=True`` is passed, the callback is called again repeatedly while the key is held
+        down.
 
         To unregister the callback function, you can call its ``unregister_mpv_key_bindings`` attribute::
 
@@ -1720,8 +1721,8 @@ class MPV(object):
         def register(fun):
             @self.key_binding(keydef, mode)
             @wraps(fun)
-            def wrapper(state='p-', name=None, char=None):
-                if state[0] in ('d', 'p'):
+            def wrapper(state='p-', name=None, char=None, *_):
+                if state[0] in ('d', 'p') or (repetition and state[0] == 'r'):
                     fun()
             return wrapper
         return register
@@ -1729,8 +1730,11 @@ class MPV(object):
     def key_binding(self, keydef, mode='force'):
         """Function decorator to register a low-level key binding.
 
-        The callback function signature is ``fun(key_state, key_name)`` where ``key_state`` is either ``'U'`` for "key
-        up" or ``'D'`` for "key down".
+        The callback function signature is ``fun(key_state, key_name, key_char, scale, arg)``.
+
+        The key_state contains up to three chars, corresponding to the regex ``[udr]([m-][c-]?)?``. ``[udr]`` means
+        "key up", "key down", or "repetition" for when the key is held down. "m" indicates mouse events, and "c"
+        indicates key up events resulting from a logical cancellation. For details check out the mpv man page.
 
         The keydef format is: ``[Shift+][Ctrl+][Alt+][Meta+]<key>`` where ``<key>`` is either the literal character the
         key produces (ASCII or Unicode character), or a symbolic name (as printed by ``mpv --input-keylist``).
@@ -1785,12 +1789,12 @@ class MPV(object):
             raise TypeError('register_key_binding expects either an str with an mpv command or a python callable.')
         self.command('enable-section', binding_name, 'allow-hide-cursor+allow-vo-dragging')
 
-    def _handle_key_binding_message(self, binding_name, key_state, key_name=None, key_char=None):
+    def _handle_key_binding_message(self, binding_name, key_state, key_name=None, key_char=None, scale=None, arg=None, *_):
         binding_name = binding_name.decode('utf-8')
         key_state = key_state.decode('utf-8')
         key_name = key_name.decode('utf-8') if key_name is not None else None
         key_char = key_char.decode('utf-8') if key_char is not None else None
-        self._key_binding_handlers[binding_name](key_state, key_name, key_char)
+        self._key_binding_handlers[binding_name](key_state, key_name, key_char, scale, arg)
 
     def unregister_key_binding(self, keydef):
         """Unregister a key binding by keydef."""
@@ -1956,6 +1960,10 @@ class MPV(object):
         Any given name can only be registered once. The catch-all can also only be registered once. To unregister a
         stream, call the .unregister function set on the callback.
 
+        If name is None (the default), a name and corresponding python:// URI are automatically generated. You can
+        access the name through the .stream_name property set on the callback, and the stream URI for passing into
+        mpv.play(...) through the .stream_uri property.
+
         The generator signals EOF by returning, manually raising StopIteration or by yielding b'', an empty bytes
         object.
 
@@ -1972,16 +1980,25 @@ class MPV(object):
         reader.unregister()
         """
         def register(cb):
+            nonlocal name
+            if name is None:
+                name = f'__python_mpv_anonymous_python_stream_{id(cb)}__'
+
             if name in self._python_streams:
                 raise KeyError('Python stream name "{}" is already registered'.format(name))
+
             self._python_streams[name] = (cb, size)
             def unregister():
                 if name not in self._python_streams or\
                         self._python_streams[name][0] is not cb: # This is just a basic sanity check
                     raise RuntimeError('Python stream has already been unregistered')
                 del self._python_streams[name]
+
             cb.unregister = unregister
+            cb.stream_name = name
+            cb.stream_uri = f'python://{name}'
             return cb
+
         return register
 
     @contextmanager
@@ -2003,10 +2020,8 @@ class MPV(object):
         """
         q = queue.Queue()
 
-        frame = sys._getframe()
-        stream_name = f'__python_mpv_play_generator_{hash(frame)}'
-        EOF = frame # Get some unique object as EOF marker
-        @self.python_stream(stream_name)
+        EOF = object() # Get some unique object as EOF marker
+        @self.python_stream()
         def reader():
             while (chunk := q.get()) is not EOF:
                 if chunk:
@@ -2017,21 +2032,19 @@ class MPV(object):
             q.put(chunk)
 
         # Start playback before yielding, the first call to reader() will block until write is called at least once.
-        self.play(f'python://{stream_name}')
+        self.play(reader.stream_uri)
         yield write
         q.put(EOF)
 
     def play_bytes(self, data):
         """ Play the given bytes object as a single file. """
-        frame = sys._getframe()
-        stream_name = f'__python_mpv_play_generator_{hash(frame)}'
 
-        @self.python_stream(stream_name)
+        @self.python_stream()
         def reader():
             yield data
             reader.unregister() # unregister itself
 
-        self.play(f'python://{stream_name}')
+        self.play(reader.stream_uri)
 
     def python_stream_catchall(self, cb):
         """ Register a catch-all python stream to be called when no name matches can be found. Use this decorator on a
