@@ -26,7 +26,7 @@ The current version is written in python3 and uses the qt6 widget kit.
 
 #### Set GTK Theme for this QT application
 If you are running a DE with GTK/Gnome (as opposed to LXQT or KDE) you need to tweak your system:
-* Arch users may have to install qt6-styleplugins from AUR
+* Arch users may have to install qt6gtk2 from AUR
 * Ubuntu/Debian users will not get a uniform look GTK theme for QT anymore. (qt5 was the last)
 
 `sudo nano /etc/environment`
