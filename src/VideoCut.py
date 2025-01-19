@@ -224,7 +224,8 @@ class VCSpinbox(QtWidgets.QSpinBox):
         QtWidgets.QSpinBox.__init__(self, parent)
         
     def keyPressEvent(self, keyEvent):
-        if (keyEvent.key() == QtCore.Qt.Key_Enter) or (keyEvent.key() == QtCore.Qt.Key_Return):
+        acceptKey=(QtCore.Qt.Key.Key_Enter,QtCore.Qt.Key.Key_Return,QtCore.Qt.Key.Key_Up,QtCore.Qt.Key.Key_Down)
+        if (keyEvent.key() in acceptKey):
             super(VCSpinbox, self).keyPressEvent(keyEvent)
         else:
             self.blockSignals(True)
