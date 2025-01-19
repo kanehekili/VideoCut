@@ -41,8 +41,8 @@ class VideoWidget(QtWidgets.QFrame):
         QtWidgets.QFrame.__init__(self, parent)
         self._defaultHeight = 518 #ratio 16:9
         self._defaultWidth = 921
-        self.setSizePolicy(QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Expanding)
-        self.setFrameStyle(QtWidgets.QFrame.Panel | QtWidgets.QFrame.Sunken)
+        self.setSizePolicy(QtWidgets.QSizePolicy.Policy.Expanding, QtWidgets.QSizePolicy.Policy.Expanding)
+        self.setFrameStyle(QtWidgets.QFrame.Shape.Panel | QtWidgets.QFrame.Shadow.Sunken)
         self.setLineWidth(1)
 
     def sizeHint(self):
@@ -123,7 +123,6 @@ class MpvPlayer():
         self._resetState()
     
     def initPlayer(self,container):
-        #self.__initPlayer()
         kwArgs=self.__baseMpvArgs()
         kwArgs["wid"]=str(int(container.winId()))
         self.mediaPlayer = MPV(**kwArgs)
@@ -132,6 +131,7 @@ class MpvPlayer():
     
     def initGLPlayer(self):
         kwArgs=self.__baseMpvArgs()
+        kwArgs["vo"]="libmpv" 
         self.mediaPlayer = MPV(**kwArgs)
         self._hookEvents()
         return self.mediaPlayer 
@@ -154,8 +154,8 @@ class MpvPlayer():
     Offset should be 0.1 for fast seek and 1.5 to 2.5 for slow seek (especially mpgts)
     '''    
     def __baseMpvArgs(self):
-        return {   "hwdec":"auto-safe", 
-            "vo":"libmpv",                
+        return {   "hwdec":"auto-safe",
+            #"vo":"libmpv", depends on backend - see below                
             #video_sync="display-desync", #no effect on mkv/vc1
             "log_handler":self._passLog,
             "loglevel" : 'error',
@@ -578,8 +578,8 @@ class MpvPlugin():
     
     def _createPlainwidget(self,parent):
         self.mpvWidget=VideoWidget(parent)
-        self.mpvWidget.setAttribute(Qt.WA_DontCreateNativeAncestors)
-        self.mpvWidget.setAttribute(Qt.WA_NativeWindow)
+        self.mpvWidget.setAttribute(Qt.WidgetAttribute.WA_DontCreateNativeAncestors)
+        self.mpvWidget.setAttribute(Qt.WidgetAttribute.WA_NativeWindow)
         return self.mpvWidget        
     
     def _createGLWidget(self,parent):
