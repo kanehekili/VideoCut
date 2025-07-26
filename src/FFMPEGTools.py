@@ -189,6 +189,25 @@ class OSTools():
     def namer(self,name):
         return name+".gz"
 
+    def is_nvidia_gpu_active(self):
+        try:
+            # Try to detect active GPU via `nvidia-smi` (most reliable if installed)
+            subprocess.run(["nvidia-smi"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True)
+            return True
+        except Exception:
+            pass
+    
+        try:
+            # Fallback: parse `lspci` output (less accurate but doesn't need NVIDIA tools)
+            result = subprocess.run(["lspci"], stdout=subprocess.PIPE, text=True)
+            return "NVIDIA" in result.stdout
+        except Exception:
+            return False
+
+    def currentDesktop(self):
+        return os.environ.get("XDG_CURRENT_DESKTOP", "")
+
+
 class ConfigAccessor():
     __SECTION = "default" 
     homeDir = OSTools().getHomeDirectory()

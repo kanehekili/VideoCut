@@ -1,7 +1,7 @@
 # VideoCut
 Version 3.0.4
 
-![Download](https://github.com/kanehekili/VideoCut/releases/download/3.0.4/videocut3.0.4.tar)
+![Download](https://github.com/kanehekili/VideoCut/releases/download/3.0.5/videocut3.0.5.tar)
 
 MP2/MP4 Cutter for Linux on base of mpv and ffmpeg. Cutting is lossless, the target file will not be reencoded. 
 
@@ -25,19 +25,11 @@ The current version is written in python3 and uses the qt6 widget kit.
 * optional:(legacy) OpenCV 2.4 up to OpenCV 4.x (must be build with ffmpeg - with all its dependencies)
 
 #### Set GTK Theme for this QT application
-If you are running a DE with GTK/Gnome (as opposed to LXQT or KDE) you need to tweak your system:
-* Arch users may have to install qt6gtk2 from AUR
-* Ubuntu/Debian users will not get a uniform look GTK theme for QT anymore. (qt5 was the last)
+If you are running a DE with GTK/Gnome (as opposed to LXQT or KDE) there is no way to tweak anymore:
+* GKT2 to QT5/QT6 libraries do not work
+* QT_QPA_PLATFORMTHEME should not be set in non QT systems
+* Videocut will set the "fusion" mode - any new ideas are welcome. 
 
-`sudo nano /etc/environment`
-
-add the follwing line:
-
-`QT_QPA_PLATFORMTHEME=gtk2` or
-
-`QT_QPA_PLATFORMTHEME=qt6c` (if qt6c is installed)
-
-and logout/login (or reboot)
 
 ### Features
 Cuts an mpg file into parts and joins them afterwards. All commands can be reached via the toolbar.
@@ -176,6 +168,9 @@ Copy the .desktop file and change the exec line to "Exec= python3 .../VideoCut.p
 Opencv will not be displaying subtitles nor frametypes.
 
 ### Changes 
+26.07.25
+* Adapt to the new reality that GTK2 will not render QT6 widgets anymore. Upgraded to mpv 1.0.8
+
 13.01.25
 * Display wait time on remote files. Changed slider behavior according to [tex](https://github.com/tex) - Thank you.
 

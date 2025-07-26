@@ -9,11 +9,11 @@
 # warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the  GNU General Public License for more
 # details.
 #
-# You should have received a copy of the  GNU General Public License along with this program.  If not, see
+# You did not receive a copy of the  GNU General Public License along with this program.  See
 # <http://www.gnu.org/licenses/>.
 
 
-import sys, traceback, math, getopt
+import sys,os, traceback, math, getopt
 
 from PyQt6.QtCore import pyqtSignal
 from PyQt6 import QtCore, QtGui, QtWidgets
@@ -541,22 +541,18 @@ class LayoutWindow(QWidget):
 
 class MainFrame(QtWidgets.QMainWindow):
     
-    def __init__(self, qapp,aPath=None):
+    def __init__(self,aPath=None):
         self._isStarted=False
-        self.__qapp=qapp
-        
         super(MainFrame, self).__init__()
         self.setWindowIcon(getAppIcon())
         self.settings = SettingsModel(self)
         self._videoController = VideoControl(self,aPath)
         self._widgets = self.initUI()
         self._widgets.hookEvents(self._videoController)
-        self.settings.update()
-        
         self.centerWindow()
         self._widgets.enableUserActions(False)
         self.show()
-        qapp.applicationStateChanged.connect(self.__queueStarted) 
+        QtCore.QTimer.singleShot(0,self.__queueStarted)
     
     def initUI(self):
         
@@ -632,6 +628,13 @@ class MainFrame(QtWidgets.QMainWindow):
         self.toolbar.addAction(self.playAction)
         self.toolbar.addAction(self.mediaSettings)
         self.toolbar.addAction(self.langSettings)
+        
+        color = self.toolbar.palette().color(QtGui.QPalette.ColorRole.Window)
+        bc = color.darker(120)
+        darker = color.darker(150)
+        lighter = color.lighter(140)
+        self.toolbar.setStyleSheet("QToolBar { background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,stop: 0 %s, stop: 1.0 %s); border: 1px solid %s;}"%(darker.name(),lighter.name(),bc.name()))                      
+        
                                
         menubar = self.menuBar()
         fileMenu = menubar.addMenu('&File')
@@ -670,11 +673,10 @@ class MainFrame(QtWidgets.QMainWindow):
         return widgets
 
     ''' this is the place to start all graphical actions. Queue is running '''
-    def __queueStarted(self,state):
-        if state==Qt.ApplicationState.ApplicationActive:
-            self.__qapp.disconnect()
-            self._isStarted=True
-            self._videoController.prepare()
+    def __queueStarted(self):
+        self._isStarted=True
+        self.settings.update()
+        self._videoController.prepare()
     
     def isActivated(self):
         return self._isStarted
@@ -1913,6 +1915,7 @@ def parseOptions(args):
     return res
                                            
 def main():
+    qt_based_desktops = ["KDE Plasma","LXQt","Trinity Desktop","Lumina","Lomiri","Cutefish","UKUI","theDesk"]
     try:
         global WIN
         global ICOMAP
@@ -1925,19 +1928,24 @@ def main():
         vc_config.read();
 
         argv = sys.argv
-        app = QApplication(argv)
-        app.setWindowIcon(getAppIcon())
         res=parseOptions(argv)
         FFMPEGTools.setupRotatingLogger("VideoCut",res["logConsole"])
+        de = OSTools().currentDesktop()
+        if de not in qt_based_desktops: 
+            os.environ["QT_QPA_PLATFORMTHEME"] = "fusion"
+            Log.info("GTK based - switched to fusion" )
+
+        app = QApplication(argv)
+        app.setWindowIcon(getAppIcon())
         VideoPlugin=setUpVideoPlugin(res["mpv"])
         ICOMAP=IconMapper(vc_config.get("icoSet","default"))
         fn =res["file"]
         if fn is None:
-            WIN = MainFrame(app)  # keep python reference!
+            WIN = MainFrame()  # keep python reference!
         else:
             if not OSTools().isAbsolute(fn):
                 fn=OSTools().joinPathes(localPath,fn)
-            WIN = MainFrame(app,fn)  
+            WIN = MainFrame(fn)  
         app.exec()
         #logging.shutdown()
     except:
@@ -2011,8 +2019,6 @@ def stylesheet():
         border: 1px solid #aaa;
         border-radius: 4px;
         }"""
-
-
         
 if __name__ == '__main__':
     sys.excepthook = handle_exception

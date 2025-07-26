@@ -20,8 +20,6 @@ import locale
 
 from lib.mpv import (MPV,MpvGlGetProcAddressFn,MpvRenderContext)
 
-    
-
 Log=FFMPEGTools.Log
 
 def get_proc_addr(_, name):
@@ -31,7 +29,6 @@ def get_proc_addr(_, name):
     qb = QByteArray(name)
     addr = int(glctx.getProcAddress(qb))
     return addr
-
 
 class VideoWidget(QtWidgets.QFrame):
     """ Sized frame for mpv """
@@ -53,7 +50,7 @@ class VideoWidget(QtWidgets.QFrame):
 
 class VideoGLWidget(QOpenGLWidget):
     trigger = pyqtSignal(float,float,float)
-
+    onMVPGLUpdate = pyqtSignal()
     def __init__(self, parent,mpv):
         QOpenGLWidget.__init__(self,parent)
         #setSurfaceType(QWindow.OpenGLSurface)
@@ -64,7 +61,8 @@ class VideoGLWidget(QOpenGLWidget):
         self.get_proc_addr_c = MpvGlGetProcAddressFn(get_proc_addr)
         self._defaultHeight = 518 #ratio 16:9
         self._defaultWidth = 921
-
+        self.onMVPGLUpdate.connect(self.__update)
+        
     def initializeGL(self):
         params = {'get_proc_address': self.get_proc_addr_c}
         self.ctx = MpvRenderContext(self.mpv,
@@ -90,7 +88,6 @@ class VideoGLWidget(QOpenGLWidget):
                       'fbo': self.defaultFramebufferObject()}
         self.ctx.render(flip_y=True, opengl_fbo=opengl_fbo)
 
-
     @pyqtSlot()
     def __update(self):
         if self.window().isMinimized():
@@ -104,15 +101,14 @@ class VideoGLWidget(QOpenGLWidget):
     def on_update(self, ctx=None):
         # __update method should run on the thread that creates the
         # OpenGLContext, which in general is the main thread.
-        # QMetaObject.invokeMethod can do this trick.
-        QMetaObject.invokeMethod(self, '__update')
+        self.onMVPGLUpdate.emit()
     
     def sizeHint(self):
         return QtCore.QSize(self._defaultWidth, self._defaultHeight)
 
+    #Called by MpvPlayer#_onTimePos
     def updateUI(self,frameNumber,framecount,timeinfo):
         self.trigger.emit(frameNumber,framecount,timeinfo)
-    
     
 class MpvPlayer():
     ERR_IDS=["No video or audio streams selected.","Failed to recognize file format."]
@@ -130,6 +126,7 @@ class MpvPlayer():
         return self.mediaPlayer 
     
     def initGLPlayer(self):
+        #stripes when using file explorer (initial call without file) 
         kwArgs=self.__baseMpvArgs()
         kwArgs["vo"]="libmpv" 
         self.mediaPlayer = MPV(**kwArgs)
@@ -191,7 +188,9 @@ class MpvPlayer():
             #"demuxer_cache_wait" : 'no', #if yes remote files take too long...
             #"demuxer_max_bytes " : '10000MiB',
             #"demuxer_backward_playback_step" : 180,
-            "volume" : 100
+            "volume" : 100,
+            #"gpu_context":'x11egl',  # Or explicitly specify 'egl', 'x11', etc.
+            "opengl_early_flush":'yes'
             }
     
     def _resetState(self):
@@ -228,35 +227,8 @@ class MpvPlayer():
         self.mediaPlayer.observe_property("eof-reached",self._onPlayEnd)
         #mostly wrong: self.mediaPlayer.observe_property("estimated-frame-count",self._onFramecount)
         self.mediaPlayer.observe_property("video-frame-info",self._onFrameInfo)
-    
-    '''
-    TEst with jasegs event handler...
-    def open_withEvent(self,filePath):
-        print("open:",filePath)
-        try:
-            self._resetState()
-            self.mediaPlayer.close()
-            self.mediaPlayer.loadfile(filePath)
-            #Try to pin down a potential file error 
-            @self.mediaPlayer.event_callback('end_file')
-            def eofHandler(evt):
-                self._superviseEndFileEvent(evt)
-            self._getReady()
-            eofHandler.unregister_mpv_events()
-        except Exception as ex:
-            Log.logException("Open mpv file")
-            print(ex)
-            
-    def _superviseEndFileEvent(self,evt):
-        if evt['event']['reason'] != MpvEventEndFile.REDIRECT or evt['event']['reason'] != MpvEventEndFile.RESTARTED:
-            self.lastError=self.ERR_IDS[0] 
-            with self.seekLock:
-                print('check notify:',evt)
-                self.seekLock.notify()
         
-        return True
-    '''        
-    
+  
     def open(self,filePath):
         try:     
             #Very verbose: self.mediaPlayer.register_event_callback(self._oncallback)
@@ -471,7 +443,6 @@ class MpvPlayer():
         msg='{}: {}'.format(component, message)
         Log.error(">%s",msg)
         with self.seekLock:
-            #TODO: file not recognized seems not be working"
             if message in self.ERR_IDS:
                 self.lastError=message
                 self.seekLock.notifyAll()
@@ -586,13 +557,13 @@ class MpvPlugin():
         self.player= MpvPlayer()
         mpv=self.player.initGLPlayer()    
         self.mpvWidget=VideoGLWidget(parent,mpv)
-        self.player.connectTo(self.mpvWidget.updateUI)
+        self.player.connectTo(self.mpvWidget.updateUI) #GL connect
         return self.mpvWidget
     
     def __setupPlayer(self):
         if self.showGL:
             return #already happened
-        if self.player:
+        if self.player: #Non GL connect
             self.player.close()
         self.player= MpvPlayer()
         self.player.initPlayer(self.mpvWidget)

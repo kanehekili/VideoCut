@@ -16,8 +16,7 @@ from PyQt6.QtGui import QOpenGLContext, QPainter, QBrush, QColor, QCloseEvent
 from PyQt6.QtCore import QByteArray, pyqtSignal, pyqtSlot, Qt
 from PyQt6.QtOpenGLWidgets import QOpenGLWidget
 from lib.mpv import MPV, MpvGlGetProcAddressFn, MpvRenderContext
-import ctypes,sys
-
+import sys
 
 def get_process_address(_, name):
     glctx =  QOpenGLContext.currentContext()
@@ -25,19 +24,20 @@ def get_process_address(_, name):
     #return ctypes.cast(address, ctypes.c_void_p).value
     return address
 
+def getMPV():
+        kwArgs={"log_handler":print,"log-file":"gl.txt","loglevel" : 'info',"pause":False,"audio" : "1","keep_open" : "always","vo":"libmpv"}
+        return MPV(**kwArgs)
+
 class Player(QOpenGLWidget):
     onUpdate = pyqtSignal()
     initialized = pyqtSignal()
     
     def __init__(self, parent) -> None:
         super().__init__(parent)
-        kwArgs={"log_handler":print,"log-file":"gl.txt","loglevel" : 'trace',"audio" : "1","keep_open" : "always","vo":"libmpv"}
-        self.mpv = MPV(**kwArgs)
+        self.mpv = getMPV()
         self.ctx = None
         self._proc_addr_wrapper = MpvGlGetProcAddressFn(get_process_address)
         self.onUpdate.connect(self.do_update)
-        self.c = 0
-
         self.setUpdateBehavior(QOpenGLWidget.UpdateBehavior.PartialUpdate)
         
     def initializeGL(self) -> None:
@@ -53,29 +53,11 @@ class Player(QOpenGLWidget):
             self.initialized.emit()
 
     def paintGL(self) -> None:
-        if self.c > 100:
-            self.c = 0
-        else:
-            self.c += 1
         rect = self.rect()
         if self.ctx:
             fbo = self.defaultFramebufferObject()
             self.ctx.render(flip_y=True, opengl_fbo={'w': rect.width(), 'h': rect.height(), 'fbo': fbo})
-
-                    
-        # Draw on bottom center
-        '''
-        p = QPainter(self)
-        width = rect.size().width()
-        height = rect.size().height()
-        label_rect = rect.adjusted((width/2)-75, height-100, -(width/2)+75, -50)
-        p.setPen(QColor("#ffffff"))
-        
-        text = '.'*int((self.c/20)) + "playing" + '.'*int((self.c/20))
-        p.fillRect(label_rect, QBrush(QColor("#ff00ff"), Qt.BrushStyle.FDiagPattern))
-        p.drawText(label_rect, Qt.AlignmentFlag.AlignCenter, text)
-        '''
-
+                  
     def do_update(self):
         self.update()
 
@@ -107,10 +89,15 @@ class MainFrame(QtWidgets.QMainWindow):
     
     def initUI(self):
         self.player = Player(self)
+        #self.player = VideoGLWidget(self,getMPV())
         
         self.uiLabel= QtWidgets.QLabel(self)
         self.uiLabel.setText("Player demo")
         self.uiPlayButton = QtWidgets.QPushButton(" Play")
+        self.uiPlayButton.clicked.connect(self.execPlayButton)
+        self.uiStopButton = QtWidgets.QPushButton(" Stop")
+        self.uiStopButton.clicked.connect(self.execStopButton)
+        
         
         box = self._makeLayout()
         wid = QtWidgets.QWidget(self)
@@ -118,7 +105,11 @@ class MainFrame(QtWidgets.QMainWindow):
         wid.setLayout(box)
         self.resize(500, 600) 
         #self.player.initialized.connect(lambda: [self.player.play("/media/disk1/UHD/gog.mp4")])
-        self.player.initialized.connect(lambda: [self.player.mpv.loadfile("icons/film-clapper.png")])
+        #self.player.initialized.connect(lambda: [self.player.mpv.loadfile("icons/film-clapper.png")])
+        self.player.initialized.connect(self._initIcon)
+
+    def _initIcon(self):
+        self.player.mpv.loadfile("icons/film-clapper.png")
 
     def _makeLayout(self):
         mainBox = QtWidgets.QVBoxLayout()  # for all
@@ -126,6 +117,7 @@ class MainFrame(QtWidgets.QMainWindow):
         btn1Box.setSpacing(20)
         btn1Box.addWidget(self.uiLabel)
         btn1Box.addWidget(self.uiPlayButton)
+        btn1Box.addWidget(self.uiStopButton)
 
         mainBox.addWidget(self.player)
         mainBox.addLayout(btn1Box)
@@ -138,6 +130,14 @@ class MainFrame(QtWidgets.QMainWindow):
         centerPoint = self.screen().availableGeometry().center()
         frameGm.moveCenter(centerPoint)
         self.move(frameGm.topLeft())    
+    
+    def execPlayButton(self):
+        #self.player.play("/media/disk1/UHD/gog.mp4")
+        self.player.play("/media/disk1/makemkv/title_t00.mkv")
+    
+    def execStopButton(self):
+        playing = self.player.mpv.pause #property
+        self.player.mpv.pause=not playing
         
 if __name__ == '__main__':
     
