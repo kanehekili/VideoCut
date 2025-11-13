@@ -11,21 +11,21 @@ source=(https://github.com/kanehekili/VideoCut/releases/download/@xxx@/videocut@
 md5sums=(@md5sum@)
 
 build() {
-  make -C ${pkgname}/ffmpeg/src/ -f makefile all clean
+  make -C "${pkgname}/ffmpeg/src/" -f makefile all
 }
 
-package(){	
-  cd ${srcdir}
-  mkdir -p "${pkgdir}/opt/${pkgname}"
-  mkdir -p "${pkgdir}/usr/share/applications"
-  mkdir -p "${pkgdir}/usr/bin"
-  rm  $srcdir/$pkgname/install.sh
-  rm  $srcdir/$pkgname/uninstall.sh
-  rm -rf  $srcdir/$pkgname/ffmpeg/bin/V*/
-  chmod +x $srcdir/$pkgname/ffmpeg/bin/remux5
-  cp  $srcdir/$pkgname/VideoCut.desktop "${pkgdir}/usr/share/applications"
-  cp -r $srcdir/$pkgname/* "${pkgdir}/opt/${pkgname}"
-  ln -s /opt/videocut/VideoCut.py  ${pkgdir}/usr/bin/videocut
+package() {
+  cd "${srcdir}/${pkgname}"
+
+  install -Dm 644 *.py -t "${pkgdir}/opt/videocut"
+  rm "${pkgdir}/opt/videocut/"{FFMPEGTests,testmpv}.py
+  install -Dm 755 VideoCut.py -t "${pkgdir}/opt/videocut"
+  find data icons lib -type f \
+    -exec install -Dm 644 "{}" "${pkgdir}/opt/videocut/{}" \;
+  install -Dm 755 "ffmpeg/src/remux5" -t "${pkgdir}/opt/videocut/ffmpeg/bin"
+
+  install -Dm 644 "VideoCut.desktop" -t "${pkgdir}/usr/share/applications"
+
+  install -d "${pkgdir}/usr/bin"
+  ln -s "/opt/videocut/VideoCut.py" "${pkgdir}/usr/bin/videocut"
 }
-
-
