@@ -1,4 +1,4 @@
-CFLAGS += -g
+CFLAGS += -g -Wall -Wextra -Wno-unused-parameter -fanalyzer
 LDLIBS += -lavcodec -lavformat -lavutil
 
 all: ./../bin/remux5

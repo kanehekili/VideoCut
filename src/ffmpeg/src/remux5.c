@@ -193,7 +193,7 @@ static int _collectAllStreams(){
 	int bestAudio=0;
 	context.refAudioIndex=1;
 	int ret;
-	for (int i = 0; i < ifmt_ctx->nb_streams; i++){
+	for (unsigned int i = 0; i < ifmt_ctx->nb_streams; i++){
     	AVStream *stream = ifmt_ctx->streams[i];
     	context.stream_mapping[i]=-1;
     	AVCodecParameters *in_codecpar = stream->codecpar;
@@ -875,8 +875,8 @@ static int seekTailGOP(struct StreamInfo *info, int64_t ts,CutData *borders) {
 
     av_packet_unref(&pkt); 
     int idx=0;
-    int t1 = abs(ts - gop[1]);
-    int t2 = abs(ts - gop[2]);
+    int t1 = llabs((int64_t)(ts - gop[1]));
+    int t2 = llabs((int64_t)(ts - gop[2]));
     if (t1 > t2){
         idx++;
     }
@@ -959,8 +959,8 @@ static int seekHeadGOP(struct StreamInfo *info, int64_t ts,CutData *borders) {
 
     av_packet_unref(&pkt); 
     int idx=0;
-	int t1 = abs(ts - gop[0]);
-	int t2 = abs(ts - gop[1]);
+	int t1 = llabs((int64_t)(ts - gop[0]));
+	int t2 = llabs((int64_t)(ts - gop[1]));
     if (context.muxMode != MODE_TRANSCODE && t2 < t1){
 			idx++;
     }
@@ -1511,7 +1511,7 @@ static int transcode( int64_t start, int64_t stop){
 				char ptype = av_get_picture_type_char(frame->pict_type);
 				double_t fptime= av_q2d(info->inStream->time_base)*(pts);
 				//DTS is always==PTS- since its decoded...
-				av_log(NULL, AV_LOG_VERBOSE,"%d) decode key: %d (%d) type: %c, pts: %ld time: %.3f frm dur %ld",info->in_codec_ctx->AVCODECCONTEXT_FRAMENUMBER,frame->key_frame,pkt.flags,ptype,pts,fptime,frame->AVFRAME_PKTDURATION);
+				av_log(NULL, AV_LOG_VERBOSE,"%ld) decode key: %d (%d) type: %c, pts: %ld time: %.3f frm dur %ld",(int64_t)info->in_codec_ctx->AVCODECCONTEXT_FRAMENUMBER,frame->key_frame,pkt.flags,ptype,pts,fptime,frame->AVFRAME_PKTDURATION);
         	}
 			//if (frame->pts != AV_NOPTS_VALUE && frame->pts < start){
             if (pts < tcStart){
@@ -1674,7 +1674,7 @@ static int dumpDecodingData(){
                 char ptype = av_get_picture_type_char(frame->pict_type);
                 double_t fptime= av_q2d(streamInfo->outStream->time_base)*(frame->pts - streamInfo->inStream->start_time);  
                 //DTS is always==PTS- since its decoded...
-                av_log(NULL, AV_LOG_INFO,"%d)FRM key: %d(%d) type:%c,pts:%ld time:%.3f\n",streamInfo->in_codec_ctx->AVCODECCONTEXT_FRAMENUMBER,frame->key_frame,pkt.flags,ptype,frame->pts,fptime);
+                av_log(NULL, AV_LOG_INFO,"%ld)FRM key: %d(%d) type:%c,pts:%ld time:%.3f\n",(int64_t)streamInfo->in_codec_ctx->AVCODECCONTEXT_FRAMENUMBER,frame->key_frame,pkt.flags,ptype,frame->pts,fptime);
             }else {
                 double_t dtime= av_q2d(streamInfo->outStream->time_base)*(pkt.dts - streamInfo->inStream->start_time);  
                 av_log(NULL, AV_LOG_INFO,"Buffer pkt: isKey:%d p:%ld d:%ld [%.3f]\n",pkt.flags, pkt.pts,pkt.dts,dtime);            
@@ -1872,6 +1872,11 @@ int parseArgs(int argc, char *argv[],double_t array[]) {
             break;
           case 't':
             tmp = strtok(optarg,"");
+            if (!tmp) {
+                // argument is required
+                usage(argv[0]);
+                return -1;
+            }
             if (tmp[0]=='f')
                 context.muxMode=MODE_DUMPFRAMES;
             else if (tmp[0]=='p')
