@@ -1,7 +1,7 @@
 # VideoCut
-Version 3.0.4
+Version 3.0.6
 
-![Download](https://github.com/kanehekili/VideoCut/releases/download/3.0.5/videocut3.0.5.tar)
+![Download](https://github.com/kanehekili/VideoCut/releases/download/3.0.6/videocut3.0.6.tar)
 
 MP2/MP4 Cutter for Linux on base of mpv and ffmpeg. Cutting is lossless, the target file will not be reencoded. 
 
@@ -150,7 +150,7 @@ sudo dnf python3-qt6 ffmpeg python3-pillow-qt mpv-libs.x86_64
 
 ### Still on my list:
 * Multi language support
-* Full support for wayland
+* Videoplayer as spinoff
 
 ### Using ffmpeg instead of Videocut muxer
 remux5 is a c binary based on the libavcodec library, but uses an integrated approach to cut and join videos. It seems to be more precise than the ffmpeg API. It supports reencoding as well. It is activated by default and runs on all threads available. To activate FFMPEG, use the "coggs" icon (or click on the green labels) and deselect "VideoCut Muxer".
@@ -168,6 +168,9 @@ Copy the .desktop file and change the exec line to "Exec= python3 .../VideoCut.p
 Opencv will not be displaying subtitles nor frametypes.
 
 ### Changes 
+21.11.25
+* support ffmpeg V8 + PKGBUILD cleanup - (Courtesy of Corubba - very much appreciated!)
+
 26.07.25
 * Adapt to the new reality that GTK2 will not render QT6 widgets anymore. Upgraded to mpv 1.0.8
 
