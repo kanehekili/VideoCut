@@ -18,7 +18,7 @@ package() {
   cd "${srcdir}/${pkgname}"
 
   install -Dm 644 *.py -t "${pkgdir}/opt/videocut"
-  rm "${pkgdir}/opt/videocut/"{FFMPEGTests,testmpv}.py
+  rm "${pkgdir}/opt/videocut/"{FFMPEGTests}.py
   install -Dm 755 VideoCut.py -t "${pkgdir}/opt/videocut"
   find data icons lib -type f \
     -exec install -Dm 644 "{}" "${pkgdir}/opt/videocut/{}" \;
