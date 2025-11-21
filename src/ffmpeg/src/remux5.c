@@ -28,6 +28,7 @@
  * ffmpeg 5.x    LIBAVCODEC_VERSION_MAJOR=59
  * ffmpeg 6.x    LIBAVCODEC_VERSION_MAJOR=60
  * ffmpeg 7.x    LIBAVCODEC_VERSION_MAJOR=61
+ * ffmpeg 8.x    LIBAVCODEC_VERSION_MAJOR=62
  */
 #include <libavcodec/version.h>
 #if (LIBAVCODEC_VERSION_MAJOR < 57)
@@ -44,6 +45,14 @@
   #define AVCODECPARAMETERS_CHANNELS ch_layout.nb_channels
   #define AVFRAME_PKTDURATION duration
   #define AVCODECCONTEXT_FRAMENUMBER frame_num
+#endif
+#if (LIBAVCODEC_VERSION_MAJOR <= 61)
+  #define AVCODECCONTEXT_PIXFMTS 1
+  #define AVCODECCONTEXT_TICKSPERFRAME 1
+  #define AVSTREAM_SIDEDATA 1
+  #define AVFRAME_KEYFRAME(frame) (frame->key_frame)
+#else
+  #define AVFRAME_KEYFRAME(frame) (!!(frame->flags & AV_FRAME_FLAG_KEY))
 #endif
 
 #include <libavutil/timestamp.h>
@@ -193,7 +202,7 @@ static int _collectAllStreams(){
 	int bestAudio=0;
 	context.refAudioIndex=1;
 	int ret;
-	for (int i = 0; i < ifmt_ctx->nb_streams; i++){
+	for (unsigned int i = 0; i < ifmt_ctx->nb_streams; i++){
     	AVStream *stream = ifmt_ctx->streams[i];
     	context.stream_mapping[i]=-1;
     	AVCodecParameters *in_codecpar = stream->codecpar;
@@ -456,12 +465,29 @@ static int createOutputStream(struct StreamInfo *info){
  * Copies the sidedata - currently the rotation information
  */
 static int _copySidedata(struct StreamInfo *info){
-    uint8_t *data;
-    size_t size;
+    uint8_t *data = NULL;
+    size_t size = 0;
+#ifdef AVSTREAM_SIDEDATA
 	data = av_stream_get_side_data(info->inStream,AV_PKT_DATA_DISPLAYMATRIX, &size);
+#else
+    const AVPacketSideData *sd = av_packet_side_data_get(info->inStream->codecpar->coded_side_data,
+                                                         info->inStream->codecpar->nb_coded_side_data,
+                                                         AV_PKT_DATA_DISPLAYMATRIX);
+    if (sd) {
+        data = sd->data;
+        size = sd->size;
+    }
+#endif
 	if (data && size >= 9 * sizeof(int32_t)) {
        av_log(NULL, AV_LOG_VERBOSE,"displaymatrix copied \n");
+#ifdef AVSTREAM_SIDEDATA
        av_stream_add_side_data(info->outStream,AV_PKT_DATA_DISPLAYMATRIX,data,size);
+#else
+       av_packet_side_data_add(&info->outStream->codecpar->coded_side_data,
+                               &info->outStream->codecpar->nb_coded_side_data,
+                               AV_PKT_DATA_DISPLAYMATRIX,
+                               data, size, 0);
+#endif
 	}
     return 1;
 }
@@ -529,7 +555,19 @@ int _initOutputContext(const AVOutputFormat *pre_ofmt, char *out_filename){
 
     /* The VBV Buffer warning is removed: */
     AVCPBProperties *props;
+#ifdef AVSTREAM_SIDEATA
     props = (AVCPBProperties*) av_stream_new_side_data(videoInfo->outStream, AV_PKT_DATA_CPB_PROPERTIES, sizeof(*props));
+#else
+    const AVPacketSideData *sd = av_packet_side_data_new(&videoInfo->outStream->codecpar->coded_side_data,
+                                                         &videoInfo->outStream->codecpar->nb_coded_side_data,
+                                                         AV_PKT_DATA_CPB_PROPERTIES, sizeof(*props), 0);
+    if (!sd) {
+        av_log(NULL, AV_LOG_ERROR,"Err: Could not create sidedata\n");
+        return -1;
+    } else {
+        props = (AVCPBProperties*) sd->data;
+    }
+#endif
 
     props->buffer_size = 2024 *1024;
     props->max_bitrate = 15*bitrate;//Lower means buffer underflow & pixelation during cut
@@ -644,10 +682,16 @@ static int _initEncoder(struct StreamInfo *info, AVFrame *frame){
     enc_ctx->sample_aspect_ratio = dec_ctx->sample_aspect_ratio;
 
 	// take first format from list of supported formats
+#ifdef AVCODECCONTEXT_PIXFMTS
 	if (encoder->pix_fmts)
 		enc_ctx->pix_fmt = encoder->pix_fmts[0];
 	else
 		enc_ctx->pix_fmt = dec_ctx->pix_fmt;
+#else
+	const enum AVPixelFormat *pix_fmts = NULL;
+	ret = avcodec_get_supported_config(dec_ctx, NULL, AV_CODEC_CONFIG_PIX_FORMAT, 0, (const void**)&pix_fmts, NULL);
+	enc_ctx->pix_fmt = (ret >= 0 && pix_fmts) ? pix_fmts[0] : dec_ctx->pix_fmt;
+#endif
 	// video time_base can be set to whatever is handy and supported by encoder !MUST!
 	/*Setting of TB alters the bitrate:
 	 * 1/framerate: 39 mb
@@ -660,7 +704,9 @@ static int _initEncoder(struct StreamInfo *info, AVFrame *frame){
 	enc_ctx->framerate = dec_ctx->framerate;
 	enc_ctx->max_b_frames = 4;
 	if (encoder->id == AV_CODEC_ID_H264){
+#ifdef AVCODECCONTEXT_TICKSPERFRAME
 		enc_ctx->ticks_per_frame=dec_ctx->ticks_per_frame;//should be 2!
+#endif
 		//crf has no big impact on bitrate, 18 has hardly an effect on avc to avc, but increases bitrate from mp2 to mp4...
 		av_opt_set(enc_ctx->priv_data, "crf","18",0);
 		//profile: baseline, main, high, high10, high422, high444
@@ -699,7 +745,9 @@ static int _initEncoder(struct StreamInfo *info, AVFrame *frame){
 	 } else if (encoder->id == AV_CODEC_ID_MPEG2VIDEO){
 		//enc_ctx->max_b_frames = 2;
 		enc_ctx->bit_rate = context.ifmt_ctx->bit_rate;
+#ifdef AVCODECCONTEXT_TICKSPERFRAME
 		enc_ctx->ticks_per_frame=2;
+#endif
 
 	}
 	//In case of experimental encoder
@@ -875,8 +923,8 @@ static int seekTailGOP(struct StreamInfo *info, int64_t ts,CutData *borders) {
 
     av_packet_unref(&pkt); 
     int idx=0;
-    int t1 = abs(ts - gop[1]);
-    int t2 = abs(ts - gop[2]);
+    int t1 = llabs((int64_t)(ts - gop[1]));
+    int t2 = llabs((int64_t)(ts - gop[2]));
     if (t1 > t2){
         idx++;
     }
@@ -959,8 +1007,8 @@ static int seekHeadGOP(struct StreamInfo *info, int64_t ts,CutData *borders) {
 
     av_packet_unref(&pkt); 
     int idx=0;
-	int t1 = abs(ts - gop[0]);
-	int t2 = abs(ts - gop[1]);
+	int t1 = llabs((int64_t)(ts - gop[0]));
+	int t2 = llabs((int64_t)(ts - gop[1]));
     if (context.muxMode != MODE_TRANSCODE && t2 < t1){
 			idx++;
     }
@@ -1511,7 +1559,7 @@ static int transcode( int64_t start, int64_t stop){
 				char ptype = av_get_picture_type_char(frame->pict_type);
 				double_t fptime= av_q2d(info->inStream->time_base)*(pts);
 				//DTS is always==PTS- since its decoded...
-				av_log(NULL, AV_LOG_VERBOSE,"%d) decode key: %d (%d) type: %c, pts: %ld time: %.3f frm dur %ld",info->in_codec_ctx->AVCODECCONTEXT_FRAMENUMBER,frame->key_frame,pkt.flags,ptype,pts,fptime,frame->AVFRAME_PKTDURATION);
+				av_log(NULL, AV_LOG_VERBOSE,"%ld) decode key: %d (%d) type: %c, pts: %ld time: %.3f frm dur %ld",(int64_t)info->in_codec_ctx->AVCODECCONTEXT_FRAMENUMBER,AVFRAME_KEYFRAME(frame),pkt.flags,ptype,pts,fptime,frame->AVFRAME_PKTDURATION);
         	}
 			//if (frame->pts != AV_NOPTS_VALUE && frame->pts < start){
             if (pts < tcStart){
@@ -1674,7 +1722,7 @@ static int dumpDecodingData(){
                 char ptype = av_get_picture_type_char(frame->pict_type);
                 double_t fptime= av_q2d(streamInfo->outStream->time_base)*(frame->pts - streamInfo->inStream->start_time);  
                 //DTS is always==PTS- since its decoded...
-                av_log(NULL, AV_LOG_INFO,"%d)FRM key: %d(%d) type:%c,pts:%ld time:%.3f\n",streamInfo->in_codec_ctx->AVCODECCONTEXT_FRAMENUMBER,frame->key_frame,pkt.flags,ptype,frame->pts,fptime);
+                av_log(NULL, AV_LOG_INFO,"%ld)FRM key: %d(%d) type:%c,pts:%ld time:%.3f\n",(int64_t)streamInfo->in_codec_ctx->AVCODECCONTEXT_FRAMENUMBER,AVFRAME_KEYFRAME(frame),pkt.flags,ptype,frame->pts,fptime);
             }else {
                 double_t dtime= av_q2d(streamInfo->outStream->time_base)*(pkt.dts - streamInfo->inStream->start_time);  
                 av_log(NULL, AV_LOG_INFO,"Buffer pkt: isKey:%d p:%ld d:%ld [%.3f]\n",pkt.flags, pkt.pts,pkt.dts,dtime);            
@@ -1872,6 +1920,11 @@ int parseArgs(int argc, char *argv[],double_t array[]) {
             break;
           case 't':
             tmp = strtok(optarg,"");
+            if (!tmp) {
+                // argument is required
+                usage(argv[0]);
+                return -1;
+            }
             if (tmp[0]=='f')
                 context.muxMode=MODE_DUMPFRAMES;
             else if (tmp[0]=='p')

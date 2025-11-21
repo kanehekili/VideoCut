@@ -146,9 +146,9 @@ def testFFmpegVersion():
 def testregex():
     # text = "46648 P:1866.05 D:1866.05 25.70%"
     text = "49 D:0.96 [00:00.00] 5.05%"
-    # m= re.search("([0-9]+) D:([0-9.]+)([0-9:0-9.0-9]+) ([0-9.]+)%",text)
-    # m= re.search("([0-9]+) D:([0-9.]+) (.+) ([0-9.]+)%",text)
-    regexp = re.compile("([0-9]+) D:([0-9.]+) \[(.+)\] ([0-9.]+)%")
+    # m= re.search(r"([0-9]+) D:([0-9.]+)([0-9:0-9.0-9]+) ([0-9.]+)%",text)
+    # m= re.search(r"([0-9]+) D:([0-9.]+) (.+) ([0-9.]+)%",text)
+    regexp = re.compile(r"([0-9]+) D:([0-9.]+) \[(.+)\] ([0-9.]+)%")
     m = regexp.search(text)
     print(m.group(0))
     frame = m.group(1)
