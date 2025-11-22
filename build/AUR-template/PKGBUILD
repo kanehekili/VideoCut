@@ -5,13 +5,13 @@ pkgrel=@xpkgrelx@
 pkgdesc="Fast mp4/matroska/Av1/webm/mp2/mpts lossless Video cutter"
 url="https://github.com/kanehekili/VideoCut"
 license=('GPL-3.0-or-later')
-depends=('python-pyqt6' 'mpv' 'ffmpeg<2:9.0' 'python-pillow')
+depends=('python-pyqt6' 'mpv' 'ffmpeg<2:9.0' 'python-pillow' 'gcc')
 arch=('x86_64')
 source=(https://github.com/kanehekili/VideoCut/releases/download/@xxx@/videocut@xxx@.tar)
 md5sums=(@md5sum@)
 
 build() {
-  make -C "${pkgname}/ffmpeg/src/" -f makefile all
+  CC=gcc make -C "${pkgname}/ffmpeg/src/" -f makefile all
 }
 
 package() {
