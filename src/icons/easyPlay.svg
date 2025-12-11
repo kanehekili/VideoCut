@@ -1,0 +1,121 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" width="200" height="200">
+  <defs>
+    <!-- Enhanced gradients for maximum 3D drama -->
+    <linearGradient id="boardGradient" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#5A6C7D;stop-opacity:1" />
+      <stop offset="30%" style="stop-color:#3D4E5F;stop-opacity:1" />
+      <stop offset="70%" style="stop-color:#2D3748;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#141821;stop-opacity:1" />
+    </linearGradient>
+    
+    <linearGradient id="clapperLight" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#FFFFFF;stop-opacity:1" />
+      <stop offset="40%" style="stop-color:#E2E8F0;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#A0AEC0;stop-opacity:1" />
+    </linearGradient>
+    
+    <linearGradient id="clapperDark" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#2D3748;stop-opacity:1" />
+      <stop offset="50%" style="stop-color:#1A202C;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#000000;stop-opacity:1" />
+    </linearGradient>
+    
+    <linearGradient id="playGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#68D391;stop-opacity:1" />
+      <stop offset="50%" style="stop-color:#48BB78;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#2F855A;stop-opacity:1" />
+    </linearGradient>
+    
+    <radialGradient id="strongHighlight">
+      <stop offset="0%" style="stop-color:#FFFFFF;stop-opacity:0.8" />
+      <stop offset="50%" style="stop-color:#FFFFFF;stop-opacity:0.3" />
+      <stop offset="100%" style="stop-color:#FFFFFF;stop-opacity:0" />
+    </radialGradient>
+    
+    <radialGradient id="metalShine">
+      <stop offset="0%" style="stop-color:#E2E8F0;stop-opacity:1" />
+      <stop offset="50%" style="stop-color:#718096;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#2D3748;stop-opacity:1" />
+    </radialGradient>
+  </defs>
+  
+  <!-- Dramatic shadow -->
+  <ellipse cx="105" cy="178" rx="85" ry="12" fill="#000000" opacity="0.5" />
+  
+  <!-- Shadow behind board -->
+  <rect x="23" y="91" width="155" height="85" rx="4" fill="#000000" opacity="0.3" />
+  
+  <!-- Main board body - enhanced 3D -->
+  <rect x="20" y="88" width="155" height="85" rx="4" fill="url(#boardGradient)" />
+  
+  <!-- Board right side depth -->
+  <path d="M 175 88 L 190 93 L 190 178 L 175 173 Z" fill="#0D1117" />
+  <!-- Board bottom depth -->
+  <path d="M 20 173 L 175 173 L 190 178 L 35 178 Z" fill="#000000" />
+  
+  <!-- Inner board recess for depth -->
+  <rect x="28" y="96" width="139" height="69" rx="2" fill="#1A202C" />
+  
+  <!-- Board highlights and reflections -->
+  <rect x="25" y="92" width="145" height="6" fill="#4A5568" opacity="0.8" />
+  <rect x="25" y="92" width="145" height="2" fill="#718096" opacity="0.6" />
+  
+  <!-- Shadow behind clapper -->
+  <path d="M 22 90 L 177 90 L 172 42 L 32 42 Z" fill="#000000" opacity="0.3" />
+  
+  <!-- Top clapper - dramatic perspective -->
+  <path d="M 20 88 L 175 88 L 170 40 L 30 40 Z" fill="url(#clapperLight)" />
+  
+  <!-- Clapper right side depth -->
+  <path d="M 175 88 L 190 83 L 185 35 L 170 40 Z" fill="#CBD5E0" />
+  <!-- Clapper top edge -->
+  <path d="M 30 40 L 170 40 L 185 35 L 45 35 Z" fill="#F7FAFC" />
+  
+  <!-- Black stripes with dramatic 3D -->
+  <path d="M 42 40 L 52 40 L 52 88 L 42 88 Z" fill="url(#clapperDark)" />
+  <path d="M 52 40 L 58 37 L 58 85 L 52 88 Z" fill="#000000" />
+  <path d="M 42 40 L 52 40 L 58 37 L 48 37 Z" fill="#1A202C" />
+  
+  <path d="M 72 40 L 82 40 L 82 88 L 72 88 Z" fill="url(#clapperDark)" />
+  <path d="M 82 40 L 88 37 L 88 85 L 82 88 Z" fill="#000000" />
+  <path d="M 72 40 L 82 40 L 88 37 L 78 37 Z" fill="#1A202C" />
+  
+  <path d="M 102 40 L 112 40 L 112 88 L 102 88 Z" fill="url(#clapperDark)" />
+  <path d="M 112 40 L 118 37 L 118 85 L 112 88 Z" fill="#000000" />
+  <path d="M 102 40 L 112 40 L 118 37 L 108 37 Z" fill="#1A202C" />
+  
+  <path d="M 132 40 L 142 40 L 142 88 L 132 88 Z" fill="url(#clapperDark)" />
+  <path d="M 142 40 L 148 37 L 148 85 L 142 88 Z" fill="#000000" />
+  <path d="M 132 40 L 142 40 L 148 37 L 138 37 Z" fill="#1A202C" />
+  
+  <!-- Shadow behind play button -->
+  <path d="M 72 110 L 72 160 L 132 135 Z" fill="#000000" opacity="0.4" />
+  
+  <!-- Play button with extreme 3D -->
+  <path d="M 70 108 L 70 158 L 130 133 Z" fill="url(#playGradient)" />
+  <!-- Top face -->
+  <path d="M 70 108 L 130 133 L 125 130 L 73 110 Z" fill="#9AE6B4" />
+  <!-- Bottom face -->
+  <path d="M 70 158 L 130 133 L 125 130 L 73 153 Z" fill="#22543D" />
+  <!-- Shine on play button -->
+  <path d="M 75 115 L 75 145 L 90 136 Z" fill="#FFFFFF" opacity="0.3" />
+  
+  <!-- Dramatic metallic hinges -->
+  <circle cx="38" cy="88" r="8" fill="url(#metalShine)" />
+  <circle cx="38" cy="88" r="6" fill="#4A5568" />
+  <circle cx="38" cy="88" r="4" fill="#2D3748" />
+  <circle cx="36" cy="86" r="2" fill="#CBD5E0" />
+  
+  <circle cx="162" cy="88" r="8" fill="url(#metalShine)" />
+  <circle cx="162" cy="88" r="6" fill="#4A5568" />
+  <circle cx="162" cy="88" r="4" fill="#2D3748" />
+  <circle cx="160" cy="86" r="2" fill="#CBD5E0" />
+  
+  <!-- Dramatic highlights -->
+  <ellipse cx="100" cy="55" rx="65" ry="12" fill="url(#strongHighlight)" />
+  <ellipse cx="100" cy="115" rx="55" ry="25" fill="url(#strongHighlight)" />
+  
+  <!-- Edge lighting on board -->
+  <rect x="20" y="88" width="2" height="85" fill="#718096" opacity="0.5" />
+  <path d="M 20 88 L 30 40 L 32 40 L 22 88 Z" fill="#E2E8F0" opacity="0.4" />
+</svg>

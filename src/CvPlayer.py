@@ -154,7 +154,7 @@ class CVImage(QtGui.QImage):
 
 class VideoWidget(QtWidgets.QFrame):
     """ A class for rendering video coming from OpenCV """
-    trigger = pyqtSignal(float,float,float)
+    posChanged = pyqtSignal(float,float,float)
     
     def __init__(self, parent):
         QtWidgets.QFrame.__init__(self, parent)
@@ -212,7 +212,7 @@ class VideoWidget(QtWidgets.QFrame):
             self.imageRatio = float(ratio)       
     
     def updateUI(self,frameNumber,framecount,timeinfo):
-        self.trigger.emit(frameNumber,framecount,timeinfo)
+        self.posChanged.emit(frameNumber,framecount,timeinfo)
         
                     
 class VideoPlayerCV():
@@ -434,7 +434,7 @@ class CvPlugin():
             self.player.close()
         self.player=None        
    
-    def changeSettings(self,key,value):
+    def changeSettings(self,value):
         pass
     
     def shutDown(self):
@@ -559,35 +559,7 @@ class CvPlugin():
 
     def hasVideoOffset(self):
         return True #hook for remux5 zeroTime
-    '''
-    callbacks
-     self.controller.syncVideoPlayerControls(isplaying)
 
-    events:
-      videoWidget.trigger (signal(flaot,flaot,float))
-
-    POTENTIAL PLAYER api
-    CVPlayer:
-    self.player.framecount
-    self.player.fps
-    
-    self.player = VideoPlugin.initPlayer(filePath, self.streamData, rot)
-    pos=self.player.getCurrentFrameNumber()
-    self.player.isValid()
-    boolean= self.player.takeScreenShot(path):
-    
-    VideoPlugin:
-    VideoPlugin.createWidget(self,self.SLIDER_RESOLUTION) ?ICO_SIZE?
-    VideoPlugin.showBanner() #clapper zeigen
-    self.player = VideoPlugin.initPlayer(filePath, self.streamData, rot)
-    
-    VideoPlugin.controller=self
-    VideoPlugin.setCutEntry(cutEntry,restore=True)
-    VideoPlugin.showFirstFrame()
-    VideoPlugin.enqueueFrame(frameNumber)
-    sliderPos = VideoPlugin.onDial(self._dialStep)
-    isPlaying = VideoPlugin.toggleVideoPlay()  
-    '''
 class SliderThread(QtCore.QThread):
     signal = pyqtSignal()
     result = None

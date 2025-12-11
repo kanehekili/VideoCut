@@ -1,5 +1,5 @@
 Source: videocut
-Maintainer: kanehekili <mat.wegmann@gmail.com>
+Maintainer: kanehekili <kanehekili.media@gmail.com>
 Section: video
 Priority: optional
 Build-Depends: debhelper, libc6-dev, libavcodec-dev, libavformat-dev

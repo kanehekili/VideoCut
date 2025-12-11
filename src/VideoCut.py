@@ -38,6 +38,14 @@ Log = FFMPEGTools.Log
 SIZE_ICON = 80
 ITEM_ROW_COUNT = 3
 
+'''
+with open('/tmp/startup_env.txt', 'w') as f:
+    f.write(f"Executable: {sys.executable}\n")
+    f.write(f"CWD: {os.getcwd()}\n")
+    f.write(f"Args: {sys.argv}\n\n")
+    for k, v in sorted(os.environ.items()):
+        f.write(f"{k}={v}\n")
+'''
 
 saneCheck = FFmpegVersion()
 if not saneCheck.confirmFFmpegInstalled():
@@ -556,42 +564,34 @@ class MainFrame(QtWidgets.QMainWindow):
     
     def initUI(self):
         
-        #self.exitAction = QtGui.QAction(QtGui.QIcon('icons/window-close.png'), 'Exit', self)
         self.exitAction = QtGui.QAction(QtGui.QIcon(ICOMAP.ico("buttonStop")), 'Exit', self)
         self.exitAction.setShortcut('Ctrl+Q')
         self.exitAction.triggered.connect(QApplication.quit)
         
-        #self.loadAction = QtGui.QAction(QtGui.QIcon('./icons/loadfile.png'), 'Load Video', self)
         self.loadAction = QtGui.QAction(QtGui.QIcon(ICOMAP.ico("loadAction")), 'Load Video', self)
         self.loadAction.setShortcut('Ctrl+L')
         self.loadAction.triggered.connect(self.loadFile)
 
-        #self.startAction = QtGui.QAction(QtGui.QIcon('./icons/start-icon.png'), 'Include from here', self)
         self.startAction = QtGui.QAction(QtGui.QIcon(ICOMAP.ico("startAction")), 'Include from here', self)
         self.startAction.setShortcut('Ctrl+G')
         self.startAction.triggered.connect(self._videoController.addStartMarker)
 
-        #self.stopAction = QtGui.QAction(QtGui.QIcon('./icons/stop-red-icon.png'), 'Exclude from here', self)
         self.stopAction = QtGui.QAction(QtGui.QIcon(ICOMAP.ico("stopAction")), 'Exclude from here', self)
         self.stopAction.setShortcut('Ctrl+H')
         self.stopAction.triggered.connect(self._videoController.addStopMarker)
         
-        #self.saveAction = QtGui.QAction(QtGui.QIcon('./icons/save-as-icon.png'), 'Save the video', self)
         self.saveAction = QtGui.QAction(QtGui.QIcon(ICOMAP.ico("saveAction")), 'Save the video', self)
         self.saveAction.setShortcut('Ctrl+S')
         self.saveAction.triggered.connect(self.saveVideo)
         
-        #self.infoAction = QtGui.QAction(QtGui.QIcon('./icons/info.png'), 'Codec info', self)
         self.infoAction = QtGui.QAction(QtGui.QIcon(ICOMAP.ico("infoAction")), 'Codec info', self)
         self.infoAction.setShortcut('Ctrl+I')
         self.infoAction.triggered.connect(self.showCodecInfo)
         
-        #self.playAction = QtGui.QAction(QtGui.QIcon('./icons/play.png'), 'Play video', self)
         self.playAction = QtGui.QAction(QtGui.QIcon(ICOMAP.ico("playStart")), 'Play video', self)
         self.playAction.setShortcut('Ctrl+P')
         self.playAction.triggered.connect(self.playVideo)
         
-        #self.photoAction = QtGui.QAction(QtGui.QIcon('./icons/screenshot.png'), 'Take screenshot', self)
         self.photoAction = QtGui.QAction(QtGui.QIcon(ICOMAP.ico("photoAction")), 'Take screenshot', self)
         self.photoAction.setShortcut('Ctrl+P')
         self.photoAction.triggered.connect(self.takeScreenShot)
@@ -599,8 +599,6 @@ class MainFrame(QtWidgets.QMainWindow):
         '''
         the settings menues
         '''
-#         self.extractMP3 = QtGui.QAction(QtGui.QIcon('./icons/stop-red-icon.png'),"Extract MP3",self)
-        #self.mediaSettings = QtGui.QAction(QtGui.QIcon('./icons/settings.png'), "Output settings", self)
         self.mediaSettings = QtGui.QAction(QtGui.QIcon(ICOMAP.ico("mediaSettings")), "Output settings", self)
         self.mediaSettings.setShortcut('Ctrl+T')
         self.mediaSettings.triggered.connect(self.openMediaSettings)
@@ -608,7 +606,6 @@ class MainFrame(QtWidgets.QMainWindow):
         '''
         audio language selection
         '''
-        #self.langSettings = QtGui.QAction(QtGui.QIcon('./icons/langflags.png'), "Language settings", self)
         self.langSettings = QtGui.QAction(QtGui.QIcon(ICOMAP.ico("langSettings")), "Language settings", self)
         self.langSettings.setShortcut('Ctrl+L')
         self.langSettings.triggered.connect(self.openLanguageSettings)
@@ -650,8 +647,8 @@ class MainFrame(QtWidgets.QMainWindow):
         self.setCentralWidget(widgets);
         self.setWindowTitle("VideoCut")
       
-        widgets.ui_VideoFrame.trigger.connect(self._videoController._onUpdateInfo)
-        self.settings.trigger.connect(self._videoController.onSettingsChanged)
+        widgets.ui_VideoFrame.posChanged.connect(self._videoController._onUpdateInfo)
+        self.settings.dataChanged.connect(self._videoController.onSettingsChanged)
         
         # connect the labels to their dialogs
         # if not "self" - stops if out of scope!
@@ -675,7 +672,7 @@ class MainFrame(QtWidgets.QMainWindow):
     ''' this is the place to start all graphical actions. Queue is running '''
     def __queueStarted(self):
         self._isStarted=True
-        self.settings.update()
+        self.settings.sync()
         self._videoController.prepare()
     
     def isActivated(self):
@@ -905,40 +902,8 @@ class MainFrame(QtWidgets.QMainWindow):
         except:
             Log.exception("Error Exit")
 
-'''    
-class LanguageModel():
-    def __init__(self,mainframe):
-        lang = self.getAvailableLanguage(mainframe._videoController)
-        self.parseIso692(lang)
-        
-        
-    def parseIso692(self,langArray):
-        #read the iso file
-        HomeDir = os.path.dirname(__file__)
-        DataDir=os.path.join(HomeDir,"data")
-        path = os.path.join(DataDir,"unidueIso692.json")
-        with open(path,'r')as f:
-            self.langDict = json.load(f)
-        #ned the items of arr 1
-        data = self.langDict['items']
-        for item in data.items():
-            print(item)    
-#         for lang in data:
-#             if lang['ISO3']upper() in langArray:
-#                 print("long:%s abbr:%s"%(lang['English'],lang['alpha3-b']))   
-            
-    def getAvailableLanguage(self,controller):
-        lang= controller.getLanguages()
-        print("avail:")
-        for country in lang:
-            print("   -%s"%(country))
-        #this is alpha-3b code
-        return lang    
-'''
-
-
 class SettingsModel(QtCore.QObject):
-    trigger = pyqtSignal(object)
+    dataChanged = pyqtSignal(object)
     
     def __init__(self, mainframe):
         # keep flags- save them later
@@ -950,8 +915,9 @@ class SettingsModel(QtCore.QObject):
         self.mainFrame = mainframe
         self.showSubid=vc_config.getInt("subtitles",0)  #id if subtitle should be presented. mpv only
         self.showGL=vc_config.getBoolean("openGL",True) #GL Widgets, mpv only
+        self.isoCodes=[]
     
-    def update(self):
+    def sync(self):
         cutmode = "Fast"
         mode = "FFMPEG"
         audio = self.mainFrame._widgets.pixAudioOn
@@ -990,16 +956,19 @@ class SettingsModel(QtCore.QObject):
         #SET the icoset
         vc_config.set("icoSet", self.iconSet)
         
+    def update(self):
+        self.sync()        
         vc_config.store()
-        self.trigger.emit(self)
+        self.dataChanged.emit(self)
         
     def getPreferedLanguageCodes(self):
         lang = vc_config.get("LANG")
         if lang is None:
-            lang = ["deu", "eng", "fra"]  # default
+            lang = ["German","English","French"]  # default
         else:
             lang = json.loads(lang)
         return lang
+
 
     def processSubtitles(self):
         return self.showSubid>0
@@ -1007,6 +976,7 @@ class SettingsModel(QtCore.QObject):
     def setPreferedLanguageCodes(self, langList):
         vc_config.set("LANG", json.dumps(langList))
         vc_config.store()
+        self.dataChanged.emit(self)
     
     #UI toggle functions
     def toggleRemux(self):
@@ -1708,7 +1678,8 @@ class VideoControl(QtCore.QObject):
  
     #callback settings
     def onSettingsChanged(self,settingsModel):
-        VideoPlugin.changeSettings("subtitle",settingsModel.showSubid)
+        #pass all settings, so the player can select what he needs
+        VideoPlugin.changeSettings(settingsModel)
 
     '''
     plugin callbacks
@@ -1915,7 +1886,7 @@ def parseOptions(args):
     return res
                                            
 def main():
-    qt_based_desktops = ["KDE Plasma","LXQt","Trinity Desktop","Lumina","Lomiri","Cutefish","UKUI","theDesk"]
+    qt_based_desktops = ["kde","plasma","lxqtt","trinity desktop","lumina","lomiri","cutefish","ukui","thedesk","razor","deepin","dde"]
     try:
         global WIN
         global ICOMAP
@@ -1932,10 +1903,15 @@ def main():
         FFMPEGTools.setupRotatingLogger("VideoCut",res["logConsole"])
         de = OSTools().currentDesktop()
         if de not in qt_based_desktops: 
-            os.environ["QT_QPA_PLATFORMTHEME"] = "fusion"
-            Log.info("GTK based - switched to fusion" )
+            os.environ["QT_QPA_PLATFORMTHEME"] = "gtk3"
+            os.environ['QT_QPA_PLATFORM'] = 'xcb'
+            Log.info("GTK based - switched to QT_QPA_PLATFORM = xcb" )
 
         app = QApplication(argv)
+        # Set the application name (this sets WM_CLASS)
+        app.setApplicationName("VideoCut")
+        # Link to your desktop file (important for GNOME)
+        app.setDesktopFileName("VideoCut")        
         app.setWindowIcon(getAppIcon())
         VideoPlugin=setUpVideoPlugin(res["mpv"])
         ICOMAP=IconMapper(vc_config.get("icoSet","default"))

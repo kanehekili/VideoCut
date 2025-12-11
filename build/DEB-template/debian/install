@@ -1,2 +1,3 @@
 src/* /opt/videocut
 addons/VideoCut.desktop /usr/share/applications
+addons/EasyPlayer.desktop /usr/share/applications

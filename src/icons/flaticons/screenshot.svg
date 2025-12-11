@@ -1,8 +1,8 @@
-<svg width="256" height="256" version="1.1" viewBox="0 0 256 256" xmlns="http://www.w3.org/2000/svg">
- <path d="m23.308 23.308v209.38h209.38v-209.38z" fill="none" stroke="#000" stroke-dasharray="19, 19" stroke-dashoffset="9.5" stroke-linejoin="bevel" stroke-miterlimit="0" stroke-width="19" style="paint-order:stroke markers fill"/>
- <g fill="#fff" stroke="#000" stroke-linejoin="round" stroke-miterlimit="0">
-  <rect x="91.977" y="158.84" width="152.54" height="83.816" stroke-width="15" style="paint-order:stroke markers fill"/>
-  <rect x="140.97" y="133.58" width="54.543" height="26.425" stroke-width="10" style="paint-order:stroke markers fill"/>
-  <ellipse cx="167.79" cy="201.6" rx="24.264" ry="24.264" stroke-width="16.472" style="paint-order:stroke markers fill"/>
- </g>
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Uploaded to: SVG Repo, www.svgrepo.com, Generator: SVG Repo Mixer Tools -->
+<svg width="800px" height="800px" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+    <g>
+        <path fill="none" d="M0 0h24v24H0z"/>
+        <path d="M3 3h2v2H3V3zm4 0h2v2H7V3zm4 0h2v2h-2V3zm4 0h2v2h-2V3zm4 0h2v2h-2V3zm0 4h2v2h-2V7zM3 19h2v2H3v-2zm0-4h2v2H3v-2zm0-4h2v2H3v-2zm0-4h2v2H3V7zm7.667 4l1.036-1.555A1 1 0 0 1 12.535 9h2.93a1 1 0 0 1 .832.445L17.333 11H20a1 1 0 0 1 1 1v8a1 1 0 0 1-1 1H8a1 1 0 0 1-1-1v-8a1 1 0 0 1 1-1h2.667zM9 19h10v-6h-2.737l-1.333-2h-1.86l-1.333 2H9v6zm5-1a2 2 0 1 1 0-4 2 2 0 0 1 0 4z"/>
+    </g>
 </svg>

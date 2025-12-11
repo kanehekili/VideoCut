@@ -16,9 +16,10 @@
     "mediaSettings":"./icons/settings.png",
     "langSettings":"./icons/langflags.png",
     "audioOn":"./icons/speaker-high.png",
-    "audioOff":"./icons/speaker-muted.png"
+    "audioOff":"./icons/speaker-muted.png",
+	"fullscreen":"./icons/fullscreen.png"
     },
-    "flat": {
+    "flat(light)": {
     "rmAction":"./icons/flaticons/remove.svg",
     "rmAllAction":"./icons/flaticons/remove_all.svg",
     "gotoAction":"./icons/flaticons/goto.svg",
@@ -32,6 +33,24 @@
     "playPause" :"./icons/flaticons/pause.svg",
     "mediaSettings":"./icons/flaticons/settings.svg",
     "audioOn":"./icons/flaticons/sound.svg",
-    "audioOff":"./icons/flaticons/mute.svg"
-    }
+    "audioOff":"./icons/flaticons/mute.svg",
+	"fullscreen":"./icons/flaticons/fullscreen.png"
+    },
+	"flat(dark)": {
+	  "rmAction":"./icons/flatdark/remove.svg",
+	  "rmAllAction":"./icons/flatdark/remove_all.svg",
+	  "gotoAction":"./icons/flatdark/goto.svg",
+	  "loadAction" :"./icons/flatdark/open.svg",
+	  "startAction":"./icons/flatdark/start-cut.svg",
+	  "stopAction":"./icons/flatdark/stop-cut.svg",
+	  "saveAction":"./icons/flatdark/save.svg",
+	  "infoAction":"./icons/flatdark/info.svg",
+	  "photoAction":"./icons/flatdark/screenshot.svg",
+	  "playStart" :"./icons/flatdark/play.svg",
+	  "playPause" :"./icons/flatdark/pause.svg",
+	  "mediaSettings":"./icons/flatdark/settings.svg",
+	  "audioOn":"./icons/flatdark/sound.svg",
+	  "audioOff":"./icons/flatdark/mute.svg",
+	"fullscreen":"./icons/flatdark/fullscreen.png"
+	  }	
     }

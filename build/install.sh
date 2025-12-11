@@ -6,10 +6,11 @@ if [ "$EUID" -ne 0 ] ; then
 fi
 #copy desktop to /usr/share applications
 DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
-sudo cp $DIR/VideoCut.desktop /usr/share/applications;
+sudo cp $DIR/*.desktop /usr/share/applications;
 sudo mkdir -p /opt/videocut;
 sudo cp -r $DIR/* /opt/videocut/;
-sudo ln -s /opt/videocut/VideoCut.py /usr/bin/VideoCut
+sudo ln -s /opt/videocut/VideoCut.py /usr/bin/videocut
+sudo ln -s /opt/videocut/EasyPlayer.py /usr/bin/easyplay
 
 echo "######################################################################"
 echo "#                  Ensure you have installed:                        #"                     

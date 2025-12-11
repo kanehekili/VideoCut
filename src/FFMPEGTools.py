@@ -205,7 +205,7 @@ class OSTools():
             return False
 
     def currentDesktop(self):
-        return os.environ.get("XDG_CURRENT_DESKTOP", "")
+        return os.environ.get("XDG_CURRENT_DESKTOP", "").lower()
 
 
 class ConfigAccessor():
@@ -658,39 +658,38 @@ class FFStreamProbe():
         self.sanityCheck()
 
     def sanityCheck(self):
-        if self.getVideoStream() is None:
-            raise IOError("No video stream available")
         if logging.root.level!=logging.DEBUG:
-            return 
+            return
+        
         Log.debug("-------- Video -------------")
         s = self.getVideoStream()
-        Log.debug("Index: %d", s.getStreamIndex())
-        Log.debug("codec %s", s.getCodec())
-        Log.debug("getCodecTimeBase: %s", s.getCodecTimeBase())
-        Log.debug("getTimeBase: %s", s.getTimeBase())
-        Log.debug("getAspect %s", s.getAspectRatio())
-        Log.debug("getFrameRate_r: %.3f", s.frameRateMultiple())
-        Log.debug("getAVGFrameRate: %3.f", s.frameRateAvg())  # Common denominator
-        Log.debug("getDuration: %.3f", s.duration())
-        Log.debug("getWidth: %s", s.getWidth())
-        Log.debug("getHeight: %s", s.getHeight())
-        Log.debug("isAudio: %r", s.isAudio())
-        Log.debug("isVideo: %r", s.isVideo())
+        if s:
+            Log.debug("Index: %d", s.getStreamIndex())
+            Log.debug("codec %s", s.getCodec())
+            Log.debug("getCodecTimeBase: %s", s.getCodecTimeBase())
+            Log.debug("getTimeBase: %s", s.getTimeBase())
+            Log.debug("getAspect %s", s.getAspectRatio())
+            Log.debug("getFrameRate_r: %.3f", s.frameRateMultiple())
+            Log.debug("getAVGFrameRate: %3.f", s.frameRateAvg())  # Common denominator
+            Log.debug("getDuration: %.3f", s.duration())
+            Log.debug("getWidth: %s", s.getWidth())
+            Log.debug("getHeight: %s", s.getHeight())
+            Log.debug("isAudio: %r", s.isAudio())
+            Log.debug("isVideo: %r", s.isVideo())
         
         Log.debug("-------- Audio -------------")
-        s = self.getAudioStream()  
-        if not s:
-            Log.debug("No audio")
-            return  
-        Log.debug("Index:%d", s.getStreamIndex())
-        Log.debug("getCodec:%s", s.getCodec())
-        Log.debug("bitrate(kb) %d", s.getBitRate())
-        Log.debug("getCodecTimeBase: %s", s.getCodecTimeBase())
-        Log.debug("getTimeBase: %s", s.getTimeBase())
-        Log.debug("getDuration: %.3f", s.duration())
-        Log.debug("isAudio: %r", s.isAudio())
-        Log.debug("isVideo: %r", s.isVideo())
-        Log.debug("-----------Formats-----------")
+        s = self.getAudioStream()
+        if s:  
+            Log.debug("Index:%d", s.getStreamIndex())
+            Log.debug("getCodec:%s", s.getCodec())
+            Log.debug("bitrate(kb) %d", s.getBitRate())
+            Log.debug("getCodecTimeBase: %s", s.getCodecTimeBase())
+            Log.debug("getTimeBase: %s", s.getTimeBase())
+            Log.debug("getDuration: %.3f", s.duration())
+            Log.debug("isAudio: %r", s.isAudio())
+            Log.debug("isVideo: %r", s.isVideo())
+            Log.debug("-----------Formats-----------")
+
         f=self.formatInfo
         Log.debug("Fmt Names:%s",f.formatNames())
         Log.debug("Fmt bitrate;%d",f.getBitRate())
@@ -742,6 +741,8 @@ class FFStreamProbe():
         
     
     def getAspectRatio(self):
+        if not self.getVideoStream():
+            return 1.0
         ratio = self.getVideoStream().getAspectRatio()
         if ratio == 1.0 and int(self.getVideoStream().getHeight())>0:
             ratio = float(self.getVideoStream().getWidth()) / float(self.getVideoStream().getHeight())
@@ -770,7 +771,9 @@ class FFStreamProbe():
         return self.formatInfo.formatNames()
     
     def getRotation(self):
-        return self.getVideoStream().getRotation()
+        if self.getVideoStream():
+            return self.getVideoStream().getRotation()
+        return 0
     
     def getLanguages(self):
         lang = []
@@ -795,10 +798,10 @@ class FFStreamProbe():
             
             if stream.isAudio():
                 if lang[res][0]==-1:
-                    lang[res][0]=stream.getStreamIndex()
+                    lang[res][0]=stream.slot #MPV specific, might not be the stream number.. 
                     
             elif lang[res][1]==-1:
-                lang[res][1]=stream.getStreamIndex()
+                lang[res][1]=stream.slot
         return lang 
    
     def hasFormat(self, formatName):
@@ -822,13 +825,19 @@ class FFStreamProbe():
         return self.hasFormat("mp4")
     
     def isMPEG2Codec(self):
-        return "mpeg" in self.getVideoStream().getCodec()
+        if self.getVideoStream():
+            return "mpeg" in self.getVideoStream().getCodec()
+        return False
         
     def isH264Codec(self):
-        return "h264" == self.getVideoStream().getCodec()
+        if self.getVideoStream():
+            return "h264" == self.getVideoStream().getCodec()
+        return False
     
     def isVC1Codec(self):
-        return "vc1" == self.getVideoStream().getCodec()
+        if self.getVideoStream():
+            return "vc1" == self.getVideoStream().getCodec()
+        return False
     
     
     '''

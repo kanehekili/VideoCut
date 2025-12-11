@@ -8,13 +8,13 @@ under the
 GNU Affero General Public License v3.0
 '''
      
-from PyQt6.QtCore import Qt,QMetaObject,pyqtSlot,pyqtSignal, QByteArray
+from PyQt6.QtCore import Qt,pyqtSlot,pyqtSignal, QByteArray
 from PyQt6 import QtCore,QtWidgets
 from PyQt6 import QtGui
 from PyQt6.QtOpenGLWidgets import QOpenGLWidget
 
 from threading import Condition
-import FFMPEGTools
+import FFMPEGTools,Cutter
 import time,re
 import locale
 
@@ -32,7 +32,7 @@ def get_proc_addr(_, name):
 
 class VideoWidget(QtWidgets.QFrame):
     """ Sized frame for mpv """
-    trigger = pyqtSignal(float,float,float)
+    posChanged = pyqtSignal(float,float,float)
     
     def __init__(self, parent):
         QtWidgets.QFrame.__init__(self, parent)
@@ -46,10 +46,10 @@ class VideoWidget(QtWidgets.QFrame):
         return QtCore.QSize(self._defaultWidth, self._defaultHeight)
 
     def updateUI(self,frameNumber,framecount,timeinfo):
-        self.trigger.emit(frameNumber,framecount,timeinfo)
+        self.posChanged.emit(frameNumber,framecount,timeinfo)
 
 class VideoGLWidget(QOpenGLWidget):
-    trigger = pyqtSignal(float,float,float)
+    posChanged = pyqtSignal(float,float,float)
     onMVPGLUpdate = pyqtSignal()
     def __init__(self, parent,mpv):
         QOpenGLWidget.__init__(self,parent)
@@ -62,8 +62,11 @@ class VideoGLWidget(QOpenGLWidget):
         self._defaultHeight = 518 #ratio 16:9
         self._defaultWidth = 921
         self.onMVPGLUpdate.connect(self.__update)
+        self.setUpdateBehavior(QOpenGLWidget.UpdateBehavior.PartialUpdate)
         
     def initializeGL(self):
+        if self.mpv is None:
+            return
         params = {'get_proc_address': self.get_proc_addr_c}
         self.ctx = MpvRenderContext(self.mpv,
                                     'opengl',
@@ -108,19 +111,23 @@ class VideoGLWidget(QOpenGLWidget):
 
     #Called by MpvPlayer#_onTimePos
     def updateUI(self,frameNumber,framecount,timeinfo):
-        self.trigger.emit(frameNumber,framecount,timeinfo)
+        self.posChanged.emit(frameNumber,framecount,timeinfo)
     
 class MpvPlayer():
     ERR_IDS=["No video or audio streams selected.","Failed to recognize file format."]
     def __init__(self):
         self.mediaPlayer =None
         self.seekLock=Condition()
-        self._frameInfoFunc=None
+        self._frameInfoFunc = None
         self._resetState()
     
     def initPlayer(self,container):
         kwArgs=self.__baseMpvArgs()
+        kwArgs["vo"]="gpu-next" 
         kwArgs["wid"]=str(int(container.winId()))
+        if FFMPEGTools.OSTools().fileExists("/proc/driver/nvidia/version"):
+            kwArgs["hwdec"] = "nvdec_copy"
+            Log.info("Switched to nvdec")      
         self.mediaPlayer = MPV(**kwArgs)
         self._hookEvents()
         return self.mediaPlayer 
@@ -128,7 +135,9 @@ class MpvPlayer():
     def initGLPlayer(self):
         #stripes when using file explorer (initial call without file) 
         kwArgs=self.__baseMpvArgs()
-        kwArgs["vo"]="libmpv" 
+        if FFMPEGTools.OSTools().fileExists("/proc/driver/nvidia/version"):
+            kwArgs["hwdec"] = "nvdec"
+            Log.info("Switched to nvdec")        
         self.mediaPlayer = MPV(**kwArgs)
         self._hookEvents()
         return self.mediaPlayer 
@@ -151,8 +160,8 @@ class MpvPlayer():
     Offset should be 0.1 for fast seek and 1.5 to 2.5 for slow seek (especially mpgts)
     '''    
     def __baseMpvArgs(self):
-        return {   "hwdec":"auto-safe",
-            #"vo":"libmpv", depends on backend - see below                
+        return {"hwdec":"auto-safe",
+            "vo":"libmpv", #depends on backend - see below                
             #video_sync="display-desync", #no effect on mkv/vc1
             "log_handler":self._passLog,
             "loglevel" : 'error',
@@ -161,7 +170,7 @@ class MpvPlayer():
             "mute" : 'yes',
             #"video_latency_hacks" : "yes", #no avail sbtx
             "audio" : "no", #this improves seeking
-            #"video_sync" : "desync", #improves seeking instead of audio = off
+            "video_sync" : "desync", #improves seeking instead of audio = off
             #"initial_audio_sync" : "no", check this as an alternative
             "keep_open" : "always",
             #"rebase_start_time" : 'yes',  #default, no will show the real time
@@ -212,8 +221,8 @@ class MpvPlayer():
         res= re.findall(r'\d+',ver)
         nbr = 100*int(res[0])+int(res[1])
         if nbr>30:
-            self.mediaPlayer.demuxer_max_back_bytes='10000M'
-            self.mediaPlayer.demuxer_max_bytes = '10000M'
+            self.mediaPlayer.demuxer_max_back_bytes='150M'
+            self.mediaPlayer.demuxer_max_bytes = '150M'
             self.mediaPlayer.demuxer_cache_wait='no'
             Log.info("applied demuxer settings for mpv > 3.x")
         
@@ -271,31 +280,24 @@ class MpvPlayer():
         if self.mediaPlayer.seeking is None:
             Log.error("No seek! Aborting")
             return
-        step = frameNumber - self.getCurrentFrameNumber()
-        if abs(step) < 20: #mpv hack: mpegts small distances
-            self.seekStep(step)
-            return
+
         secs = self.calcPosition(frameNumber)#hack
-        #ts =self._timeAsString(secs)
-        #print("1seek secs: %.3f %d >%s"%(secs,frameNumber,ts))
+        ts =self._timeAsString(secs)
+        #print("§<<<<seek secs: %.3f %d >%s"%(secs,frameNumber,ts))
         if fast:
             self.mediaPlayer.hr_seek_demuxer_offset=0.1
-        self.mediaPlayer.seek(secs,"absolute+exact")
+        
+        self.mediaPlayer.seek(secs,"absolute")
         self._waitSeekDone()
         self.mediaPlayer.hr_seek_demuxer_offset=self._demuxOffset
         
-    '''
-    #unused    
-    def __seekPrecise(self,dialStep):
-        secs=self.calcOffset(dialStep)
-        #print("dial:",dialStep)
-        self.mediaPlayer.seek(secs,"absolute+exact")
-        self._waitSeekDone()
-    '''
-
     #using dialStep with relative leads to different timestamps... 
     def seekStep(self,dialStep):
         if self.mediaPlayer.seeking is not None:
+            if self.mediaPlayer.seeking:  # Property check - is MPV busy?
+                # MPV is busy - ignore
+                return  # Don't send another command yet            
+            
             if dialStep == -1:
                 self.mediaPlayer.frame_back_step()
                 return
@@ -310,8 +312,6 @@ class MpvPlayer():
                     
             self.mediaPlayer.seek(nxt,"relative+exact")
             #print("seek dial %d step1 %f time:%f dur:%f"%(dialStep,nxt,self.timePos(),self.duration)) 
-            self._waitSeekDone()
-            #print("seekStep2 %f dial: %d currTime:%f"%(nxt,dialStep,self.timePos()))
         else:
             Log.info("MPV: Seek none!")
                                
@@ -369,31 +369,35 @@ class MpvPlayer():
             self.setFPS(val)
     '''
     
-    def _onTimePos(self,name,val):
-        if val is not None:
-            self._timePos=val
-            if not self._frameInfoFunc:
-                return
+    def _onTimePos(self, name, val):
+        if val is None:
+            return
+        
+        self._timePos=val
+        if not self._frameInfoFunc:
+            return
 
-            if not self.mediaPlayer.pause:  #player hack...          
-                now=time.monotonic()
-                if now-self._lastDispatch < (1/self.fps):
-                    return
-                self._lastDispatch=now
-            frameNumber=self.getCurrentFrameNumber()
-            
-            #ts =self._timeAsString(val)
-            #print("TS:",val," fn:",frameNumber," real time:",ts," calc:",self.timePos())
-            '''
-            xfps = self.fps
-            if xfps is None:
-                xfps=-1.0
-            xeps= self.mediaPlayer.estimated_vf_fps
-            if xeps is None:
-                xeps=-1.0
-            print("prop time %.3f fps:%f fn:%d fc:%d"%(val,xfps,frameNumber,self.framecount))
-            '''
-            self._frameInfoFunc(frameNumber,self.framecount,self.timePos()*1000)
+                # More aggressive throttling during seeking
+        if self.mediaPlayer.seeking:
+            # Limit updates to 15 FPS during seeks
+            min_interval = 1.0 / 15.0
+        elif not self.mediaPlayer.pause:
+            # Normal throttling during playback
+            min_interval = 1.0 / self.fps
+        else:
+            # No throttling when paused
+            min_interval = 0
+        
+        if min_interval > 0:
+            now=time.monotonic()
+            if now-self._lastDispatch < (1/self.fps):
+                return
+            self._lastDispatch=now
+        frameNumber=self.getCurrentFrameNumber()
+        
+        #ts =self._timeAsString(val)
+        #print("§>>>TS:",val," fn:",frameNumber," real time:",ts," calc:",self.timePos())
+        self._frameInfoFunc(frameNumber,self.framecount,self.timePos()*1000)
     
     #pure debug info
     def _timeAsString(self,val):
@@ -404,13 +408,13 @@ class MpvPlayer():
     def _onPlayEnd(self,name,val):
         if val == True and self.play_func:
             self.play_func(False)
-            
-    def _onSeek(self,name,val):
+
+    def _onSeek(self,__name,val):
         if val==False:
             with self.seekLock:
                 self.seekLock.notify()
                 self.mediaPlayer.unobserve_property("seeking",self._onSeek)
-    
+   
     def _waitSeekDone(self):
         self.mediaPlayer.observe_property("seeking",self._onSeek)
         with self.seekLock:  
@@ -439,7 +443,7 @@ class MpvPlayer():
                         self._readyMsgCount=0;
                         self.seekLock.notify()
     
-    def _passLog(self,loglevel, component, message):
+    def _passLog(self,__loglevel, component, message):
         msg='{}: {}'.format(component, message)
         Log.error(">%s",msg)
         with self.seekLock:
@@ -471,6 +475,10 @@ class MpvPlayer():
     def tweakVC1(self):
         Log.info("Set VC1 codec in MPV explictly")
         self.mediaPlayer.hwdec_codecs="vc1"       
+ 
+    def resetCodecs(self):
+        #self.mediaPlayer.hwdec_codecs = "h264,hevc,vp8,vp9,av1,mpeg2video,mpeg4,vc1"
+        self.mediaPlayer.hwdec_codecs ="all"
  
     def tweakMPG(self):
         Log.info("MP2: Setting frame offset in mpg (mpv bug) and seek offset to high")
@@ -515,12 +523,15 @@ class MpvPlugin():
         self.iconSize=iconSize
         self.controller=None #VCControl
         self.sliderThread=SliderThread(self.onSeek)
+        self.audioLanguages=[]
+        self.audioMapping={}
         
     def initPlayer(self,filePath, streamData):
         locale.setlocale(locale.LC_NUMERIC, 'C')
         self.__setupPlayer()
         
         #check stream data for exact one video stream
+        self._tweakStream(streamData)
         self.player.open(filePath)    
         if not self.player.isReadable:
             raise Exception(self.player.lastError)
@@ -595,6 +606,22 @@ class MpvPlugin():
         pix = pix.scaledToWidth(self.iconSize, mode=Qt.TransformationMode.SmoothTransformation)
         return pix       
 
+    def _tweakStream(self,streamData):
+        #Transport stream handling:
+        videoInfo = streamData.getVideoStream() 
+        isUHD = float(videoInfo.getWidth())>3000.0
+        interlaced = videoInfo.isInterlaced()
+        if streamData.isTransportStream() or interlaced:
+            self.player.tweakTansportStreamSettings(interlaced)  
+        if isUHD:
+            self.player.tweakUHD() 
+        if streamData.isVC1Codec():
+            self.player.tweakVC1() 
+        else:
+            self.player.resetCodecs() 
+        if streamData.isMPEG2Codec():
+            self.player.tweakMPG()           
+
     def _sanityCheck(self,streamData):
         if streamData is None:
             return
@@ -605,7 +632,7 @@ class MpvPlugin():
             self.player.setAudioIndex(audioInfo.slot)        
         ff_fps= videoInfo.frameRateMultiple()
         ff_FrameCount = round(ff_fps*duration)
-        isUHD = float(videoInfo.getWidth())>3000.0
+        
         interlaced = videoInfo.isInterlaced()
         frameCount= self.player.framecount
         if not frameCount:
@@ -627,15 +654,10 @@ class MpvPlugin():
             Log.info.logInfo("Irregular count, ratio: %.3f, setting framecount %d"%(fcCheck,ff_FrameCount))
             self.player.framecount=max(1,ff_FrameCount)    
             
-        #Transport stream handling:
-        if streamData.isTransportStream() or interlaced:
-            self.player.tweakTansportStreamSettings(interlaced)  
-        if isUHD:
-            self.player.tweakUHD() 
-        if streamData.isVC1Codec():
-            self.player.tweakVC1()  
-        if streamData.isMPEG2Codec():
-            self.player.tweakMPG()                        
+            
+        #audio:                     
+        self.audioLanguages = streamData.getLanguages()
+        self.audioMapping = streamData.getLanguageMapping()
 
     def _secureDiv(self,nominator,denominator):
         return nominator / denominator if denominator else 0
@@ -676,9 +698,31 @@ class MpvPlugin():
             return False
         return self.player.togglePlay()
     
-    def changeSettings(self,key,value):
+    def changeSettings(self,settings):
         if self.player is not None:
-            self.player.changeSettings(key,value)                
+            self.player.changeSettings("subtitle",settings.showSubid)   
+            lang = settings.getPreferedLanguageCodes()
+            self.player.setAudioIndex(self.__findAudioIndex(lang))
+    
+    def __findAudioIndex(self,codes):
+        if len(codes)==0:
+            return 1;
+        '''
+        for lang in self.audioLanguages:
+            print("Lang avail:",lang)
+        for code in codes:
+            print("Lang prev:",code)
+        
+        for isoCode,idxTuple in self.audioMapping.items():
+            print("map:",isoCode, " to:",idxTuple[0])
+        '''    
+        iso = Cutter.IsoMap().codeForCountry(codes[0],self.audioLanguages)
+        idxList = self.audioMapping.get(iso,[-1,-1])
+        Log.info("Found audiostream %d for lang:%s [%s]",idxList[0],iso,codes[0])
+        if idxList[0]>0:
+            return idxList[0]
+
+        return 1
     
     def markStopPlay(self,boolval):
         #MPVEventHandlerThread-pass it over to the main thread.
