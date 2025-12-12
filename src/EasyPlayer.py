@@ -32,7 +32,7 @@ from FFMPEGTools import  FFStreamProbe, OSTools, ConfigAccessor
 import sys, json, FFMPEGTools, getopt, traceback, locale, os
 from threading import Condition
 from MpvPlayer import SliderThread
-from executing.executing import only
+
 
 global Log
 global AppName
@@ -482,7 +482,7 @@ class MainFrame(QtWidgets.QMainWindow):
         self.shortcutPageDown.activated.connect(lambda: self.player.seekRelative(-60))        
 
     def _initIcon(self):
-        self.player.mpv.loadfile("icons/easyPlay.svg")
+        self.player.mpv.loadfile("icons/easyPlay.png")
 
     def _makeLayout(self):
         mainBox = QtWidgets.QVBoxLayout()  # for all
@@ -512,6 +512,8 @@ class MainFrame(QtWidgets.QMainWindow):
             QtCore.QTimer.singleShot(0, lambda: self._switchStream(fn))
     
     def _switchStream(self, fn):
+        if not fn:
+            return
         try:
             self.player.setStreamData(fn)
             self.updateWindowTitle(fn)
@@ -1000,6 +1002,8 @@ def getAppIcon():
 
 
 def main():
+    qt_based_desktops = ["kde","plasma","lxqtt","trinity desktop","lumina","lomiri","cutefish","ukui","thedesk","razor","deepin","dde"]
+
     try:
         global ICOMAP 
         global WIN 
@@ -1013,6 +1017,10 @@ def main():
         argv = sys.argv
         res = parseOptions(argv)    
         FFMPEGTools.setupRotatingLogger(AppName, res["logConsole"])
+        de = OSTools().currentDesktop()
+        if de not in qt_based_desktops:        
+            os.environ["QT_QPA_PLATFORMTHEME"] = "gtk3"
+            os.environ['QT_QPA_PLATFORM'] = 'xcb'
         app = QApplication(argv)
         # Set the application name (this sets WM_CLASS)
         app.setApplicationName(AppName)
