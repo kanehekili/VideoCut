@@ -1886,7 +1886,6 @@ def parseOptions(args):
     return res
                                            
 def main():
-    qt_based_desktops = ["kde","plasma","lxqtt","trinity desktop","lumina","lomiri","cutefish","ukui","thedesk","razor","deepin","dde"]
     try:
         global WIN
         global ICOMAP
@@ -1902,9 +1901,8 @@ def main():
         res=parseOptions(argv)
         FFMPEGTools.setupRotatingLogger("VideoCut",res["logConsole"])
         de = OSTools().currentDesktop()
-        if de not in qt_based_desktops: 
-            os.environ["QT_QPA_PLATFORMTHEME"] = "gtk3"
-            os.environ['QT_QPA_PLATFORM'] = 'xcb'
+        if de not in OSTools.QT_DESKTOPS:        
+            OSTools().setGTKEnvironment()
             Log.info("GTK based - switched to QT_QPA_PLATFORM = xcb" )
 
         app = QApplication(argv)

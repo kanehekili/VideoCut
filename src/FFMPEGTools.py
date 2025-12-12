@@ -59,6 +59,8 @@ def setLogLevel(levelString):
 class OSTools():
     __instance=None
 
+    QT_DESKTOPS = ["kde","plasma","lxqtt","trinity desktop","lumina","lomiri","cutefish","ukui","thedesk","razor","deepin","dde"]
+
     def __new__(cls):
         if OSTools.__instance is None:
             OSTools.__instance=object.__new__(cls)
@@ -207,6 +209,9 @@ class OSTools():
     def currentDesktop(self):
         return os.environ.get("XDG_CURRENT_DESKTOP", "").lower()
 
+    def setGTKEnvironment(self):
+        os.environ["QT_QPA_PLATFORMTHEME"] = "gtk3"
+        os.environ['QT_QPA_PLATFORM'] = 'xcb'
 
 class ConfigAccessor():
     __SECTION = "default" 
@@ -665,6 +670,7 @@ class FFStreamProbe():
         s = self.getVideoStream()
         if s:
             Log.debug("Index: %d", s.getStreamIndex())
+            Log.debug("Slot: %d", s.slot)
             Log.debug("codec %s", s.getCodec())
             Log.debug("getCodecTimeBase: %s", s.getCodecTimeBase())
             Log.debug("getTimeBase: %s", s.getTimeBase())
@@ -681,6 +687,7 @@ class FFStreamProbe():
         s = self.getAudioStream()
         if s:  
             Log.debug("Index:%d", s.getStreamIndex())
+            Log.debug("Slot: %d", s.slot)
             Log.debug("getCodec:%s", s.getCodec())
             Log.debug("bitrate(kb) %d", s.getBitRate())
             Log.debug("getCodecTimeBase: %s", s.getCodecTimeBase())
@@ -978,6 +985,7 @@ class VideoStreamInfo():
     # int values
     NA = "N/A"
     TAG = "TAG:"
+    PIC ="DISPOSITION:attached_pic"
 #     keys = ["index","width", "height","avg_frame_rate","duration","sample_rate"]
 #     stringKeys =["codec_type","codec_name"]
 #     divKeys =["display_aspect_ratio"]        
@@ -1142,13 +1150,16 @@ class VideoStreamInfo():
             return val
         return self.NA
     
+    def _picAttached(self):
+        return self.dataDict.get(self.PIC,"0")=="1"
+    
     def isAudio(self):
         # Is this stream labeled as an audio stream?
         return str(self.dataDict.get('codec_type',"")) == 'audio'
 
     def isVideo(self):
         #Is the stream labeled as a video stream.
-        return str(self.dataDict.get('codec_type',"")) == 'video'
+        return str(self.dataDict.get('codec_type',"")) == 'video' and not self._picAttached()
         
     def isSubTitle(self):
         # Is this stream labeled as subtitle stream?

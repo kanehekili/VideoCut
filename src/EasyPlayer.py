@@ -86,6 +86,9 @@ class Player(QOpenGLWidget):
             },
         )
         if self.ctx:
+            if FFMPEGTools.OSTools().fileExists("/proc/driver/nvidia/version"):
+                self.mpv.hwdec = "nvdec"
+                Log.info("Switched to nvdec")            
             self.ctx.update_cb = self._on_update
             self.triggerInitialized.emit()
 
@@ -99,17 +102,13 @@ class Player(QOpenGLWidget):
                 self.isAudioOnly = self.streamData.getVideoStream() is None
                 self._tweak(self.streamData)
                 tx = FFMPEGTools.OSTools().getFileNameOnly(fn)
-                print("TODO: title:", tx)
                 return True
             except IOError:
                 Log.exception("Setting Stream Data")
-                self.lastError = "Invalid video file"
+                self.lastError = "Invalid media file"
                 self.onError.emit(self.lastError)
 
     def _tweak(self, streamData):
-        if FFMPEGTools.OSTools().fileExists("/proc/driver/nvidia/version"):
-            self.mpv.hwdec = "nvdec"
-            Log.info("Switched to nvdec")
         if streamData.isVC1Codec(): 
             self.mpv.hwdec_codecs = "vc1"
             Log.info("Optimized for VC1")  
@@ -196,6 +195,7 @@ class Player(QOpenGLWidget):
             self.duration = val
             Log.info("durance detected:%.3f" % (val))  
             self.durString = '{:02.0f}:{:02.0f}:{:02.0f}'.format(val // 3600, val % 3600 // 60, val % 60)
+            self._on_update()
     
     def _onReadyWait(self, name, val):
         if val is not None:
@@ -297,7 +297,7 @@ class MainFrame(QtWidgets.QMainWindow):
     def initUI(self):
         # ##the actions
         
-        self.loadAction = QtGui.QAction(QtGui.QIcon(ICOMAP.ico("loadAction")), 'Load Video (CRTL+L)', self)
+        self.loadAction = QtGui.QAction(QtGui.QIcon(ICOMAP.ico("loadAction")), 'Load media file (CRTL+L)', self)
         self.loadAction.setShortcut('Ctrl+L')
         self.loadAction.triggered.connect(self.loadFile)
         
@@ -305,7 +305,7 @@ class MainFrame(QtWidgets.QMainWindow):
         # self.exitAction.setShortcut('Ctrl+Q')
         # self.exitAction.triggered.connect(QApplication.quit)        
         
-        self.playAction = QtGui.QAction(QtGui.QIcon(ICOMAP.ico("playStart")), 'Play video (toggle with space)', self)
+        self.playAction = QtGui.QAction(QtGui.QIcon(ICOMAP.ico("playStart")), 'Play media (toggle with space)', self)
         self.shortcutPlay = QtGui.QShortcut(QtGui.QKeySequence("Space"), self)
         self.shortcutPlay.setContext(QtCore.Qt.ShortcutContext.ApplicationShortcut)
         self.shortcutPlay.activated.connect(self.playVideo)
@@ -368,7 +368,7 @@ class MainFrame(QtWidgets.QMainWindow):
         fontM = QtGui.QFontMetrics(self.ui_InfoLabel.font())
         self.ui_InfoLabel.setFixedHeight(fontM.height() + round(fontM.height() * 0.5))
         self.ui_InfoLabel.setAlignment(QtCore.Qt.AlignmentFlag.AlignVCenter | QtCore.Qt.AlignmentFlag.AlignRight)
-        self.ui_InfoLabel.setToolTip("Infos about the video position")
+        self.ui_InfoLabel.setToolTip("Infos about the media position")
         
         self._createSlider()
        
@@ -466,7 +466,7 @@ class MainFrame(QtWidgets.QMainWindow):
         
         self.ui_Slider.setMinimum(0)
         self.ui_Slider.setMaximum(self.SLIDER_RESOLUTION)
-        self.ui_Slider.setToolTip("Video track")
+        self.ui_Slider.setToolTip("Time track")
         self.ui_Slider.setTickInterval(0)
         self.ui_Slider.valueChanged.connect(self._onSliderMoved)
         
@@ -506,10 +506,11 @@ class MainFrame(QtWidgets.QMainWindow):
     
     def loadFile(self):
         initalPath = self.player.getSourceDir()
-        result = QtWidgets.QFileDialog.getOpenFileName(parent=self, directory=initalPath, caption="Load Video");
+        result = QtWidgets.QFileDialog.getOpenFileName(parent=self, directory=initalPath, caption="Load Media");
         if result[0]:
             fn = self.__encodeQString(result)
-            QtCore.QTimer.singleShot(0, lambda: self._switchStream(fn))
+            QtCore.QTimer.singleShot(10, lambda: self._switchStream(fn))
+            
     
     def _switchStream(self, fn):
         if not fn:
@@ -520,7 +521,7 @@ class MainFrame(QtWidgets.QMainWindow):
             self.asyncPlay()
         except:
             self._initIcon()
-            self.getErrorDialog("Invalid file", "%s is not a video file" % (fn), "-").show()
+            self.getErrorDialog("Invalid file", "%s is not a known media file" % (fn), "-").show()
     
     def __encodeQString(self, stringTuple):
         text = stringTuple[0]
@@ -560,8 +561,10 @@ class MainFrame(QtWidgets.QMainWindow):
         if not self.ui_Slider.isSliderDown():
             self.ui_Slider.blockSignals(True)
             dur = self.player.duration
-            # not always present dur = self.player.streamData.getVideoStream().duration()
-            sliderPos = self.SLIDER_RESOLUTION * timepos / dur 
+            if dur == 0:
+                sliderPos=0
+            else:
+                sliderPos = self.SLIDER_RESOLUTION * timepos / dur 
             self.ui_Slider.setSliderPosition(int(sliderPos))
             self.ui_Slider.blockSignals(False)    
         s = int(timepos)
@@ -570,7 +573,7 @@ class MainFrame(QtWidgets.QMainWindow):
     
     @pyqtSlot(str)
     def _onPlayerError(self, errorMsg):
-        self.getErrorDialog("Invalid video file", "Not a valid video codec found", "on_player error").show()
+        self.getErrorDialog("Invalid file", "Not a valid codec found", "on_player error").show()
     
     def __enableActionsOnVideoPlay(self, enable):
         self.loadAction.setEnabled(enable)
@@ -581,9 +584,8 @@ class MainFrame(QtWidgets.QMainWindow):
         self.player.triggerUpdate.connect(self._onSyncSlider)
         self.settings.changeEQ.connect(self._onEQChanged)
         self.settings.changeSub.connect(self._onSubtitleChanged)
-        # self.player.setStreamData(self.player.filePath)
-        # self.asyncPlay()
-        self._switchStream(self.player.filePath)
+        #self._switchStream(self.player.filePath)
+        QtCore.QTimer.singleShot(10, lambda: self._switchStream(self.player.filePath))
     
     def asyncPlay(self):
         self.w = Worker(self.player.startPlaying)
@@ -1002,8 +1004,6 @@ def getAppIcon():
 
 
 def main():
-    qt_based_desktops = ["kde","plasma","lxqtt","trinity desktop","lumina","lomiri","cutefish","ukui","thedesk","razor","deepin","dde"]
-
     try:
         global ICOMAP 
         global WIN 
@@ -1018,9 +1018,9 @@ def main():
         res = parseOptions(argv)    
         FFMPEGTools.setupRotatingLogger(AppName, res["logConsole"])
         de = OSTools().currentDesktop()
-        if de not in qt_based_desktops:        
-            os.environ["QT_QPA_PLATFORMTHEME"] = "gtk3"
-            os.environ['QT_QPA_PLATFORM'] = 'xcb'
+        if de not in OSTools.QT_DESKTOPS:        
+            OSTools().setGTKEnvironment()
+            Log.info("GTK based - switched to QT_QPA_PLATFORM = xcb" )
         app = QApplication(argv)
         # Set the application name (this sets WM_CLASS)
         app.setApplicationName(AppName)
