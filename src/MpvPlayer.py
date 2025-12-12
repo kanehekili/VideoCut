@@ -123,7 +123,7 @@ class MpvPlayer():
     
     def initPlayer(self,container):
         kwArgs=self.__baseMpvArgs()
-        kwArgs["vo"]="gpu-next" 
+        kwArgs["vo"]="gpu-next," 
         kwArgs["wid"]=str(int(container.winId()))
         if FFMPEGTools.OSTools().fileExists("/proc/driver/nvidia/version"):
             kwArgs["hwdec"] = "nvdec_copy"
