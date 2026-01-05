@@ -7,7 +7,7 @@ Standards-Version: 3.0.0
 
 
 
-Architecture: all
+Architecture: amd64 arm64 armhf
 Depends: @xlibsx@, ${shlibs:Depends}, ${misc:Depends}
 Description: Fast and lossless videocutter for mp2,mp4,mkv,av-1 and more 
 Section: video

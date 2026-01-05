@@ -20,12 +20,14 @@ package() {
   install -Dm 644 *.py -t "${pkgdir}/opt/videocut"
   rm ${pkgdir}/opt/videocut/FFMPEGTests.py
   install -Dm 755 VideoCut.py -t "${pkgdir}/opt/videocut"
+  install -Dm 755 EasyPlayer.py -t "${pkgdir}/opt/videocut"
   find data icons lib -type f \
     -exec install -Dm 644 "{}" "${pkgdir}/opt/videocut/{}" \;
   install -Dm 755 "ffmpeg/src/remux5" -t "${pkgdir}/opt/videocut/ffmpeg/bin"
 
-  install -Dm 644 "VideoCut.desktop" -t "${pkgdir}/usr/share/applications"
+  install -Dm 644 "*.desktop" -t "${pkgdir}/usr/share/applications"
 
   install -d "${pkgdir}/usr/bin"
   ln -s "/opt/videocut/VideoCut.py" "${pkgdir}/usr/bin/videocut"
+  ln -s "/opt/videocut/EasyPlayer.py" "${pkgdir}/usr/bin/easyplay"
 }

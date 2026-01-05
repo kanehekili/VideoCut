@@ -210,7 +210,8 @@ class OSTools():
         return os.environ.get("XDG_CURRENT_DESKTOP", "").lower()
 
     def setGTKEnvironment(self):
-        os.environ["QT_QPA_PLATFORMTHEME"] = "gtk3"
+        #too narrow: 
+        #os.environ["QT_QPA_PLATFORMTHEME"] = "@qtplatform@"
         os.environ['QT_QPA_PLATFORM'] = 'xcb'
 
 class ConfigAccessor():

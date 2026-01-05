@@ -530,11 +530,11 @@ class MpvPlugin():
         locale.setlocale(locale.LC_NUMERIC, 'C')
         self.__setupPlayer()
         
-        #check stream data for exact one video stream
-        self._tweakStream(streamData)
-        self.player.open(filePath)    
+        self.player.open(filePath)
         if not self.player.isReadable:
             raise Exception(self.player.lastError)
+        #check stream data for exact one video stream
+        self._tweakStream(streamData)  
         self._sanityCheck(streamData)
         self.player.syncPlay(self.markStopPlay)
         return self.player
@@ -607,6 +607,8 @@ class MpvPlugin():
         return pix       
 
     def _tweakStream(self,streamData):
+        if streamData is None:
+            return
         #Transport stream handling:
         videoInfo = streamData.getVideoStream() 
         isUHD = float(videoInfo.getWidth())>3000.0

@@ -555,7 +555,7 @@ int _initOutputContext(const AVOutputFormat *pre_ofmt, char *out_filename){
 
     /* The VBV Buffer warning is removed: */
     AVCPBProperties *props;
-#ifdef AVSTREAM_SIDEATA
+#ifdef AVSTREAM_SIDEDATA
     props = (AVCPBProperties*) av_stream_new_side_data(videoInfo->outStream, AV_PKT_DATA_CPB_PROPERTIES, sizeof(*props));
 #else
     const AVPacketSideData *sd = av_packet_side_data_new(&videoInfo->outStream->codecpar->coded_side_data,

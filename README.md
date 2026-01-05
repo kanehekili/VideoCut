@@ -1,7 +1,7 @@
 # VideoCut
-Version 3.0.6
+Version 3.0.7
 
-![Download](https://github.com/kanehekili/VideoCut/releases/download/3.0.6/videocut3.0.6.tar)
+![Download](https://github.com/kanehekili/VideoCut/releases/download/3.0.7/videocut3.0.7.tar)
 
 MP2/MP4 Cutter for Linux on base of mpv and ffmpeg. Cutting is lossless, the target file will not be reencoded. 
 
@@ -15,9 +15,12 @@ VideoCut supports the cutting of subtitles when "Show subtitles"  in the setting
 
 The current version is written in python3 and uses the qt6 widget kit.  
 
+## :boom: EasyPlayer Video/Audio player included
+As a spinoff a player has been introduced. It displays pictures, plays videos and audio files. 
+
 ### Prerequisites
 * Arch: python3, python-pillow and mpv
-* Debian/Mint/Ubuntu: python3 python3-pil libmpv1 (no-recommends)
+* Debian/Mint/Ubuntu: python3 python3-pil libmpv2 (or libmpv1) (no-recommends)
   #not working for Ubuntu 18.4: libmpv - use python3-opencv instead
 * Fedora: python3-pillow-qt and mpv-libs.x86_64
 * ffmpeg > 3.X to 8.X
@@ -25,11 +28,10 @@ The current version is written in python3 and uses the qt6 widget kit.
 * optional:(legacy) OpenCV 2.4 up to OpenCV 4.x (must be build with ffmpeg - with all its dependencies)
 
 #### Set GTK Theme for this QT application
-If you are running a DE with GTK/Gnome (as opposed to LXQT or KDE) there is no way to tweak anymore:
-* GKT2 to QT5/QT6 libraries do not work
-* QT_QPA_PLATFORMTHEME should not be set in non QT systems
-* Videocut will set the "fusion" mode - any new ideas are welcome. 
-
+If you are running a DE with GTK/Gnome (as opposed to LXQT or KDE)  you might set QT_QPA_PLATFORMTHEME:
+* Depending on the distro and version this variable may be defined with one of:
+* gtk2, qt6ct, fusion, gtk3
+* VideoCut will enforce "QT_QPA_PLATFORM=xcb" on Wayland for SSD decorations.
 
 ### Features
 Cuts an mpg file into parts and joins them afterwards. All commands can be reached via the toolbar.
@@ -78,7 +80,7 @@ The cog icon at the toolbar will open the settings dialog, providing the followi
 * VideoCut Muxer: Toggle between the internal Muxer or the ffmpeg command line. Default is on.
 * Audio Mute: Mute all audio streams and extract video only. Default is off (no mute)
 * Show Subtitles: Show subtitles in the preview window (mpv backend only)
-* Usel GL Widgets (mpv backend only). Needed for wayland. Default is on (works with X11 as well)
+* Use GL Widgets (mpv backend only). Needed for wayland. Default is on (works with X11 as well)
 
 Pressing one of the 3 lightgreen "buttons" toggles the upper 3 settings directly. 
 
@@ -94,7 +96,7 @@ Note that this selection is ignored if audio is muted.
 
 ##Install
 
-#### Install via ppa on Linux Mint or Ubuntu (focal/jammy/Mint20 and newer versions)
+#### Install via ppa on Linux Mint or Ubuntu (Mint 22.2, Ubuntu 22.04 and newer versions)
 ```
 sudo add-apt-repository ppa:jentiger-moratai/mediatools
 sudo apt update
@@ -168,6 +170,9 @@ Copy the .desktop file and change the exec line to "Exec= python3 .../VideoCut.p
 Opencv will not be displaying subtitles nor frametypes.
 
 ### Changes 
+03.01.2026
+* Refines GTK compatiblity, introduces "easyplayer" video/audio player.
+
 21.11.25
 * support ffmpeg V8 + PKGBUILD cleanup - (Courtesy of Corubba - very much appreciated!)
 

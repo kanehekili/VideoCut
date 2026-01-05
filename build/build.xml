@@ -79,18 +79,14 @@
 		<chmod file="${ffmpeg}/bin/V7/remux5" perm="uo+rwx"/>
 		
 		<copy todir="${rootDir}">
-			<fileset file="${source}/*.py" >
-			   <exclude name="VideoCut.py"/>
-			</fileset>
+     		<fileset file="${source}/*.py" />
+			<filterset>
+  	    	    <filter token="qtplatform" value="${qtArch}"/>
+       		    <filter token="xxx" value="${version}"/>
+			</filterset>	
 		</copy>	
-				
-		<copy todir="${rootDir}">
-			<fileset file="${source}/VideoCut.py" />
-			 <filterset>
-			    <filter token="xxx" value="${version}"/>
-			  </filterset>			
-		</copy>
 		<chmod file="${rootDir}/VideoCut.py" perm="ugo+rwx"/>
+		<chmod file="${rootDir}/EasyPlayer.py" perm="ugo+rwx"/>				
 		
 	</target>
 
@@ -131,14 +127,14 @@
 				<filter token="xxx" value="${version}"/>
 				<filter token="xpkgrelx" value="${pkgrelease}"/>
 				<filter token="xtsx" value="${time.stamp}"/>	
-                <filter token="xlibsx" value=" python3, ffmpeg, python3-pyqt5, python3-pil, qt5-style-plugins, libmpv1, python3-pyqt5.qtopengl"/>															
+                <filter token="xlibsx" value="${ubu0-lib}"/>															
 			</filterset>			
 		</copy>
 		
 		<mkdir dir="${ubu0Target}/addons"/>
 		<mkdir dir="${ubu0Target}/debian"/>
 		<mkdir dir="${ubu0Target}/src"/>
-		<mkdir dir="${ubu0Target}/src/ffmpeg/bin/V4"/>
+		<mkdir dir="${ubu0Target}/src/ffmpeg/bin"/>
 		<copy todir="${ubu0Target}/src/icons">
 			<fileset dir="${srcIcons}">
 			</fileset>
@@ -151,16 +147,18 @@
 			<fileset file="${srcffmpeg}/src/makefile"/>
 		</copy>				
 		<copy todir="${ubu0Target}/src/lib">
-			<fileset file="${srcmpvlegacy}\mpv.py"/>
+			<fileset file="${srcmpv}\mpv.py"/>
 		</copy>		
 		<copy todir="${ubu0Target}/src">
 			<fileset file="${source}/*.py" />
 			<filterset>
 			    <filter token="xxx" value="${version}"/>
+			    <filter token="qtplatform" value="${qtUbu0}"/>
 			</filterset>
 		</copy>
 		
 		<chmod file="${ubu0Target}/src/VideoCut.py" perm="ug+rwx"/>
+		<chmod file="${ubu0Target}/src/EasyPlayer.py" perm="ug+rwx"/>
 		
 		<copy todir="${ubu0Target}/addons">
 			<fileset file="*.desktop"/>
@@ -181,14 +179,14 @@
 				<filter token="xxx" value="${version}"/>
 				<filter token="xpkgrelx" value="${pkgrelease}"/>
 				<filter token="xtsx" value="${time.stamp}"/>
-				<filter token="xlibsx" value=" python3, ffmpeg, python3-pyqt5, python3-pil, qt5-style-plugins, libmpv1, python3-pyqt5.qtopengl"/>					
+				<filter token="xlibsx" value="${ubu1-lib}"/>			
 			</filterset>			
 		</copy>
 		
 		<mkdir dir="${ubu1Target}/addons"/>
 		<mkdir dir="${ubu1Target}/debian"/>
 		<mkdir dir="${ubu1Target}/src"/>
-		<mkdir dir="${ubu1Target}/src/ffmpeg/bin/V4"/>
+		<mkdir dir="${ubu1Target}/src/ffmpeg/bin"/>
 		<copy todir="${ubu1Target}/src/icons">
 			<fileset dir="${srcIcons}">
 			</fileset>
@@ -201,16 +199,18 @@
 			<fileset file="${srcffmpeg}/src/makefile"/>
 		</copy>				
 		<copy todir="${ubu1Target}/src/lib">
-			<fileset file="${srcmpvlegacy}\mpv.py"/>
+			<fileset file="${srcmpv}\mpv.py"/>
 		</copy>		
 		<copy todir="${ubu1Target}/src">
 			<fileset file="${source}/*.py" />
 			<filterset>
 			    <filter token="xxx" value="${version}"/>
+			    <filter token="qtplatform" value="${qtUbu1}"/>
 			</filterset>
 		</copy>
 		
 		<chmod file="${ubu1Target}/src/VideoCut.py" perm="ug+rwx"/>
+		<chmod file="${ubu1Target}/src/EasyPlayer.py" perm="ug+rwx"/>
 		
 		<copy todir="${ubu1Target}/addons">
 			<fileset file="*.desktop"/>
@@ -231,14 +231,14 @@
 				<filter token="xxx" value="${version}"/>
 				<filter token="xpkgrelx" value="${pkgrelease}"/>
 				<filter token="xtsx" value="${time.stamp}"/>
-				<filter token="xlibsx" value="python3, ffmpeg, python3-pyqt6, python3-pil,libmpv2"/>					
+				<filter token="xlibsx" value="${ubu2-lib}"/>					
 			</filterset>			
 			
 		</copy>
 		<mkdir dir="${ubu2Target}/addons"/>
 		<mkdir dir="${ubu2Target}/debian"/>
 		<mkdir dir="${ubu2Target}/src"/>
-		<mkdir dir="${ubu2Target}/src/ffmpeg/bin/V4"/>
+		<mkdir dir="${ubu2Target}/src/ffmpeg/bin"/>
 		<copy todir="${ubu2Target}/src/icons">
 			<fileset dir="${srcIcons}">
 			</fileset>
@@ -257,9 +257,12 @@
 			<fileset file="${source}/*.py" />
 			<filterset>
 			    <filter token="xxx" value="${version}"/>
+			    <filter token="qtplatform" value="${qtUbu2}"/>
 			</filterset>
 		</copy>
 		<chmod file="${ubu2Target}/src/VideoCut.py" perm="ug+rwx"/>
+		<chmod file="${ubu2Target}/src/EasyPlayer.py" perm="ug+rwx"/>
+				
 		<copy todir="${ubu2Target}/addons">
 			<fileset file="*.desktop"/>
 		</copy>
