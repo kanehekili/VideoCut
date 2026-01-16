@@ -17,7 +17,7 @@ build() {
 package() {
   cd "${srcdir}/${pkgname}"
 
-  install -Dm 644 *.py -t "${pkgdir}/opt/videocut"
+  install -Dm 644 "*.py" -t "${pkgdir}/opt/videocut"
   rm ${pkgdir}/opt/videocut/FFMPEGTests.py
   install -Dm 755 VideoCut.py -t "${pkgdir}/opt/videocut"
   install -Dm 755 EasyPlayer.py -t "${pkgdir}/opt/videocut"
