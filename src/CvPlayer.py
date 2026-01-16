@@ -453,7 +453,9 @@ class CvPlugin():
     #unused
     def videoWidget(self):
         return self.cvWidget
-        
+    
+    def gpuMode(self,gpumode):
+        pass    
     
     #TODO based on time, not frame...        
     def setCutEntry(self,cutEntry,restore=False): #this is a cv restore hack

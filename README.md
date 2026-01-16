@@ -1,7 +1,7 @@
 # VideoCut
-Version 3.0.7
+Version 3.0.8
 
-![Download](https://github.com/kanehekili/VideoCut/releases/download/3.0.7/videocut3.0.7.tar)
+![Download](https://github.com/kanehekili/VideoCut/releases/download/3.0.8/videocut3.0.8.tar)
 
 MP2/MP4 Cutter for Linux on base of mpv and ffmpeg. Cutting is lossless, the target file will not be reencoded. 
 
@@ -20,7 +20,8 @@ As a spinoff a player has been introduced. It displays pictures, plays videos an
 
 ### Prerequisites
 * Arch: python3, python-pillow and mpv
-* Debian/Mint/Ubuntu: python3 python3-pil libmpv2 (or libmpv1) (no-recommends)
+* Debian/Mint/Ubuntu: python3 python3-pil libmpv2 (or libmpv1) (no-recommends) 
+* Ubuntu 26.04 needs additionally qt6-svg-plugins
   #not working for Ubuntu 18.4: libmpv - use python3-opencv instead
 * Fedora: python3-pillow-qt and mpv-libs.x86_64
 * ffmpeg > 3.X to 8.X
@@ -32,6 +33,8 @@ If you are running a DE with GTK/Gnome (as opposed to LXQT or KDE)  you might se
 * Depending on the distro and version this variable may be defined with one of:
 * gtk2, qt6ct, fusion, gtk3
 * VideoCut will enforce "QT_QPA_PLATFORM=xcb" on Wayland for SSD decorations.
+* On Ubuntu 26.04 you need to install qt6-gtk-platformtheme. This will get your GTK theme into any QT6 app. 
+* On Ubuntu(with libadwaita) use /etc/environment to add GTK_THEME=yourTheme to enforce a third party theme. (Hack)
 
 ### Features
 Cuts an mpg file into parts and joins them afterwards. All commands can be reached via the toolbar.
@@ -70,6 +73,12 @@ For DVB transport stream you should keep the ".m2t" ending, mkv containers shoul
 
 ### Audio Monitoring
 MPV supports audio streams while playing. Unfortunately it relies on the audio stream while seeking (precise) thus rendering exact seeking sometimes difficult due to problems decoding it. So audio is turned of (not just muted) while seeking. The "auto" mode has been replaced with the first valid audio stream and seems to work better for listening while cutting. 
+
+### Support for Qemu:
+-v will use a virtual GL driver for the preview window. (videocut -v)
+
+### Player included
+easyplay is a spinoff as a small easy to use media player. 
 
 ### Settings
 The cog icon at the toolbar will open the settings dialog, providing the following settings:
@@ -170,8 +179,11 @@ Copy the .desktop file and change the exec line to "Exec= python3 .../VideoCut.p
 Opencv will not be displaying subtitles nor frametypes.
 
 ### Changes 
+16.01.2026
+* Support virtual machines - hardening vc.ini  
+
 03.01.2026
-* Refines GTK compatiblity, introduces "easyplayer" video/audio player.
+* Refines GTK compatiblity, introduces "easyplay" video/audio player.
 
 21.11.25
 * support ffmpeg V8 + PKGBUILD cleanup - (Courtesy of Corubba - very much appreciated!)

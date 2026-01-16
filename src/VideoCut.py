@@ -38,14 +38,6 @@ Log = FFMPEGTools.Log
 SIZE_ICON = 80
 ITEM_ROW_COUNT = 3
 
-'''
-with open('/tmp/startup_env.txt', 'w') as f:
-    f.write(f"Executable: {sys.executable}\n")
-    f.write(f"CWD: {os.getcwd()}\n")
-    f.write(f"Args: {sys.argv}\n\n")
-    for k, v in sorted(os.environ.items()):
-        f.write(f"{k}={v}\n")
-'''
 
 saneCheck = FFmpegVersion()
 if not saneCheck.confirmFFmpegInstalled():
@@ -1140,9 +1132,9 @@ class LanguageSettingsDialog(QtWidgets.QDialog):
         dlgBox = QtWidgets.QVBoxLayout() 
         self.btnup = QtWidgets.QPushButton()
         self.btnup.clicked.connect(self.onButtonUp)
-        self.btnup.setIcon(QtGui.QIcon.fromTheme("up"))
+        self.btnup.setIcon(self.style().standardIcon(QtWidgets.QStyle.StandardPixmap.SP_ArrowUp))
         self.btndown = QtWidgets.QPushButton()
-        self.btndown.setIcon(QtGui.QIcon.fromTheme("down"))
+        self.btndown.setIcon(self.style().standardIcon(QtWidgets.QStyle.StandardPixmap.SP_ArrowDown))
         self.btndown.clicked.connect(self.onButtonDown)
         vBox.addStretch(1)
         vBox.addWidget(self.btnup, 0)
@@ -1835,13 +1827,25 @@ class IconMapper():
         self._read()
         
     def _read(self):
-        ipath=OSTools().joinPathes(OSTools().getWorkingDirectory(),"icons","icomap.json")
-        with open(ipath) as fn:
-            self.map = json.load(fn)
+        try:
+            ipath=OSTools().joinPathes(OSTools().getWorkingDirectory(),"icons","icomap.json")
+            with open(ipath) as fn:
+                self.map = json.load(fn)
+            #issue 45: Manipulation of json file
+            if not isinstance(self.map, dict):
+                raise ValueError("Corrupt icon file root")
+            for section, content in self.map.items():
+                if not isinstance(content, dict):
+                    raise ValueError(f"Corrupted config: section '{section}' is invalid."
+                )
+        except (json.JSONDecodeError, ValueError) as e:
+            Log.exception("Error load icons:")
+            raise RuntimeError(f"Warning! \n{e} \nPlease reinstall the application or replace 'icomap.json'.") 
+                 
             
     def ico(self,name):
         key=name.strip()
-        submap=self.map.get(self.section,self.DEFAULT)
+        submap=self.map.get(self.section,self.map[self.DEFAULT])
         return submap.get(key,self.getDefault(key))
      
     def getDefault(self,name):
@@ -1865,8 +1869,9 @@ def parseOptions(args):
     res["mpv"]=True
     res["logConsole"]=False
     res["file"]=None
+    res["virtual"]=False
     try:
-        opts,args=getopt.getopt(args[1:], "cdp:", ["console","debug","player="])
+        opts,args=getopt.getopt(args[1:], "cdp:v", ["console","debug","player=","virtual"])
         if len(args)==1:
             res["file"]=args[0]
     except getopt.GetoptError as err:
@@ -1881,6 +1886,8 @@ def parseOptions(args):
                 res["mpv"]=False
         elif o in ("-c","--console"):
             res["logConsole"]=True
+        elif o in ("-v","--virtual"):
+            res["virtual"]=True
         else:
             print("Undef:",o) 
     return res
@@ -1912,6 +1919,7 @@ def main():
         app.setDesktopFileName("VideoCut")        
         app.setWindowIcon(getAppIcon())
         VideoPlugin=setUpVideoPlugin(res["mpv"])
+        VideoPlugin.gpuMode(res["virtual"])
         ICOMAP=IconMapper(vc_config.get("icoSet","default"))
         fn =res["file"]
         if fn is None:

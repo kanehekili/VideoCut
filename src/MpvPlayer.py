@@ -53,25 +53,33 @@ class VideoGLWidget(QOpenGLWidget):
     onMVPGLUpdate = pyqtSignal()
     def __init__(self, parent,mpv):
         QOpenGLWidget.__init__(self,parent)
-        #setSurfaceType(QWindow.OpenGLSurface)
-        #QOpenGLWindow.__init__(self)
-        self.ratio= 1.0 #?is that true?
         self.mpv=mpv
         self.ctx = None
-        self.get_proc_addr_c = MpvGlGetProcAddressFn(get_proc_addr)
-        self._defaultHeight = 518 #ratio 16:9
-        self._defaultWidth = 921
+        self._defaultHeight = 518  #ratio 16:9
+        self._defaultWidth = 921 
         self.onMVPGLUpdate.connect(self.__update)
         self.setUpdateBehavior(QOpenGLWidget.UpdateBehavior.PartialUpdate)
+        self._opengl_fbo=None
         
+    
+    #called implicitly on creation    
     def initializeGL(self):
         if self.mpv is None:
             return
-        params = {'get_proc_address': self.get_proc_addr_c}
+        addr_c = MpvGlGetProcAddressFn(get_proc_addr)
+        self.makeCurrent()        
+        params = {'get_proc_address': addr_c}
         self.ctx = MpvRenderContext(self.mpv,
                                     'opengl',
                                     opengl_init_params=params)
         self.ctx.update_cb = self.on_update
+
+    def resizeGL(self, w, h):
+        # Cache it here - resizeGL is called after the widget is properly initialized
+        sc = self.devicePixelRatio()
+        pw = int(w * sc)
+        ph = int(h * sc)
+        self._opengl_fbo = {'w': pw, 'h': ph, 'fbo': self.defaultFramebufferObject()}
 
     def shutdown(self):
         if self.ctx is not None:
@@ -79,17 +87,8 @@ class VideoGLWidget(QOpenGLWidget):
             self.ctx = None
 
     def paintGL(self):
-        "init it on the 1st time"
-        if self.ctx is None:
-            self.initializeGL()
-        # check if we really need a ratio on desktops
-        #ratio = self._app.devicePixelRatio()
-        w = int(self.width() * self.ratio)
-        h = int(self.height() * self.ratio)
-        opengl_fbo = {'w': w,
-                      'h': h,
-                      'fbo': self.defaultFramebufferObject()}
-        self.ctx.render(flip_y=True, opengl_fbo=opengl_fbo)
+        if self.ctx and self._opengl_fbo:
+            self.ctx.render(flip_y=True,opengl_fbo=self._opengl_fbo)
 
     @pyqtSlot()
     def __update(self):
@@ -112,6 +111,17 @@ class VideoGLWidget(QOpenGLWidget):
     #Called by MpvPlayer#_onTimePos
     def updateUI(self,frameNumber,framecount,timeinfo):
         self.posChanged.emit(frameNumber,framecount,timeinfo)
+
+    def cleanup(self):
+        """Manual cleanup method"""
+        if self.ctx is not None:
+            self.makeCurrent()
+            try:
+                self.ctx.free()
+            except Exception as e:
+                Log.error(f"Error freeing context: {e}")
+            self.ctx = None
+       
     
 class MpvPlayer():
     ERR_IDS=["No video or audio streams selected.","Failed to recognize file format."]
@@ -474,7 +484,16 @@ class MpvPlayer():
  
     def tweakVC1(self):
         Log.info("Set VC1 codec in MPV explictly")
-        self.mediaPlayer.hwdec_codecs="vc1"       
+        self.mediaPlayer.hwdec_codecs="vc1" 
+        
+    def tweakVirtual(self,virtualGPU):
+        if virtualGPU:
+            self.mediaPlayer.gpu_dumb_mode = 'yes'
+            self.mediaPlayer.vd_lavc_dr = 'no'        
+ 
+    def supportVirtualGuest(self):
+        self.mediaPlayer.gpu_dumb_mode='yes'  
+        self.mediaPlayer.vd_lavc_dr='no' 
  
     def resetCodecs(self):
         #self.mediaPlayer.hwdec_codecs = "h264,hevc,vp8,vp9,av1,mpeg2video,mpeg4,vc1"
@@ -525,6 +544,7 @@ class MpvPlugin():
         self.sliderThread=SliderThread(self.onSeek)
         self.audioLanguages=[]
         self.audioMapping={}
+        self.virtualGPU=False
         
     def initPlayer(self,filePath, streamData):
         locale.setlocale(locale.LC_NUMERIC, 'C')
@@ -539,6 +559,9 @@ class MpvPlugin():
         self.player.syncPlay(self.markStopPlay)
         return self.player
 
+    def gpuMode(self,isVirtualGPU):
+        self.virtualGPU=isVirtualGPU
+
     def validate(self):
         if self.player:
             return self.player.validate()
@@ -549,6 +572,7 @@ class MpvPlugin():
         
     def shutDown(self):
         self.sliderThread.stop()
+        self.mpvWidget.cleanup()
     
     def createWidget(self,showGL,parent):
         self.showGL=showGL;
@@ -573,6 +597,7 @@ class MpvPlugin():
     
     def __setupPlayer(self):
         if self.showGL:
+            self.player.tweakVirtual(self.virtualGPU)
             return #already happened
         if self.player: #Non GL connect
             self.player.close()
@@ -653,7 +678,7 @@ class MpvPlugin():
             
         fcCheck= self._secureDiv(self.player.framecount,ff_FrameCount)
         if fcCheck < 0.9 or fcCheck > 1.1:
-            Log.info.logInfo("Irregular count, ratio: %.3f, setting framecount %d"%(fcCheck,ff_FrameCount))
+            Log.info("Irregular count, ratio: %.3f, setting framecount %d"%(fcCheck,ff_FrameCount))
             self.player.framecount=max(1,ff_FrameCount)    
             
             
@@ -666,11 +691,9 @@ class MpvPlugin():
 
     def showBanner(self):
         self.initPlayer("icons/film-clapper.png",None)
-        #self._showPos()
         
     def showFirstFrame(self):
         self.player.syncToStart()
-        #self._showPos()
 
     #slider    
     def enqueueFrame(self,frameNumber): #Slider stuff

@@ -29,7 +29,7 @@ from PyQt6.QtCore import QByteArray, pyqtSignal, pyqtSlot, QThread
 from PyQt6.QtOpenGLWidgets import QOpenGLWidget
 from lib.mpv import MPV, MpvGlGetProcAddressFn, MpvRenderContext
 from FFMPEGTools import  FFStreamProbe, OSTools, ConfigAccessor
-import sys, json, FFMPEGTools, getopt, traceback, locale, os
+import sys, json, FFMPEGTools, getopt, traceback, locale
 from threading import Condition
 from MpvPlayer import SliderThread
 
@@ -58,7 +58,7 @@ class Player(QOpenGLWidget):
     syncPlayStatus = pyqtSignal(int)
     onError = pyqtSignal(str)
     
-    def __init__(self, parent, path=None):
+    def __init__(self, parent, path=None, isVirtual=False):
         super().__init__(parent)
         self.closePending = False
         self.seekLock = Condition()
@@ -66,7 +66,7 @@ class Player(QOpenGLWidget):
         self._timePos = 0;
         self.streamData = None
         self._demuxOffset = 0.1
-        self.mpv = MPV(**self._getMPVArgs())
+        self.mpv = MPV(**self._getMPVArgs(isVirtual))
         self.filePath = path
         self._hookEvents()
         self._proc_addr_wrapper = MpvGlGetProcAddressFn(get_process_address)
@@ -77,6 +77,7 @@ class Player(QOpenGLWidget):
         self.lastError = None
         self.isAudioOnly = False
         self.durString = "00:00:00"
+        self._opengl_fbo=None
         
     def initializeGL(self) -> None:
         self.ctx = MpvRenderContext(
@@ -145,11 +146,17 @@ class Player(QOpenGLWidget):
         self.mpv.observe_property("eof-reached", self._onPlayEnd)
         self.mpv.observe_property("time-pos", self._onTimePos)  # messes up timing!
 
-    def paintGL(self) -> None:
-        rect = self.rect()
-        if self.ctx:
-            fbo = self.defaultFramebufferObject()
-            self.ctx.render(flip_y=True, opengl_fbo={'w': rect.width(), 'h': rect.height(), 'fbo': fbo})
+    def resizeGL(self, w, h):
+        # Cache it here - resizeGL is called after the widget is properly initialized
+        sc = self.devicePixelRatio()
+        pw = int(w * sc)
+        ph = int(h * sc)
+        self._opengl_fbo = {'w': pw, 'h': ph, 'fbo': self.defaultFramebufferObject()}        
+        
+
+    def paintGL(self):
+        if self.ctx and self._opengl_fbo:
+            self.ctx.render(flip_y=True, opengl_fbo=self._opengl_fbo)
                   
     def do_update(self):
         self.update()
@@ -259,12 +266,15 @@ class Player(QOpenGLWidget):
         self.mpv = None
         event.accept()
 
-    def _getMPVArgs(self):
+    def _getMPVArgs(self,isVirtual):
         kwArgs = {"hwdec":"auto-safe", "log_handler":self._passLog, "loglevel": 'error', "pause":False, "audio": "1", "keep_open": "always", "vo":"libmpv",
                 "input_vo_keyboard": False, "video-latency-hacks": "yes", "hr_seek": 'yes', "hr_seek_demuxer_offset": self._demuxOffset,  # below is test
                 "demuxer_max_back_bytes":'150M', "demuxer_max_bytes":'150M', "demuxer_cache_wait":'no', "stream_buffer_size":'255MiB',
                 "audio-display":"embedded-first"
                 }
+        if isVirtual:
+            kwArgs['gpu-dumb-mode'] = 'yes'
+            kwArgs['vd-lavc-dr'] = 'no'
         return kwArgs
 
     def _passLog(self, loglevel, component, message):
@@ -280,11 +290,11 @@ class Player(QOpenGLWidget):
 class MainFrame(QtWidgets.QMainWindow):
     SLIDER_RESOLUTION = 1000 * 1000
     
-    def __init__(self, qapp, aPath=None):
+    def __init__(self, qapp, aPath=None, isVirtual=False):
         self._isStarted = False
         self.__qapp = qapp
         super(MainFrame, self).__init__()
-        self.player = Player(self, aPath)
+        self.player = Player(self, aPath, isVirtual)
         self.settings = SettingsModel(self)
         self.audioMapping = None
         self.setWindowIcon(getAppIcon())
@@ -913,8 +923,9 @@ def parseOptions(args):
     res = {}
     res["logConsole"] = False
     res["file"] = None
+    res["virtual"]=False
     try:
-        opts, args = getopt.getopt(args[1:], "cdp:", ["console", "debug"])
+        opts, args = getopt.getopt(args[1:], "cdv", ["console", "debug", "virtual"])
         if len(args) == 1:
             res["file"] = args[0]
         else:
@@ -928,6 +939,8 @@ def parseOptions(args):
             FFMPEGTools.setLogLevel("Debug")
         elif o in ("-c", "--console"):
             res["logConsole"] = True
+        elif o in ("-v","--virtual"):
+            res["virtual"]=True            
         else:
             print("Undef:", o) 
     return res
@@ -1034,7 +1047,7 @@ def main():
         else:
             if not OSTools().isAbsolute(fn):
                 fn = OSTools().joinPathes(localPath, fn)
-            WIN = MainFrame(app, fn) 
+            WIN = MainFrame(app, fn, res['virtual']) 
         app.exec()
     except:
         Log.exception("Error in main:")
