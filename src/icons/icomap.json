@@ -17,7 +17,9 @@
     "langSettings":"./icons/langflags.png",
     "audioOn":"./icons/speaker-high.png",
     "audioOff":"./icons/speaker-muted.png",
-	"fullscreen":"./icons/fullscreen.png"
+	"fullscreen":"./icons/fullscreen.png",
+	"quickOn":"./icons/quickSearch.png",
+	"quickOff":"./icons/quickNoSearch.png"
     },
     "flat(light)": {
     "rmAction":"./icons/flaticons/remove.svg",
@@ -49,8 +51,8 @@
 	  "playStart" :"./icons/flatdark/play.svg",
 	  "playPause" :"./icons/flatdark/pause.svg",
 	  "mediaSettings":"./icons/flatdark/settings.svg",
-	  "audioOn":"./icons/flatdark/sound.svg",
-	  "audioOff":"./icons/flatdark/mute.svg",
-	"fullscreen":"./icons/flatdark/fullscreen.png"
+      "audioOn":"./icons/flaticons/sound.svg",
+      "audioOff":"./icons/flaticons/mute.svg",
+	  "fullscreen":"./icons/flatdark/fullscreen.png"
 	  }	
     }

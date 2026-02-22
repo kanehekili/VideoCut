@@ -278,17 +278,27 @@ class LayoutWindow(QWidget):
         self.ui_InfoLabel.setText("")
         self.ui_InfoLabel.setToolTip("Infos about the video position")
         
+        self.ui_QuickSearch = QtWidgets.QLabel(self)
+        self.ui_QuickSearch.setStyleSheet("QLabel { border: 1px solid darkgray; border-radius: 3px; color: inherit; background: lightgreen} ");
+        self.ui_QuickSearch.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
+        self.ui_QuickSearch.setToolTip("Toggle for fast I frame search")
+        
+        self.pixFastSearchOn = QtGui.QPixmap()
+        self.pixFastSearchOn.load(ICOMAP.ico("quickOn"))
+        self.pixFastSearchOn = self.pixFastSearchOn.scaledToWidth(32, mode=Qt.TransformationMode.SmoothTransformation)
+        self.pixFastSearchOff = QtGui.QPixmap()
+        self.pixFastSearchOff.load(ICOMAP.ico("quickOff"))
+        self.pixFastSearchOff = self.pixFastSearchOff.scaledToWidth(32, mode=Qt.TransformationMode.SmoothTransformation)
+        
         self.ui_AudioModeLabel = QtWidgets.QLabel(self)
         self.ui_AudioModeLabel.setStyleSheet("QLabel { border: 1px solid darkgray; border-radius: 3px; color: inherit; background: lightgreen} ");
         self.ui_AudioModeLabel.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
         self.ui_AudioModeLabel.setToolTip("Toggle if audio should be saved")
         
         self.pixAudioOn = QtGui.QPixmap()
-        #self.pixAudioOn.load("icons/speaker-high.png")
         self.pixAudioOn.load(ICOMAP.ico("audioOn"))
         self.pixAudioOn = self.pixAudioOn.scaledToWidth(32, mode=Qt.TransformationMode.SmoothTransformation)
         self.pixAudioOff = QtGui.QPixmap()
-        #self.pixAudioOff.load("icons/speaker-muted.png")
         self.pixAudioOff.load(ICOMAP.ico("audioOff"))
         self.pixAudioOff = self.pixAudioOff.scaledToWidth(32, mode=Qt.TransformationMode.SmoothTransformation)
         
@@ -303,6 +313,7 @@ class LayoutWindow(QWidget):
         self.ui_BackendLabel.setToolTip("Toogle if precise remux or external ffmpeg")
         
         self.statusBox = QtWidgets.QHBoxLayout()
+        self.statusBox.addWidget(self.ui_QuickSearch)
         self.statusBox.addWidget(self.ui_AudioModeLabel)
         self.statusBox.addWidget(self.ui_CutModeLabel)
         self.statusBox.addWidget(self.ui_BackendLabel)
@@ -338,8 +349,8 @@ class LayoutWindow(QWidget):
         # from row,from col, rowSpan, columnSpan
         gridLayout.addWidget(self.ui_VideoFrame, 0, 1, 4, -1);
         gridLayout.addWidget(self.ui_GotoField, 4, 1, 1, 2)
-        gridLayout.addWidget(self.ui_InfoLabel, 4, 3, 1, 6)
-        gridLayout.addLayout(self.statusBox, 4, 9, 1, -1)
+        gridLayout.addWidget(self.ui_InfoLabel, 4, 3, 1, 5)
+        gridLayout.addLayout(self.statusBox, 4, 8, 1, -1)
         gridLayout.addWidget(self.ui_Slider, 5, 0, 1, 11)
         gridLayout.addWidget(self.ui_Dial, 5, 11, 1, -1)
         gridLayout.addWidget(self.statusbar, 6, 0, 1, 12)
@@ -648,15 +659,15 @@ class MainFrame(QtWidgets.QMainWindow):
         #--TOGGLE IT!
         
         self.audiofilter = SignalOnEvent(widgets.ui_AudioModeLabel)
-        #self.audiofilter.clicked.connect(self.openMediaSettings)
         self.audiofilter.clicked.connect(self.settings.toggleMute)
         
+        self.searchfilter = SignalOnEvent(widgets.ui_QuickSearch)
+        self.searchfilter.clicked.connect(self.settings.toggleQuickSearch)        
+        
         self.cutfilter = SignalOnEvent(widgets.ui_CutModeLabel)
-        #self.cutfilter.clicked.connect(self.openMediaSettings)
         self.cutfilter.clicked.connect(self.settings.toggleEncode)
         
         self.backendfilter = SignalOnEvent(widgets.ui_BackendLabel)
-        #self.backendfilter.clicked.connect(self.openMediaSettings)
         self.backendfilter.clicked.connect(self.settings.toggleRemux)
         self.enableActions(False) 
         return widgets
@@ -903,6 +914,7 @@ class SettingsModel(QtCore.QObject):
         self.fastRemux = vc_config.getBoolean("useRemux",True)
         self.reencoding = vc_config.getBoolean("recode",False)
         self.muteAudio = vc_config.getBoolean("muteAudio",False)
+        self.quickSearch= vc_config.getBoolean("quickSearch",False)
         self.iconSet = vc_config.get("icoSet",IconMapper.DEFAULT)
         self.mainFrame = mainframe
         self.showSubid=vc_config.getInt("subtitles",0)  #id if subtitle should be presented. mpv only
@@ -913,14 +925,18 @@ class SettingsModel(QtCore.QObject):
         cutmode = "Fast"
         mode = "FFMPEG"
         audio = self.mainFrame._widgets.pixAudioOn
+        qSearch = self.mainFrame._widgets.pixFastSearchOff
         if self.fastRemux:
             mode = "REMUX"
         if self.reencoding:
             cutmode = "Exact"
         if self.muteAudio:
             audio=self.mainFrame._widgets.pixAudioOff
+        if self.quickSearch:
+            qSearch = self.mainFrame._widgets.pixFastSearchOn
         
         self.mainFrame._widgets.ui_AudioModeLabel.setPixmap(audio)
+        self.mainFrame._widgets.ui_QuickSearch.setPixmap(qSearch)
         self.mainFrame._widgets.ui_CutModeLabel.setText(cutmode)
         self.mainFrame._widgets.ui_BackendLabel.setText(mode)
         
@@ -944,6 +960,11 @@ class SettingsModel(QtCore.QObject):
             vc_config.set("muteAudio", "True")
         else:
             vc_config.set("muteAudio", "False")
+            
+        if self.quickSearch:
+            vc_config.set("quickSearch", "True")
+        else:
+            vc_config.set("quickSearch", "False")    
         
         #SET the icoset
         vc_config.set("icoSet", self.iconSet)
@@ -983,7 +1004,10 @@ class SettingsModel(QtCore.QObject):
         self.muteAudio = not self.muteAudio
         self.update()    
     
-       
+    def toggleQuickSearch(self):
+        self.quickSearch = not self.quickSearch
+        self.update()    
+        
         
 class SettingsDialog(QtWidgets.QDialog):
 
@@ -1036,6 +1060,11 @@ class SettingsDialog(QtWidgets.QDialog):
         self.muteAudio.setChecked(self.model.muteAudio)
         self.muteAudio.stateChanged.connect(self._onAudioChanged)  
 
+        self.quickSearch= QtWidgets.QCheckBox("Quick search -I frames only")
+        self.quickSearch.setToolTip("Slider searches for I frames (Fast for 4K)")
+        self.quickSearch.setChecked(self.model.quickSearch)
+        self.quickSearch.stateChanged.connect(self._onQSearchChanged)
+        
         self.showSub = QtWidgets.QCheckBox("Show subtitles")
         self.showSub.setToolTip("Toggle show subtitles (mpv only)")
         self.showSub.setChecked(self.model.showSubid>0)
@@ -1063,9 +1092,8 @@ class SettingsDialog(QtWidgets.QDialog):
         encodeBox.addWidget(self.check_reencode)
         encodeBox.addWidget(self.exRemux)
         encodeBox.addWidget(self.muteAudio)
-        #expoBox = QtWidgets.QVBoxLayout(frame2)
-        #expoBox.addWidget(self.exRemux)
-        
+        encodeBox.addWidget(self.quickSearch)
+          
         subBox= QtWidgets.QVBoxLayout(frame2)
         subBox.addWidget(self.showSub)
         subBox.addWidget(self.showGL)
@@ -1077,11 +1105,7 @@ class SettingsDialog(QtWidgets.QDialog):
         self.setLayout(outBox)
         # make it wider...
         self.setMinimumSize(400, 0)
-        
-#     def on_combobox_selected(self,value):
-#         self.model.selectedContainer=value
-#         self.model.update()
-    
+         
     def on_reencodeChanged(self, reencode):
         self.model.reencoding = QtCore.Qt.CheckState.Checked.value == reencode
         self.model.update()
@@ -1104,6 +1128,10 @@ class SettingsDialog(QtWidgets.QDialog):
         
     def _onAudioChanged(self,muteAudio):
         self.model.muteAudio = QtCore.Qt.CheckState.Checked.value == muteAudio
+        self.model.update()
+    
+    def _onQSearchChanged(self,searchQuick):
+        self.model.quickSearch = QtCore.Qt.CheckState.Checked.value == searchQuick
         self.model.update()
         
     def _onIconThemeChanged(self,text):
@@ -1618,7 +1646,7 @@ class VideoControl(QtCore.QObject):
     # connected to slider-called whenever position is changed.
     def sliderMoved(self, pos):
         if self.player is None or not self.player.isValid():
-            self.gui.syncSliderPos(0)
+            self.gui.syncSliderPos(pos)
             return
 
         frameNumber = round(self.player.framecount / LayoutWindow.SLIDER_RESOLUTION * pos, 0)
@@ -1797,6 +1825,8 @@ class DialThread(QtCore.QThread):
     
     def dialStep(self,delay,step):
         self.step=step
+        #print(f"dialStep:{self.delay} newdel: {delay} step: {step} ")
+
         if delay == 0:
             self.delay=0
             return

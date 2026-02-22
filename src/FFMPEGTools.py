@@ -626,7 +626,9 @@ class FFStreamProbe():
         self._readData()
          
     def _readData(self):
-        result = Popen(["ffprobe", "-show_format", "-show_streams", self.path, "-v", "quiet"], stdout=subprocess.PIPE, stderr=subprocess.PIPE).communicate()
+        cmd = ["ffprobe", "-show_format", "-show_streams", self.path, "-v", "quiet"]
+        Log.info("ffprobe:%s",cmd)
+        result = Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE).communicate()
         if len(result[0]) == 0:
             raise IOError('Not a media file ' + self.path)
         self.streams = []
@@ -653,7 +655,7 @@ class FFStreamProbe():
                 datalines.append(a)
         for a in self.streams:
             if a.isAudio():
-                self.audio.append(a)
+                self.audio.append(a) #save invalid audios for sake of the slot
                 a.slot=len(self.audio)
             elif a.isVideo():
                 self.video.append(a)
@@ -797,19 +799,18 @@ class FFStreamProbe():
         for stream in self.streams:
             if stream.isVideo():
                 continue
-            res = stream.getLanguage()
-            if res == VideoFormatInfo.NA:
+            key = stream.getLanguage()
+            if key == VideoFormatInfo.NA:
                 continue
+            if key not in lang:
+                lang[key]=[-1,-1]
             
-            if res not in lang:
-                lang[res]=[-1,-1]
-            
-            if stream.isAudio():
-                if lang[res][0]==-1:
-                    lang[res][0]=stream.slot #MPV specific, might not be the stream number.. 
+            if stream.isValidAudio():
+                if lang[key][0]==-1:
+                    lang[key][0]=stream.slot #MPV specific, might not be the stream number.. 
                     
-            elif lang[res][1]==-1:
-                lang[res][1]=stream.slot
+            elif lang[key][1]==-1:
+                lang[key][1]=stream.slot
         return lang 
    
     def hasFormat(self, formatName):

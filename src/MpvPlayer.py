@@ -178,7 +178,7 @@ class MpvPlayer():
             "input_vo_keyboard" : False,  #We'll take the qt events
             "pause" : True,
             "mute" : 'yes',
-            #"video_latency_hacks" : "yes", #no avail sbtx
+            "video_latency_hacks" : "yes", #no avail sbtx
             "audio" : "no", #this improves seeking
             "video_sync" : "desync", #improves seeking instead of audio = off
             #"initial_audio_sync" : "no", check this as an alternative
@@ -190,7 +190,6 @@ class MpvPlayer():
             #"index" : "recreate",         #test for m2t
             #"demuxer_lavf_probescore" : 100, #not working with mpg
             "demuxer_lavf_analyzeduration" : 100.0,
-            "video-latency-hacks" : "yes", #efficent for fast seek
             #"demuxer_backward_playback_step" : 1024, #no help
             #"video_sync" : "display-desync", #no help
             #"demuxer_lavf_probesize" : 1000, #won't load any mpg2 stream
@@ -203,9 +202,10 @@ class MpvPlayer():
             "cache" : 'yes',
             "demuxer_seekable_cache" : 'yes',
             #no valid for libmpv < 0.30:
-            #"demuxer_max_back_bytes " : '10000MiB',
+            "demuxer_max_back_bytes" : '500MiB',
             #"demuxer_cache_wait" : 'no', #if yes remote files take too long...
-            #"demuxer_max_bytes " : '10000MiB',
+            "demuxer_max_bytes" : '500MiB',
+            "video_reversal_buffer": "500MiB",
             #"demuxer_backward_playback_step" : 180,
             "volume" : 100,
             #"gpu_context":'x11egl',  # Or explicitly specify 'egl', 'x11', etc.
@@ -224,7 +224,8 @@ class MpvPlayer():
         self.lastError=""
         self._readyMsgCount=0
         self._frameOffset=0   
-        self._audioIndex="auto"     
+        self._audioIndex="auto"  
+        self._fastSearch=False   
     
     def _hookEvents(self):
         ver = self.mpvVersion()
@@ -285,8 +286,14 @@ class MpvPlayer():
     def calcPosition(self,frameNumber):
         return frameNumber/self.fps
   
+    def __demuxFast(self):
+        self.mediaPlayer.hr_seek_demuxer_offset=0.1
+    
+    def __demuxReset(self):
+        self.mediaPlayer.hr_seek_demuxer_offset=self._demuxOffset
+        
     #performance tweak: fastseek should have a low demuxer seek offset: tune if fast seek.
-    def seek(self,frameNumber,fast=False):
+    def seek(self,frameNumber):
         if self.mediaPlayer.seeking is None:
             Log.error("No seek! Aborting")
             return
@@ -294,36 +301,41 @@ class MpvPlayer():
         secs = self.calcPosition(frameNumber)#hack
         ts =self._timeAsString(secs)
         #print("§<<<<seek secs: %.3f %d >%s"%(secs,frameNumber,ts))
-        if fast:
-            self.mediaPlayer.hr_seek_demuxer_offset=0.1
+        self.__demuxFast()
         
-        self.mediaPlayer.seek(secs,"absolute")
+        '''
+        #Video editor should be precise - don't compromise speed for accuracy"
+         '''
+        mode = "absolute" if self._fastSearch else "absolute+exact"
+
+        self.mediaPlayer.seek(secs,mode)
         self._waitSeekDone()
-        self.mediaPlayer.hr_seek_demuxer_offset=self._demuxOffset
-        
+
     #using dialStep with relative leads to different timestamps... 
     def seekStep(self,dialStep):
-        if self.mediaPlayer.seeking is not None:
-            if self.mediaPlayer.seeking:  # Property check - is MPV busy?
-                # MPV is busy - ignore
-                return  # Don't send another command yet            
-            
-            if dialStep == -1:
-                self.mediaPlayer.frame_back_step()
-                return
-            fix=0.4*dialStep*dialStep
-            nxt=(dialStep/self.fps)*fix
-            if dialStep > 0:
-                if self.timePos()+nxt>self.duration:
-                    return
-            else:
-                if self.timePos()>self.duration:
-                    nxt=-1/self.fps*1.8
-                    
-            self.mediaPlayer.seek(nxt,"relative+exact")
-            #print("seek dial %d step1 %f time:%f dur:%f"%(dialStep,nxt,self.timePos(),self.duration)) 
+        if self.mediaPlayer.seeking:
+            # MPV is busy - ignore
+            return
+        step=int(dialStep)
+        self.__demuxFast()
+        if step == 1:
+            self.mediaPlayer.frame_step()
+            return self.__demuxReset()
+        if step == -1:
+            self.mediaPlayer.frame_back_step()
+            return self.__demuxReset()
+        fix=0.4*dialStep*dialStep
+        nxt=(dialStep/self.fps)*fix
+        if step > 0:
+            if self.timePos()+nxt>self.duration:
+                return self.__demuxReset()
         else:
-            Log.info("MPV: Seek none!")
+            if self.timePos()>self.duration:
+                nxt=-1/self.fps*1.8
+                
+        self.mediaPlayer.seek(nxt,"relative+exact")
+        self.__demuxReset()
+        #print("seek dial %d step1 %f time:%f dur:%f"%(dialStep,nxt,self.timePos(),self.duration)) 
                                
     def screenshotAtFrame(self,frameNumber):
         secs = self.calcPosition(frameNumber)
@@ -352,7 +364,6 @@ class MpvPlayer():
         
     def _onPropertyChange(self,name,pos):
         pass
-        #print("        >",name,":",pos)
     
     def _onDuration(self,name,val):
         if val is not None:
@@ -422,13 +433,16 @@ class MpvPlayer():
     def _onSeek(self,__name,val):
         if val==False:
             with self.seekLock:
+                self._seekFlag = True
                 self.seekLock.notify()
-                self.mediaPlayer.unobserve_property("seeking",self._onSeek)
+            self.mediaPlayer.unobserve_property("seeking",self._onSeek)
    
     def _waitSeekDone(self):
-        self.mediaPlayer.observe_property("seeking",self._onSeek)
         with self.seekLock:  
+            self._seekFlag = False
+            self.mediaPlayer.observe_property("seeking",self._onSeek)
             self.seekLock.wait(timeout=3)
+            #self.seekLock.wait_for(lambda: self._seekFlag, timeout=3)
     
     def _getReady(self):
         self.mediaPlayer.observe_property("estimated-vf-fps", self._onReadyWait)
@@ -506,6 +520,9 @@ class MpvPlayer():
     
     def setAudioIndex(self,intIndex):
         self._audioIndex=str(intIndex)
+     
+    def setFastSliderSearch(self,fastSearching):
+        self._fastSearch = fastSearching
         
     def togglePlay(self):
         if self.mediaPlayer is None:
@@ -701,22 +718,20 @@ class MpvPlugin():
 
     #spinbutton +cutEntry   
     def setFrameDirect(self,frameNumber):
-        self.player.seek(frameNumber) #direct in Main thread
+        x=self.player.getCurrentFrameNumber()
         delta = int(frameNumber-self.player.getCurrentFrameNumber())
+        #print(f"curr:{x} delta:{delta} target:{frameNumber}")
         if delta != 0:
             self.player.seekStep(delta)
-        #self.sliderThread.seekTo(int(frameNumber)) #pass it to slider thread
         
     #dial
     def onDial(self,pos):
         self.player.seekStep(pos)
-        #self._showPos()
 
     def onSeek(self,frameNumber):
         if self.player:
-            #no demux offset on fast seek
-            self.player.seek(frameNumber,fast=True) 
-        #return self.player.getCurrentFrameNumber()
+            self.player.seek(frameNumber) 
+
 
     def toggleVideoPlay(self):
         if self.player is None:
@@ -728,6 +743,7 @@ class MpvPlugin():
             self.player.changeSettings("subtitle",settings.showSubid)   
             lang = settings.getPreferedLanguageCodes()
             self.player.setAudioIndex(self.__findAudioIndex(lang))
+            self.player.setFastSliderSearch(settings.quickSearch)
     
     def __findAudioIndex(self,codes):
         if len(codes)==0:
@@ -776,7 +792,6 @@ class SliderThread(QtCore.QThread):
             while self.pos != curr:
                 curr=self.pos
                 self.func(self.pos)
-
             self.__wait() #wait until needed
     
     def __wait(self):

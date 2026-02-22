@@ -102,7 +102,7 @@ class Player(QOpenGLWidget):
                 self.lastError = None
                 self.isAudioOnly = self.streamData.getVideoStream() is None
                 self._tweak(self.streamData)
-                tx = FFMPEGTools.OSTools().getFileNameOnly(fn)
+                #tx = FFMPEGTools.OSTools().getFileNameOnly(fn)
                 return True
             except IOError:
                 Log.exception("Setting Stream Data")
@@ -127,7 +127,7 @@ class Player(QOpenGLWidget):
         self._waitSeekDone()
         
     def seekRelative(self, seconds):
-        self.mpv.seek(seconds, "relative")
+        self.mpv.seek(seconds, "relative+exact")
         self._waitSeekDone()
         
     def _waitSeekDone(self):
@@ -191,7 +191,7 @@ class Player(QOpenGLWidget):
         self.seekLock = Condition()
         self.mpv.observe_property("duration", self._onReadyWait)
         with self.seekLock:
-            res = self.seekLock.wait(timeout=15.0)  # networking=15
+            res = self.seekLock.wait(timeout=5.0)  # networking=15
             # broken = len(self.lastError)>0
             # print("ready: %d, broken:%s"%(res,self.lastError))
             # self.isReadable=res and not broken
@@ -266,7 +266,7 @@ class Player(QOpenGLWidget):
         self.mpv = None
         event.accept()
 
-    def _getMPVArgs(self,isVirtual):
+    def _getMPVArgsEasy(self,isVirtual):
         kwArgs = {"hwdec":"auto-safe", "log_handler":self._passLog, "loglevel": 'error', "pause":False, "audio": "1", "keep_open": "always", "vo":"libmpv",
                 "input_vo_keyboard": False, "video-latency-hacks": "yes", "hr_seek": 'yes', "hr_seek_demuxer_offset": self._demuxOffset,  # below is test
                 "demuxer_max_back_bytes":'150M', "demuxer_max_bytes":'150M', "demuxer_cache_wait":'no', "stream_buffer_size":'255MiB',
@@ -276,7 +276,32 @@ class Player(QOpenGLWidget):
             kwArgs['gpu-dumb-mode'] = 'yes'
             kwArgs['vd-lavc-dr'] = 'no'
         return kwArgs
-
+    
+    def _getMPVArgs(self,isVirtual):
+        kwArgs= {"hwdec":"auto-safe",
+            "vo":"libmpv", #depends on backend - see below                
+            "log_handler":self._passLog,
+            "loglevel" : 'error',
+            "input_vo_keyboard" : False,  #We'll take the qt events
+            "pause" : True,
+            "mute" : 'yes',
+            "audio" : "no", #this improves seeking
+            "video_sync" : "desync", #improves seeking instead of audio = off
+            "keep_open" : "always",
+            "demuxer_lavf_analyzeduration" : 100.0,
+            "video-latency-hacks" : "yes", #efficent for fast seek
+            "hr_seek" : 'yes',            #yes for slider search
+            "hr_seek_demuxer_offset" : self._demuxOffset, #offset too large (2.1) will slow everything down, only if hr_seek is true
+            "cache" : 'yes',
+            "demuxer_seekable_cache" : 'yes',
+            "volume" : 100,
+            "opengl_early_flush":'yes'
+            }
+        if isVirtual:
+            kwArgs['gpu-dumb-mode'] = 'yes'
+            kwArgs['vd-lavc-dr'] = 'no'
+        return kwArgs
+        
     def _passLog(self, loglevel, component, message):
         msg = '{}: {}'.format(component, message)
         with self.seekLock:
