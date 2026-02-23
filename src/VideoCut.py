@@ -13,7 +13,7 @@
 # <http://www.gnu.org/licenses/>.
 
 
-import sys,os, traceback, math, getopt
+import sys, traceback, math, getopt
 
 from PyQt6.QtCore import pyqtSignal
 from PyQt6 import QtCore, QtGui, QtWidgets
@@ -804,10 +804,11 @@ class MainFrame(QtWidgets.QMainWindow):
                     <tr><td><b>Video Codec:</b></td><td> %s </td></tr>
                     <tr><td><b>Dimension:</b></td><td> %sx%s </td></tr>
                     <tr><td><b>Aspect:</b></td><td> %s </td></tr>
+                    <tr><td><b>Interlaced:</b></td><td> %s </td></tr>
                     <tr><td><b>FPS:</b></td><td> %.2f </td></tr>
                     <tr><td><b>Duration:</b></td><td> %.1f [sec]</td></tr>
                     <tr><td><b>Audio codec:</b></td><td> %s </td></tr>
-                    </table>""" % (container.formatNames()[0], container.getBitRate(), container.getSizeKB(), streamData.isTransportStream(), videoData.getCodec(), videoData.getWidth(), videoData.getHeight(), videoData.getAspectRatio(), self._videoController.fps(), videoData.duration(), acodec)
+                    </table>""" % (container.formatNames()[0], container.getBitRate(), container.getSizeKB(), streamData.isTransportStream(), videoData.getCodec(), videoData.getWidth(), videoData.getHeight(), videoData.getAspectRatio(),videoData.isInterlaced(), self._videoController.fps(), videoData.duration(), acodec)
             entries = []
             entries.append("""<br><\br><table border=0 cellspacing="3",cellpadding="2">""")
             #TODO -check the cvInfos (CvPlayer)
@@ -1489,7 +1490,7 @@ class VideoControl(QtCore.QObject):
         recover=False
         try:
             cutList = XMLAccessor(self.currentPath).readXML()
-        except Exception as error:
+        except Exception:
             Log.exception("Error restore:")  
             return  
         for cut in cutList:
@@ -1559,7 +1560,7 @@ class VideoControl(QtCore.QObject):
     #-- Exec cutting ---
     def calculateNewVideoTime(self, spanns):
         delta = 0;
-        for index, cutmark in enumerate(spanns):
+        for __, cutmark in enumerate(spanns):
             t1 = cutmark[0].timeDelta()
             t2 = cutmark[1].timeDelta()
             delta = delta + (t2 - t1).seconds

@@ -158,7 +158,7 @@ class OSTools():
 
     def joinPathes(self,*pathes):
         res=pathes[0]
-        for head,tail in self.__pairwise(pathes):
+        for __,tail in self.__pairwise(pathes):
         #for a, b in tee(pathes):
             res = os.path.join(res, tail)
         return res
@@ -581,7 +581,7 @@ class FormatMapGenerator():
     
     #This is target map only!  
     def _findFmtTargetMap(self,vCodec, aCodec):
-        for fi, fmtMap in self.table.items():
+        for __, fmtMap in self.table.items():
             #if fi=="mpegts":
             #    continue
             if fmtMap.containsCodecs(vCodec, aCodec):
@@ -606,7 +606,7 @@ class FormatMapGenerator():
     #takes the extension and get the most likely format.
     def fromFilename(self,path):
         ext = OSTools().getExtension(path,withDot=False)
-        for fi, fmtMap in self.table.items():
+        for __, fmtMap in self.table.items():
             if ext in fmtMap.extensions:
                 return fmtMap
         
@@ -617,15 +617,33 @@ class FormatMapGenerator():
 
 FORMATS = FormatMapGenerator()
 
+#ffprobe -read_intervals "%+#3" -select_streams v -i self.path -show_entries "frame=interlaced_frame"
         
 class FFStreamProbe():
 
     def __init__(self, video_file):
         # self._setupConversionTable()
         self.path = video_file
-        self._readData()
+        interlaced = self._probeData()
+        self._readData(interlaced)
+        
+     
+    def _probeData(self):
+        cmd = ["ffprobe", "-read_intervals","%+#5", "-select_streams","v","-i", self.path, '-show_entries',"frame=interlaced_frame","-v", "quiet"]
+        #cmd = ["ffprobe", "-select_streams","v", self.path, '-show_entries','"frame=interlaced_frame"',"-v", "quiet"]
+
+        Log.info("ffprobe:%s",cmd) 
+        result = Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE).communicate()
+        if len(result[0]) == 0:
+            return
+        lines = result[0].decode("utf-8").split('\n')
+        for a in lines: 
+            if re.match(r'interlaced_frame',a):
+                return  "1" in a
+        return False        
          
-    def _readData(self):
+         
+    def _readData(self,interlaced):
         cmd = ["ffprobe", "-show_format", "-show_streams", self.path, "-v", "quiet"]
         Log.info("ffprobe:%s",cmd)
         result = Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE).communicate()
@@ -643,7 +661,7 @@ class FFStreamProbe():
             if re.match(r'\[STREAM\]', a):
                 datalines = []
             elif re.match(r'\[\/STREAM\]', a):
-                self.streams.append(VideoStreamInfo(datalines))
+                self.streams.append(VideoStreamInfo(datalines,interlaced))
                 datalines = []
 
             elif re.match(r'\[FORMAT\]', a):
@@ -685,6 +703,7 @@ class FFStreamProbe():
             Log.debug("getHeight: %s", s.getHeight())
             Log.debug("isAudio: %r", s.isAudio())
             Log.debug("isVideo: %r", s.isVideo())
+            Log.debug("interlaced: %r",s.isInterlaced())
         
         Log.debug("-------- Audio -------------")
         s = self.getAudioStream()
@@ -992,11 +1011,13 @@ class VideoStreamInfo():
 #     stringKeys =["codec_type","codec_name"]
 #     divKeys =["display_aspect_ratio"]        
     
-    def __init__(self, dataArray):
+    def __init__(self, dataArray,interlaced_probed):
         self.dataDict = {}
         self.tagDict = {}
         self._parse(dataArray)
+        self.interlaced=interlaced_probed
         self.slot=1 #thats the index in its list (mpv uses this) starting with 1
+        
     
     def _parse(self, dataArray):
         for entry in dataArray:
@@ -1081,7 +1102,7 @@ class VideoStreamInfo():
             fo=self.dataDict["field_order"]
             if fo in interlacedID:
                 return True
-        return False
+        return self.interlaced
 
     def getCodec(self):
         return self.dataDict.get('codec_name',self.NA)

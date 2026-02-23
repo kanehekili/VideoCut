@@ -115,6 +115,15 @@ class Player(QOpenGLWidget):
             Log.info("Optimized for VC1")  
         else:
             self.mpv.hwdec_codecs = "all"
+        videoInfo = streamData.getVideoStream()     
+        interlaced = videoInfo.isInterlaced()
+        if streamData.isTransportStream() or interlaced:
+            Log.info("Transport stream. Setting seek offset to high and interlacing: %d"%(interlaced))
+            self._demuxOffset=1.5#Solution for mpegts seek
+            if interlaced:
+                self.mpv.deinterlace="yes"            
+           
+            
 
     def asyncSeek(self, seconds):
         self._muteWhileSeeking(True)
@@ -679,6 +688,10 @@ class MainFrame(QtWidgets.QMainWindow):
                 <td style="border: 1px solid darkgray; padding: 8px 15px;">%s</td>
             </tr>
             <tr>
+                <td style="border: 1px solid darkgray; padding: 8px 15px;"><b>Interlaced:</b></td>
+                <td style="border: 1px solid darkgray; padding: 8px 15px;">%s</td>
+            </tr>            
+            <tr>
                 <td style="border: 1px solid darkgray; padding: 8px 15px;"><b>Video Codec:</b></td>
                 <td style="border: 1px solid darkgray; padding: 8px 15px;">%s</td>
             </tr>
@@ -702,7 +715,7 @@ class MainFrame(QtWidgets.QMainWindow):
                 <td style="border: 1px solid darkgray; padding: 8px 15px;"><b>Audio codec:</b></td>
                 <td style="border: 1px solid darkgray; padding: 8px 15px;">%s</td>
             </tr>
-            </table>""" % (container.formatNames()[0], container.getBitRate(), container.getSizeKB() / 1024, streamData.isTransportStream(), codec, w, h, ar, fr, ts, acodec)
+            </table>""" % (container.formatNames()[0], container.getBitRate(), container.getSizeKB() / 1024, streamData.isTransportStream(),videoData.isInterlaced(), codec, w, h, ar, fr, ts, acodec)
 
             '''
             entries.append("""<br><\br><table border=0 cellspacing="3",cellpadding="2">""")
@@ -721,7 +734,6 @@ class MainFrame(QtWidgets.QMainWindow):
                                         
         except:
             Log.exception("Invalid codec format")
-            text = "<br><b>No Information</b><br>"  
             text2 = "<br> Please select a file first"
         self.__getInfoDialog(textDS + text2).show()
 
@@ -959,7 +971,7 @@ def parseOptions(args):
         print(err)
         sys.exit(2)
     
-    for o, a in opts:
+    for o, __ in opts:
         if o in ("-d", "--debug"):
             FFMPEGTools.setLogLevel("Debug")
         elif o in ("-c", "--console"):

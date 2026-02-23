@@ -255,7 +255,7 @@ class MpvPlayer():
             self._resetState()
             self.mediaPlayer.loadfile(filePath)
             self._getReady()
-        except Exception as ex:
+        except Exception as __:
             Log.exception("Open mpv file")
 
     #Test, not activated    
@@ -299,7 +299,7 @@ class MpvPlayer():
             return
 
         secs = self.calcPosition(frameNumber)#hack
-        ts =self._timeAsString(secs)
+        #ts =self._timeAsString(secs)
         #print("§<<<<seek secs: %.3f %d >%s"%(secs,frameNumber,ts))
         self.__demuxFast()
         
@@ -677,7 +677,6 @@ class MpvPlugin():
         ff_fps= videoInfo.frameRateMultiple()
         ff_FrameCount = round(ff_fps*duration)
         
-        interlaced = videoInfo.isInterlaced()
         frameCount= self.player.framecount
         if not frameCount:
             frameCount=0
@@ -686,7 +685,7 @@ class MpvPlugin():
             fps=1.0
         #rot = streamData.getRotation()
         #ratio = streamData.getAspectRatio()
-        Log.info("Analyze MPV frameCount:%d fps:%.3f /FFMPEG frameCount:%d fps:%.3f, interlaced:%d"%(frameCount,fps,ff_FrameCount,ff_fps,interlaced))   
+        Log.info("Analyze MPV frameCount:%d fps:%.3f /FFMPEG frameCount:%d fps:%.3f"%(frameCount,fps,ff_FrameCount,ff_fps))   
         
         fps_check= abs(self._secureDiv(self.player.fps,ff_fps)-1)
         #if fps_check >0.1:
@@ -718,7 +717,6 @@ class MpvPlugin():
 
     #spinbutton +cutEntry   
     def setFrameDirect(self,frameNumber):
-        x=self.player.getCurrentFrameNumber()
         delta = int(frameNumber-self.player.getCurrentFrameNumber())
         #print(f"curr:{x} delta:{delta} target:{frameNumber}")
         if delta != 0:
