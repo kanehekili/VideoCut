@@ -146,7 +146,7 @@ class MpvPlayer():
         #stripes when using file explorer (initial call without file) 
         kwArgs=self.__baseMpvArgs()
         if FFMPEGTools.OSTools().fileExists("/proc/driver/nvidia/version"):
-            kwArgs["hwdec"] = "nvdec"
+            kwArgs["hwdec"] = "nvdec_copy"
             Log.info("Switched to nvdec")        
         self.mediaPlayer = MPV(**kwArgs)
         self._hookEvents()
@@ -312,7 +312,7 @@ class MpvPlayer():
         self._waitSeekDone()
 
     #using dialStep with relative leads to different timestamps... 
-    def seekStep(self,dialStep):
+    def seekStep(self,dialStep,dialMode=False):
         if self.mediaPlayer.seeking:
             # MPV is busy - ignore
             return
@@ -324,8 +324,12 @@ class MpvPlayer():
         if step == -1:
             self.mediaPlayer.frame_back_step()
             return self.__demuxReset()
-        fix=0.4*dialStep*dialStep
-        nxt=(dialStep/self.fps)*fix
+        if dialMode:
+            fix=0.4*dialStep*dialStep
+            nxt=(dialStep/self.fps)*fix
+        else:
+            nxt=(dialStep/self.fps)
+            
         if step > 0:
             if self.timePos()+nxt>self.duration:
                 return self.__demuxReset()
@@ -342,7 +346,7 @@ class MpvPlayer():
         self.mediaPlayer.seek(secs,"absolute+exact") #this works only, if seeking is done, otherwise crash.
         self._waitSeekDone()
         return self.screenshotImage()
-    
+
     def screenshotImage(self):
         im=self.mediaPlayer.screenshot_raw(includes="video")
         temp = im.convert('RGBA')
@@ -351,13 +355,7 @@ class MpvPlayer():
         temp.size[0],
         temp.size[1],
         QtGui.QImage.Format.Format_RGBA8888)
-        
-        #empty
-        #data=im.tobytes("raw","RGBA")
-        #qim = QtGui.QImage(data, im.size[0], im.size[1], QtGui.QImage.Format_ARGB32)
-        #return qim
-        #return ImageQt(im)#scale? ==QImage        
-
+    
     def takeScreenShot(self,path):
         self.mediaPlayer.screenshot_to_file(path,includes="video")
         return True
@@ -504,10 +502,6 @@ class MpvPlayer():
         if virtualGPU:
             self.mediaPlayer.gpu_dumb_mode = 'yes'
             self.mediaPlayer.vd_lavc_dr = 'no'        
- 
-    def supportVirtualGuest(self):
-        self.mediaPlayer.gpu_dumb_mode='yes'  
-        self.mediaPlayer.vd_lavc_dr='no' 
  
     def resetCodecs(self):
         #self.mediaPlayer.hwdec_codecs = "h264,hevc,vp8,vp9,av1,mpeg2video,mpeg4,vc1"
@@ -724,7 +718,7 @@ class MpvPlugin():
         
     #dial
     def onDial(self,pos):
-        self.player.seekStep(pos)
+        self.player.seekStep(pos,True)
 
     def onSeek(self,frameNumber):
         if self.player:

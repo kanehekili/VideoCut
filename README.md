@@ -1,7 +1,7 @@
 # VideoCut
-Version 3.0.8
+Version 3.0.9
 
-![Download](https://github.com/kanehekili/VideoCut/releases/download/3.0.8/videocut3.0.8.tar)
+![Download](https://github.com/kanehekili/VideoCut/releases/download/3.0.9/videocut3.0.9.tar)
 
 MP2/MP4 Cutter for Linux on base of mpv and ffmpeg. Cutting is lossless, the target file will not be reencoded. 
 
@@ -88,6 +88,7 @@ The cog icon at the toolbar will open the settings dialog, providing the followi
 * Reencode: Precice, frame exact cut. This option might take hours. Default is off
 * VideoCut Muxer: Toggle between the internal Muxer or the ffmpeg command line. Default is on.
 * Audio Mute: Mute all audio streams and extract video only. Default is off (no mute)
+* Quick Search: Makes seeking faster, but only on I frames. The jog dial stays precise
 * Show Subtitles: Show subtitles in the preview window (mpv backend only)
 * Use GL Widgets (mpv backend only). Needed for wayland. Default is on (works with X11 as well)
 
@@ -179,6 +180,8 @@ Copy the .desktop file and change the exec line to "Exec= python3 .../VideoCut.p
 Opencv will not be displaying subtitles nor frametypes.
 
 ### Changes 
+24.02.2026
+* Refined seeking, nvidia tweaks
 16.01.2026
 * Support virtual machines - hardening vc.ini  
 
