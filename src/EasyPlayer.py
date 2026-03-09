@@ -115,8 +115,7 @@ class Player(QOpenGLWidget):
             Log.info("Optimized for VC1")  
         else:
             self.mpv.hwdec_codecs = "all"
-        videoInfo = streamData.getVideoStream()     
-        interlaced = videoInfo.isInterlaced()
+        interlaced = streamData.interlaced
         if streamData.isTransportStream() or interlaced:
             Log.info("Transport stream. Setting seek offset to high and interlacing: %d"%(interlaced))
             self._demuxOffset=1.5#Solution for mpegts seek
@@ -186,7 +185,7 @@ class Player(QOpenGLWidget):
                 self._on_update()
             
     def startPlaying(self):
-        if self.filePath is  not None:
+        if self.filePath is not None:
             self.mpv.loadfile(self.filePath)
             self._getReady()
             if not self.lastError:
@@ -292,9 +291,6 @@ class Player(QOpenGLWidget):
             "log_handler":self._passLog,
             "loglevel" : 'error',
             "input_vo_keyboard" : False,  #We'll take the qt events
-            "pause" : True,
-            "mute" : 'yes',
-            "audio" : "no", #this improves seeking
             "video_sync" : "desync", #improves seeking instead of audio = off
             "keep_open" : "always",
             "demuxer_lavf_analyzeduration" : 100.0,
@@ -304,6 +300,7 @@ class Player(QOpenGLWidget):
             "cache" : 'yes',
             "demuxer_seekable_cache" : 'yes',
             "volume" : 100,
+            "audio-display":"embedded-first",
             "opengl_early_flush":'yes'
             }
         if isVirtual:

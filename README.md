@@ -1,7 +1,7 @@
 # VideoCut
-Version 3.0.9
+Version 3.1.0
 
-![Download](https://github.com/kanehekili/VideoCut/releases/download/3.0.9/videocut3.0.9.tar)
+![Download](https://github.com/kanehekili/VideoCut/releases/download/3.1.0/videocut3.1.0.tar)
 
 MP2/MP4 Cutter for Linux on base of mpv and ffmpeg. Cutting is lossless, the target file will not be reencoded. 
 
@@ -16,7 +16,7 @@ VideoCut supports the cutting of subtitles when "Show subtitles"  in the setting
 The current version is written in python3 and uses the qt6 widget kit.  
 
 ## :boom: EasyPlayer Video/Audio player included
-As a spinoff a player has been introduced. It displays pictures, plays videos and audio files. 
+As a spinoff a player has been introduced. It handles pictures, plays videos and audio files. 
 
 ### Prerequisites
 * Arch: python3, python-pillow and mpv
@@ -92,7 +92,7 @@ The cog icon at the toolbar will open the settings dialog, providing the followi
 * Show Subtitles: Show subtitles in the preview window (mpv backend only)
 * Use GL Widgets (mpv backend only). Needed for wayland. Default is on (works with X11 as well)
 
-Pressing one of the 3 lightgreen "buttons" toggles the upper 3 settings directly. 
+Pressing one of the lightgreen "buttons" toggles the settings directly. 
 
 
 ### Languages
@@ -180,8 +180,12 @@ Copy the .desktop file and change the exec line to "Exec= python3 .../VideoCut.p
 Opencv will not be displaying subtitles nor frametypes.
 
 ### Changes 
+03.03.2026
+* Hardened interlacing recognition, fixed interprocess communication
+
 24.02.2026
 * Refined seeking, nvidia tweaks
+
 16.01.2026
 * Support virtual machines - hardening vc.ini  
 

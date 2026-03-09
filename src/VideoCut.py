@@ -808,7 +808,7 @@ class MainFrame(QtWidgets.QMainWindow):
                     <tr><td><b>FPS:</b></td><td> %.2f </td></tr>
                     <tr><td><b>Duration:</b></td><td> %.1f [sec]</td></tr>
                     <tr><td><b>Audio codec:</b></td><td> %s </td></tr>
-                    </table>""" % (container.formatNames()[0], container.getBitRate(), container.getSizeKB(), streamData.isTransportStream(), videoData.getCodec(), videoData.getWidth(), videoData.getHeight(), videoData.getAspectRatio(),videoData.isInterlaced(), self._videoController.fps(), videoData.duration(), acodec)
+                    </table>""" % (container.formatNames()[0], container.getBitRate(), container.getSizeKB(), streamData.isTransportStream(), videoData.getCodec(), videoData.getWidth(), videoData.getHeight(), videoData.getAspectRatio(),streamData.interlaced, self._videoController.fps(), videoData.duration(), acodec)
             entries = []
             entries.append("""<br><\br><table border=0 cellspacing="3",cellpadding="2">""")
             #TODO -check the cvInfos (CvPlayer)
@@ -1348,7 +1348,6 @@ class VideoControl(QtCore.QObject):
             
     def _initTimer(self):
         self._dialThread=DialThread(self._dxDialFrame)#exec in dial thread
-        #self._dialThread.triggered.connect(self._dxDialFrame) #if in main thread-blocks any input
    
     #Why use soureextension? This may not be the original one.
     def getSourceFile(self):
@@ -1570,19 +1569,20 @@ class VideoControl(QtCore.QObject):
         self.cutTimeStart = time();
         settings = self.gui.settings
         if settings.fastRemux:
-            worker = LongRunningOperation(self.__directCut, srcPath, targetPath, spanns, settings)
+            self._worker = LongRunningOperation(self.__directCut, srcPath, targetPath, spanns, settings)
         else:
-            worker = LongRunningOperation(self.__makeCuts, srcPath, targetPath, spanns, settings)
-        worker.signal.connect(self._cleanupWorker)
+            self._worker = LongRunningOperation(self.__makeCuts, srcPath, targetPath, spanns, settings)
+        self._worker.signal.connect(self._cleanupWorker)
         # start the worker thread. 
-        worker.startOperation()  
+        self._worker.startOperation()  
 
-    def _cleanupWorker(self, worker):
+    def _cleanupWorker(self):
         # QThread: Destroyed while thread is still running
-        msg = worker.msg 
+        msg = self._worker.msg 
         self.gui.stopProgress()
-        worker.quit()
-        worker.wait();
+        self._worker.quit()
+        self._worker.wait()
+        self._worker=None
         if self.cutter is None or self.cutter.wasAborted():
             self.gui.getMessageDialog("Operation failed", "Cut aborted").show()
         elif self.cutter.hasErrors():
@@ -1674,9 +1674,7 @@ class VideoControl(QtCore.QObject):
  
     #called by dialThread-via "func" runs in dial thread, (via signal in main)
     def _dxDialFrame(self,pos):
-        QApplication.processEvents()
         VideoPlugin.onDial(pos)
-    
     
     def takeScreenShot(self):
         if self.player is None:
@@ -1768,7 +1766,7 @@ class SignalOnEvent(QtCore.QObject):
     
 ''' Long running operations for actions that do not draw or paint '''        
 class LongRunningOperation(QtCore.QThread):
-    signal = pyqtSignal(object) 
+    signal = pyqtSignal() 
 
     def __init__(self, func, *args):
         QtCore.QThread.__init__(self)
@@ -1783,19 +1781,15 @@ class LongRunningOperation(QtCore.QThread):
             Log.exception("***Error in LongRunningOperation***")
             self.msg = "Error while converting: "+str(ex)
         finally:
-            self.signal.emit(self)
+            self.signal.emit()
 
     def startOperation(self):
-        self.start()  # invokes run - process pending QT events
-        sleep(0.5)
-        QtCore.QCoreApplication.processEvents()
-
+        self.start()  # invokes run in its own thread- no need to process pending QT events
 
 
 #Standard QT thread impl: starts thread in an infinite loop
 #waits on mutex until woken. 
 class DialThread(QtCore.QThread):
-    triggered=pyqtSignal(int)
     def __init__(self,func):
         QtCore.QThread.__init__(self)
         self.delay=0
@@ -1809,7 +1803,6 @@ class DialThread(QtCore.QThread):
     def run(self):
         while self.__running:
             if self.delay > 0.0:
-                #self.triggered.emit(self.step)#would pass execution to the main thread->massive afterrun
                 self.func(self.step) #Pro: no queue build up
                 self.msleep(self.delay)#any other sleep breaks!
             else:

@@ -648,7 +648,7 @@ class MpvPlugin():
         #Transport stream handling:
         videoInfo = streamData.getVideoStream() 
         isUHD = float(videoInfo.getWidth())>3000.0
-        interlaced = videoInfo.isInterlaced()
+        interlaced = streamData.interlaced
         if streamData.isTransportStream() or interlaced:
             self.player.tweakTansportStreamSettings(interlaced)  
         if isUHD:
