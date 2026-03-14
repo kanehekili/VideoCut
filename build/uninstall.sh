@@ -6,7 +6,7 @@ if [ "$EUID" -ne 0 ] ; then
 fi
 
 sudo rm /usr/share/applications/VideoCut.desktop
-sudo rm /usr/share/applications/EasyPlayer.desktop
+sudo rm /usr/share/applications/VideoPlay.desktop
 sudo rm /usr/bin/VideoCut
 sudo rm -rf /opt/videocut
 echo "App removed."

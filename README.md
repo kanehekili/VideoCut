@@ -1,7 +1,7 @@
 # VideoCut
-Version 3.1.0
+Version 3.1.1
 
-![Download](https://github.com/kanehekili/VideoCut/releases/download/3.1.0/videocut3.1.0.tar)
+![Download](https://github.com/kanehekili/VideoCut/releases/download/3.1.1/videocut3.1.1.tar)
 
 MP2/MP4 Cutter for Linux on base of mpv and ffmpeg. Cutting is lossless, the target file will not be reencoded. 
 
@@ -15,7 +15,7 @@ VideoCut supports the cutting of subtitles when "Show subtitles"  in the setting
 
 The current version is written in python3 and uses the qt6 widget kit.  
 
-## :boom: EasyPlayer Video/Audio player included
+## :boom: VideoPlay Video/Audio player included
 As a spinoff a player has been introduced. It handles pictures, plays videos and audio files. 
 
 ### Prerequisites
@@ -78,14 +78,14 @@ MPV supports audio streams while playing. Unfortunately it relies on the audio s
 -v will use a virtual GL driver for the preview window. (videocut -v)
 
 ### Player included
-easyplay is a spinoff as a small easy to use media player. 
+videoplay is a spinoff as a small easy to use media player. 
 
 ### Settings
 The cog icon at the toolbar will open the settings dialog, providing the following settings:
 
 ![Screenshot](https://github.com/kanehekili/VideoCut/blob/master/Settings.png)
 
-* Reencode: Precice, frame exact cut. This option might take hours. Default is off
+* Reencode: Precise, frame exact cut. This option might take hours. Default is off
 * VideoCut Muxer: Toggle between the internal Muxer or the ffmpeg command line. Default is on.
 * Audio Mute: Mute all audio streams and extract video only. Default is off (no mute)
 * Quick Search: Makes seeking faster, but only on I frames. The jog dial stays precise
@@ -124,7 +124,7 @@ Remove with:
     * Download [PKGBUILD ](https://aur.archlinux.org/cgit/aur.git/snapshot/videocut.tar.gz)
     * unpack it and go into the "videocut" folder
     * execute `makepkg -s`
-    * excute `sudo pacman -U videocut-3.x.x.x-1-x86_64.pkg.tar.zst` 
+    * execute `sudo pacman -U videocut-3.x.x.x-1-x86_64.pkg.tar.zst` 
     * uninstall via `sudo pacman -Rs videocut`
 
 Select video and open it with "Open with ->VideoCut", oder via terminal "VideoCut"
@@ -180,6 +180,9 @@ Copy the .desktop file and change the exec line to "Exec= python3 .../VideoCut.p
 Opencv will not be displaying subtitles nor frametypes.
 
 ### Changes 
+14.03.2026
+* renamed the player to VideoPlay
+
 03.03.2026
 * Hardened interlacing recognition, fixed interprocess communication
 
@@ -190,7 +193,7 @@ Opencv will not be displaying subtitles nor frametypes.
 * Support virtual machines - hardening vc.ini  
 
 03.01.2026
-* Refines GTK compatiblity, introduces "easyplay" video/audio player.
+* Refines GTK compatiblity, introduces "videoplay" video/audio player.
 
 21.11.25
 * support ffmpeg V8 + PKGBUILD cleanup - (Courtesy of Corubba - very much appreciated!)

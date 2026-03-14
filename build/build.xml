@@ -86,7 +86,7 @@
 			</filterset>	
 		</copy>	
 		<chmod file="${rootDir}/VideoCut.py" perm="ugo+rwx"/>
-		<chmod file="${rootDir}/EasyPlayer.py" perm="ugo+rwx"/>				
+		<chmod file="${rootDir}/VideoPlay.py" perm="ugo+rwx"/>				
 		
 	</target>
 
@@ -158,7 +158,7 @@
 		</copy>
 		
 		<chmod file="${ubu0Target}/src/VideoCut.py" perm="ug+rwx"/>
-		<chmod file="${ubu0Target}/src/EasyPlayer.py" perm="ug+rwx"/>
+		<chmod file="${ubu0Target}/src/VideoPlay.py" perm="ug+rwx"/>
 		
 		<copy todir="${ubu0Target}/addons">
 			<fileset file="*.desktop"/>
@@ -210,7 +210,7 @@
 		</copy>
 		
 		<chmod file="${ubu1Target}/src/VideoCut.py" perm="ug+rwx"/>
-		<chmod file="${ubu1Target}/src/EasyPlayer.py" perm="ug+rwx"/>
+		<chmod file="${ubu1Target}/src/VideoPlay.py" perm="ug+rwx"/>
 		
 		<copy todir="${ubu1Target}/addons">
 			<fileset file="*.desktop"/>
@@ -261,7 +261,7 @@
 			</filterset>
 		</copy>
 		<chmod file="${ubu2Target}/src/VideoCut.py" perm="ug+rwx"/>
-		<chmod file="${ubu2Target}/src/EasyPlayer.py" perm="ug+rwx"/>
+		<chmod file="${ubu2Target}/src/VideoPlay.py" perm="ug+rwx"/>
 				
 		<copy todir="${ubu2Target}/addons">
 			<fileset file="*.desktop"/>

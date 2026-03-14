@@ -36,7 +36,7 @@ from MpvPlayer import SliderThread
 
 global Log
 global AppName
-AppName="EasyPlayer"
+AppName="VideoPlay"
 Log = FFMPEGTools.Log
 #####################################################
 Version = "@xxx@"
@@ -88,7 +88,7 @@ class Player(QOpenGLWidget):
         )
         if self.ctx:
             if FFMPEGTools.OSTools().fileExists("/proc/driver/nvidia/version"):
-                self.mpv.hwdec = "nvdec"
+                self.mpv.hwdec = "nvdec_copy"
                 Log.info("Switched to nvdec")            
             self.ctx.update_cb = self._on_update
             self.triggerInitialized.emit()
@@ -712,7 +712,7 @@ class MainFrame(QtWidgets.QMainWindow):
                 <td style="border: 1px solid darkgray; padding: 8px 15px;"><b>Audio codec:</b></td>
                 <td style="border: 1px solid darkgray; padding: 8px 15px;">%s</td>
             </tr>
-            </table>""" % (container.formatNames()[0], container.getBitRate(), container.getSizeKB() / 1024, streamData.isTransportStream(),videoData.isInterlaced(), codec, w, h, ar, fr, ts, acodec)
+            </table>""" % (container.formatNames()[0], container.getBitRate(), container.getSizeKB() / 1024, streamData.isTransportStream(),streamData.interlaced, codec, w, h, ar, fr, ts, acodec)
 
             '''
             entries.append("""<br><\br><table border=0 cellspacing="3",cellpadding="2">""")
@@ -732,6 +732,7 @@ class MainFrame(QtWidgets.QMainWindow):
         except:
             Log.exception("Invalid codec format")
             text2 = "<br> Please select a file first"
+            textDS = "Invalid codec"
         self.__getInfoDialog(textDS + text2).show()
 
     def __getInfoDialog(self, text):

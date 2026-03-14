@@ -1,2 +1,2 @@
 opt/videocut/VideoCut.py /usr/bin/videocut
-opt/videocut/EasyPlayer.py /usr/bin/easyplay
+opt/videocut/VideoPlay.py /usr/bin/videoplay
