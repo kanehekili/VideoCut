@@ -75,7 +75,8 @@ For DVB transport stream you should keep the ".m2t" ending, mkv containers shoul
 MPV supports audio streams while playing. Unfortunately it relies on the audio stream while seeking (precise) thus rendering exact seeking sometimes difficult due to problems decoding it. So audio is turned of (not just muted) while seeking. The "auto" mode has been replaced with the first valid audio stream and seems to work better for listening while cutting. 
 
 ### Support for Qemu:
--v will use a virtual GL driver for the preview window. (videocut -v)
+* -v will use a virtual GL driver for rendering. (videocut -v)
+* Can be set via the "Settings dialog - Software mode" as well. 
 
 ### Player included
 videoplay is a spinoff as a small easy to use media player. 

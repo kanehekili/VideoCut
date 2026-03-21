@@ -18,14 +18,15 @@ import gzip
 BIN = "ffmpeg"
 
 
-def setupRotatingLogger(logName,logConsole):
+def setupRotatingLogger(logName,logConsole,logFolder=None):
     logSize=5*1024*1024 #5MB
-    if logConsole: #aka debug/development
-        folder = OSTools().getActiveDirectory()    
+    scriptDir = OSTools().getLocalPath(__file__)
+    if os.access(scriptDir, os.W_OK):
+        folder = scriptDir
     else:
-        folder= OSTools().joinPathes(OSTools().getHomeDirectory(),".config",logName)
+        folder= OSTools().joinPathes(OSTools().getHomeDirectory(),".config",logFolder or logName)
         OSTools().ensureDirectory(folder)
-    logPath = OSTools().joinPathes(folder,logName+".log") 
+    logPath = OSTools().joinPathes(folder,logName+".log")
     fh= RotatingFileHandler(logPath,maxBytes=logSize,backupCount=5)
     fh.rotator=OSTools().compressor
     fh.namer=OSTools().namer
