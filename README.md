@@ -181,6 +181,9 @@ Copy the .desktop file and change the exec line to "Exec= python3 .../VideoCut.p
 Opencv will not be displaying subtitles nor frametypes.
 
 ### Changes 
+21.03.2026
+* Support weak/virtual devices via Settings
+
 14.03.2026
 * renamed the player to VideoPlay
 
