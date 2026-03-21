@@ -563,7 +563,7 @@ class MainFrame(QtWidgets.QMainWindow):
         self.centerWindow()
         self._widgets.enableUserActions(False)
         self.show()
-        QtCore.QTimer.singleShot(0,self.__queueStarted)
+        QtCore.QTimer.singleShot(50,self.__queueStarted)
     
     def initUI(self):
         
@@ -1404,7 +1404,9 @@ class VideoControl(QtCore.QObject):
             self._currentFile=filePath 
             if not self.streamData:
                 raise Exception('Invalid file')
-            
+            if self.streamData.getVideoStream() is None:
+                raise Exception('Audio-only files are not supported')
+
             QApplication.setOverrideCursor(QtCore.Qt.CursorShape.WaitCursor)
             self.player = VideoPlugin.initPlayer(filePath, self.streamData)
             VideoPlugin.validate()

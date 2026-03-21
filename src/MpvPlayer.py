@@ -47,6 +47,9 @@ class VideoWidget(QtWidgets.QFrame):
 
     def updateUI(self,frameNumber,framecount,timeinfo):
         self.posChanged.emit(frameNumber,framecount,timeinfo)
+    
+    def cleanup(self):
+        pass #nothing to clean
 
 class VideoGLWidget(QOpenGLWidget):
     posChanged = pyqtSignal(float,float,float)

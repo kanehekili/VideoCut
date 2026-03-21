@@ -334,7 +334,7 @@ class MainFrame(QtWidgets.QMainWindow):
         self.initUI()
         self.centerWindow()
         self.show()
-        QtCore.QTimer.singleShot(0, self.__queueStarted)
+        QtCore.QTimer.singleShot(50, self.__queueStarted)
     
     def initUI(self):
         # ##the actions
