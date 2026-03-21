@@ -304,7 +304,6 @@ class Player(QOpenGLWidget):
             "opengl_early_flush":'yes'
             }
         if isVirtual:
-            Log.info("Runs in VIRTGL mode")
             kwArgs['gpu-dumb-mode'] = 'yes'
             kwArgs['vd-lavc-dr'] = 'no'
         return kwArgs
@@ -801,7 +800,6 @@ class SettingsModel(QtCore.QObject):
         self.showEQ = ep_config.getBoolean("showEQ", False)
         self.mainFrame = mainframe
         self.showSubs = ep_config.getBoolean("subtitles", False)  # id if subtitle should be presented. mpv only
-        self.softwareRender = ep_config.getBoolean("softwareRender", False)
         self.isoCodes = []
     
     def sync(self):
@@ -815,7 +813,6 @@ class SettingsModel(QtCore.QObject):
         else:
             ep_config.set("subtitles", "False")
         
-        ep_config.set("softwareRender", str(self.softwareRender))
         # SET the icoset
         ep_config.set("icoSet", self.iconSet)
         
@@ -841,14 +838,7 @@ class SettingsModel(QtCore.QObject):
         
     def setIconSet(self, icoType):
         self.iconSet = icoType
-        self.__update()
-
-    def hasSoftwareRender(self):
-        return self.softwareRender
-
-    def setSoftwareRender(self, aBool):
-        self.softwareRender = aBool
-        self.__update()
+        self.__update() 
 
 
 class SettingsDialog(QtWidgets.QDialog):
@@ -876,7 +866,9 @@ class SettingsDialog(QtWidgets.QDialog):
         frame1 = QtWidgets.QFrame()
         frame1.setFrameStyle(QtWidgets.QFrame.Shape.Box | QtWidgets.QFrame.Shadow.Sunken)
         frame1.setLineWidth(1)
-        frame2 = QtWidgets.QGroupBox("Requires restart")
+        frame2 = QtWidgets.QFrame()
+        frame2.setFrameStyle(QtWidgets.QFrame.Shape.Box | QtWidgets.QFrame.Shadow.Sunken)
+        frame2.setLineWidth(1)
        
         self.showEQ = QtWidgets.QCheckBox("Show EQ - Audio only")
         self.showEQ.setToolTip("Display an EQ on music")
@@ -888,11 +880,9 @@ class SettingsDialog(QtWidgets.QDialog):
         self.showSub.setChecked(self.model.hasSubtitles())
         self.showSub.stateChanged.connect(self._onSubChanged)
         
-        self.softwareRender = QtWidgets.QCheckBox("Software rendering (slow or virtual hardware)")
-        self.softwareRender.setToolTip("Enables compatibility mode for older or virtual hardware")
-        self.softwareRender.setChecked(self.model.hasSoftwareRender())
-        self.softwareRender.stateChanged.connect(self._onSoftwareRenderChanged)
+        frame2Header = QtWidgets.QLabel("Icon theme. Restart application after change")
 
+        # lbl = QtWidgets.QLabel("< Icon theme")
         self.setIconTheme = QtWidgets.QComboBox()
         themes = ICOMAP.themes()
         for item in themes:
@@ -900,16 +890,14 @@ class SettingsDialog(QtWidgets.QDialog):
         self.setIconTheme.setCurrentText(self.model.iconSet)
         self.setIconTheme.currentTextChanged.connect(self._onIconThemeChanged)
         self.setIconTheme.setToolTip("Select icon theme - restart to take effect")
-        iconThemeBox = QtWidgets.QHBoxLayout()
-        iconThemeBox.addWidget(QtWidgets.QLabel("Icon theme:"))
-        iconThemeBox.addWidget(self.setIconTheme)
 
         clickBox = QtWidgets.QVBoxLayout(frame1)
+        # clickBox.addWidget(self.showEQ)
         clickBox.addWidget(self.showSub)
 
         subBox = QtWidgets.QVBoxLayout(frame2)
-        subBox.addWidget(self.softwareRender)
-        subBox.addLayout(iconThemeBox)
+        subBox.addWidget(frame2Header)
+        subBox.addWidget(self.setIconTheme)
         
         outBox.addLayout(versionBox)
         outBox.addWidget(frame1)
@@ -921,12 +909,9 @@ class SettingsDialog(QtWidgets.QDialog):
     def _onSubChanged(self, showsub):
         self.model.setSubtitle(showsub)
 
-    def _onSoftwareRenderChanged(self, val):
-        self.model.setSoftwareRender(QtCore.Qt.CheckState.Checked.value == val)
-
     def _onGLChanged(self, useGL):
         self.model.setGL(QtCore.Qt.CheckState.Checked.value == useGL)
-
+        
     def _onEQChanged(self, aBool):
         self.model.setEQ(QtCore.Qt.CheckState.Checked.value == aBool)
         
@@ -1078,9 +1063,8 @@ def main():
         ep_config.read();    
         ICOMAP = IconMapper(ep_config.get("icoSet", "default"))  
         argv = sys.argv
-        res = parseOptions(argv)
-        res["virtual"] = res["virtual"] or ep_config.getBoolean("softwareRender", False)
-        FFMPEGTools.setupRotatingLogger(AppName, res["logConsole"], "VideoCut")
+        res = parseOptions(argv)    
+        FFMPEGTools.setupRotatingLogger(AppName, res["logConsole"])
         de = OSTools().currentDesktop()
         if de not in OSTools.QT_DESKTOPS:        
             OSTools().setGTKEnvironment()
@@ -1094,7 +1078,7 @@ def main():
         locale.setlocale(locale.LC_NUMERIC, "C")
         fn = res["file"]
         if fn is None:
-            WIN = MainFrame(app,None,res['virtual'])  # keep python reference!
+            WIN = MainFrame(app)  # keep python reference!
         else:
             if not OSTools().isAbsolute(fn):
                 fn = OSTools().joinPathes(localPath, fn)

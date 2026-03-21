@@ -920,7 +920,6 @@ class SettingsModel(QtCore.QObject):
         self.mainFrame = mainframe
         self.showSubid=vc_config.getInt("subtitles",0)  #id if subtitle should be presented. mpv only
         self.showGL=vc_config.getBoolean("openGL",True) #GL Widgets, mpv only
-        self.softwareRender = vc_config.getBoolean("softwareRender", False)
         self.isoCodes=[]
     
     def sync(self):
@@ -968,7 +967,6 @@ class SettingsModel(QtCore.QObject):
         else:
             vc_config.set("quickSearch", "False")    
         
-        vc_config.set("softwareRender", str(self.softwareRender))
         #SET the icoset
         vc_config.set("icoSet", self.iconSet)
         
@@ -1009,16 +1007,9 @@ class SettingsModel(QtCore.QObject):
     
     def toggleQuickSearch(self):
         self.quickSearch = not self.quickSearch
-        self.update()
-
-    def hasSoftwareRender(self):
-        return self.softwareRender
-
-    def setSoftwareRender(self, aBool):
-        self.softwareRender = aBool
-        self.update()
-
-
+        self.update()    
+        
+        
 class SettingsDialog(QtWidgets.QDialog):
 
     def __init__(self, parent, model):
@@ -1046,7 +1037,9 @@ class SettingsDialog(QtWidgets.QDialog):
         frame1.setFrameStyle(QtWidgets.QFrame.Shape.Box | QtWidgets.QFrame.Shadow.Sunken)
         frame1.setLineWidth(1)
        
-        frame2 = QtWidgets.QGroupBox("Requires restart")
+        frame2 = QtWidgets.QFrame()
+        frame2.setFrameStyle(QtWidgets.QFrame.Shape.Box | QtWidgets.QFrame.Shadow.Sunken)
+        frame2.setLineWidth(1)
        
         #frame3 = QtWidgets.QFrame()
         #frame3.setFrameStyle(QtWidgets.QFrame.Box | QtWidgets.QFrame.Sunken)
@@ -1078,16 +1071,13 @@ class SettingsDialog(QtWidgets.QDialog):
         self.showSub.setChecked(self.model.showSubid>0)
         self.showSub.stateChanged.connect(self._onSubChanged)
         
-        self.showGL = QtWidgets.QCheckBox("Use GL Widgets (mpv only)")
-        self.showGL.setToolTip("Use GL widgets - must be activated for wayland")
+        self.showGL = QtWidgets.QCheckBox("Use GL Widgets(mpv only) Restart required")
+        self.showGL.setToolTip("Use GL widgets - must be activated for wayland\n Restart app on change")
         self.showGL.setChecked(self.model.showGL>0)
-        self.showGL.stateChanged.connect(self._onGLChanged)
+        self.showGL.stateChanged.connect(self._onGLChanged)        
 
-        self.softwareRender = QtWidgets.QCheckBox("Software rendering (slow or virtual hardware)")
-        self.softwareRender.setToolTip("Enables compatibility mode for older or virtual hardware")
-        self.softwareRender.setChecked(self.model.hasSoftwareRender())
-        self.softwareRender.stateChanged.connect(self._onSoftwareRenderChanged)
 
+        lbl = QtWidgets.QLabel("< Icon theme. Restart required")
         self.setIconTheme = QtWidgets.QComboBox()
         themes=ICOMAP.themes()
         for item in themes:
@@ -1095,20 +1085,20 @@ class SettingsDialog(QtWidgets.QDialog):
         self.setIconTheme.setCurrentText(self.model.iconSet)
         self.setIconTheme.currentTextChanged.connect(self._onIconThemeChanged)
         self.setIconTheme.setToolTip("Select icon theme - restart to take effect")
-        iconThemeBox = QtWidgets.QHBoxLayout()
-        iconThemeBox.addWidget(QtWidgets.QLabel("Icon theme:"))
-        iconThemeBox.addWidget(self.setIconTheme)
+        comboBox= QtWidgets.QHBoxLayout()
+        comboBox.addWidget(self.setIconTheme)
+        comboBox.addWidget(lbl)
 
+        
         encodeBox.addWidget(self.check_reencode)
         encodeBox.addWidget(self.exRemux)
         encodeBox.addWidget(self.muteAudio)
         encodeBox.addWidget(self.quickSearch)
-        encodeBox.addWidget(self.showSub)
-
+          
         subBox= QtWidgets.QVBoxLayout(frame2)
+        subBox.addWidget(self.showSub)
         subBox.addWidget(self.showGL)
-        subBox.addWidget(self.softwareRender)
-        subBox.addLayout(iconThemeBox)
+        subBox.addLayout(comboBox)
         
         outBox.addLayout(versionBox)
         outBox.addWidget(frame1)
@@ -1135,10 +1125,7 @@ class SettingsDialog(QtWidgets.QDialog):
 
     def _onGLChanged(self,useGL):
         self.model.showGL=QtCore.Qt.CheckState.Checked.value == useGL
-        self.model.update()
-
-    def _onSoftwareRenderChanged(self, val):
-        self.model.setSoftwareRender(QtCore.Qt.CheckState.Checked.value == val) 
+        self.model.update() 
         
     def _onAudioChanged(self,muteAudio):
         self.model.muteAudio = QtCore.Qt.CheckState.Checked.value == muteAudio
@@ -1943,7 +1930,6 @@ def main():
 
         argv = sys.argv
         res=parseOptions(argv)
-        res["virtual"] = res["virtual"] or vc_config.getBoolean("softwareRender", False)
         FFMPEGTools.setupRotatingLogger("VideoCut",res["logConsole"])
         de = OSTools().currentDesktop()
         if de not in OSTools.QT_DESKTOPS:        

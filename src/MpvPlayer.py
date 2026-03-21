@@ -500,7 +500,6 @@ class MpvPlayer():
         
     def tweakVirtual(self,virtualGPU):
         if virtualGPU:
-            Log.info("Activating software rendering for GL")
             self.mediaPlayer.gpu_dumb_mode = 'yes'
             self.mediaPlayer.vd_lavc_dr = 'no'        
  
