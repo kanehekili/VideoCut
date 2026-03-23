@@ -140,7 +140,10 @@ class MpvPlayer():
         kwArgs["wid"]=str(int(container.winId()))
         if FFMPEGTools.OSTools().fileExists("/proc/driver/nvidia/version"):
             kwArgs["hwdec"] = "nvdec_copy"
-            Log.info("Switched to nvdec")      
+            Log.info("Switched to nvdec")   
+        else:
+            kwArgs["hwdec"] = None
+            kwArgs["vo"]= "gpu"
         self.mediaPlayer = MPV(**kwArgs)
         self._hookEvents()
         return self.mediaPlayer 
