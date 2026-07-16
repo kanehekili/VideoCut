@@ -505,7 +505,7 @@ class VCCutter():
         if fv.version < 3.0:
             self.warn("Invalid FFMPEG Version! Needs to be 3.0 or higher") 
             return False
-        val = str(fv.version)[:1]
+        val = str(int(fv.version)) #major version only - two-digit safe (ffmpeg 10+)
         p = OSTools().getWorkingDirectory();
         #This makes only sense if installed manually. On Arch and debian check if a file exists in bin
         self.bin=OSTools().joinPathes(p,"ffmpeg","bin","remux5")
@@ -541,8 +541,8 @@ class VCCutter():
             cmd = cmd + ["-z"]
         if self.config.muteAudio:
             cmd = cmd + ["-m"]
-        
-        #TODO mute audio...
+        if not self.config.subtitlesOn:
+            cmd = cmd + ["-n"]
         lang = self._buildLanguageMapping()
         if len(lang) > 0:
             codes = ",".join(lang) 

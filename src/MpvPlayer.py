@@ -229,7 +229,8 @@ class MpvPlayer():
         self._lastDispatch=0.0
         self.lastError=""
         self._readyMsgCount=0
-        self._frameOffset=0   
+        self._frameOffset=0
+        self._ptsShift=0.0
         self._audioIndex="auto"  
         self._fastSearch=False   
     
@@ -276,6 +277,7 @@ class MpvPlayer():
     def changeSettings(self,key,value):
         if self.mediaPlayer:
             if key=="subtitle":
+                Log.info("Setting mpv.sid = %d", int(value))
                 self.mediaPlayer.sid=int(value)
                 
     def getCurrentFrameNumber(self):
@@ -347,12 +349,6 @@ class MpvPlayer():
         self.__demuxReset()
         #print("seek dial %d step1 %f time:%f dur:%f"%(dialStep,nxt,self.timePos(),self.duration)) 
                                
-    def screenshotAtFrame(self,frameNumber):
-        secs = self.calcPosition(frameNumber)
-        self.mediaPlayer.seek(secs,"absolute+exact") #this works only, if seeking is done, otherwise crash.
-        self._waitSeekDone()
-        return self.screenshotImage()
-
     def screenshotImage(self):
         im=self.mediaPlayer.screenshot_raw(includes="video")
         temp = im.convert('RGBA')
@@ -422,7 +418,7 @@ class MpvPlayer():
         
         #ts =self._timeAsString(val)
         #print("§>>>TS:",val," fn:",frameNumber," real time:",ts," calc:",self.timePos())
-        self._frameInfoFunc(frameNumber,self.framecount,self.timePos()*1000)
+        self._frameInfoFunc(frameNumber,self.framecount,self.cutTimePos()*1000) #display container time - consistent with the cut list
     
     #pure debug info
     def _timeAsString(self,val):
@@ -482,6 +478,11 @@ class MpvPlayer():
     def timePos(self):
         return self._timePos-self._frameOffset/self.fps #mpg mpv bug workaround
         #return self._timePos
+
+    #container timestamp of the displayed frame - use this for cut marks.
+    #mpv's timeline runs ahead of the container if the first packet yields no frame
+    def cutTimePos(self):
+        return self.timePos()+self._ptsShift
        
     def isValid(self):
         return self.mediaPlayer.seekable
@@ -518,6 +519,12 @@ class MpvPlayer():
         Log.info("MP2: Setting frame offset in mpg (mpv bug) and seek offset to high")
         self._frameOffset=1
         self._demuxOffset=1.5 #mpeg step seek
+
+    #correction for files whose first packet decodes to nothing (e.g. VC1 MakeMKV rips)
+    def tweakDecodeShift(self,shift):
+        if shift > 0.0:
+            Log.info("Cut timestamps will be corrected by %.3fs (mpv timeline runs ahead of container)"%(shift))
+        self._ptsShift=shift
     
     def setAudioIndex(self,intIndex):
         self._audioIndex=str(intIndex)
@@ -626,15 +633,9 @@ class MpvPlugin():
     def videoWidget(self):
         return self.mpvWidget
     
-    def setCutEntry(self,cutEntry,restore=False): #this is a cv restore hack
-        if restore: #legacy: create a pix from old entry 
-            cutEntry.frameNumber=cutEntry.frameNumber-1 #cv compensation
-            pilImage = self.player.screenshotAtFrame(cutEntry.frameNumber)
-        else: #create a new one
-            pilImage = self.player.screenshotImage()
-
-            #set: cutEntry.frameNumber=self.player.getCurrentFrameNumber()    
-        cutEntry.timePosMS=self.player.timePos()*1000 #Beware +1!
+    def setCutEntry(self,cutEntry):
+        pilImage = self.player.screenshotImage()
+        cutEntry.timePosMS=self.player.cutTimePos()*1000 #container time of the displayed frame
         cutEntry.pix = self._makeThumbnail(pilImage)
     
     def info(self):
@@ -661,11 +662,14 @@ class MpvPlugin():
         if isUHD:
             self.player.tweakUHD() 
         if streamData.isVC1Codec():
-            self.player.tweakVC1() 
+            self.player.tweakVC1()
+            #only VC1 misassociates timestamps when the first packet yields no frame
+            self.player.tweakDecodeShift(streamData.decodeStartShift())
         else:
-            self.player.resetCodecs() 
+            self.player.resetCodecs()
+            self.player.tweakDecodeShift(0.0)
         if streamData.isMPEG2Codec():
-            self.player.tweakMPG()           
+            self.player.tweakMPG()
 
     def _sanityCheck(self,streamData):
         if streamData is None:
@@ -739,7 +743,8 @@ class MpvPlugin():
     
     def changeSettings(self,settings):
         if self.player is not None:
-            self.player.changeSettings("subtitle",settings.showSubid)   
+            Log.info("Setting subtitle id to %d", settings.showSubid)
+            self.player.changeSettings("subtitle",settings.showSubid)
             lang = settings.getPreferedLanguageCodes()
             self.player.setAudioIndex(self.__findAudioIndex(lang))
             self.player.setFastSliderSearch(settings.quickSearch)

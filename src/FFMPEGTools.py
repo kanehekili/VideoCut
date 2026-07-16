@@ -210,6 +210,9 @@ class OSTools():
     def currentDesktop(self):
         return os.environ.get("XDG_CURRENT_DESKTOP", "").lower()
 
+    def setEnvironment(self, key, value):
+        os.environ[key] = value
+
     def setGTKEnvironment(self):
         #won't work on cinn 22.2 / numbat: needs qt6ct
         #os.environ["QT_QPA_PLATFORMTHEME"] = "@qtplatform@"
@@ -448,7 +451,7 @@ class FormatMapGenerator():
         vplayer   ?
         webvtt    ok     
     '''    
-    SUB_IMG=["dvbsub","pgssub*","hdmv_pgs_subtitle*","xsub*"]
+    SUB_IMG=["dvb_subtitle","hdmv_pgs_subtitle","pgssub","xsub"]
     SUB_TEXT=["ssa","ass","webvtt","mov_text","subrip","srt","text","webvtt"]
     
     #supported muxers
@@ -643,10 +646,38 @@ class FFStreamProbe():
         if len(result[0]) == 0:
             return False
         lines = result[0].decode("utf-8").split('\n')
-        for a in lines: 
+        for a in lines:
             if re.match(r'interlaced_frame',a):
                 return  "1" in a
-        return False        
+        return False
+
+    #Offset between container start and the first decodable video frame.
+    #Some rips (e.g. VC1 from MakeMKV) start with a packet that yields no frame:
+    #mpv's timeline then runs one frame ahead of the container timestamps.
+    def decodeStartShift(self):
+        vs = self.getVideoStream()
+        if vs is None:
+            return 0.0
+        cmd = ["ffprobe", "-read_intervals","0%+1", "-select_streams","v:0","-i", self.path, "-show_entries","frame=best_effort_timestamp_time:stream=start_time","-of","csv","-v", "quiet"]
+        Log.info("ffprobe:%s",cmd)
+        result = Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE).communicate()
+        if len(result[0]) == 0:
+            return 0.0
+        firstFrame = None
+        start = None
+        lines = result[0].decode("utf-8").split('\n')
+        for a in lines:
+            raw = a.split(',')
+            try:
+                if firstFrame is None and raw[0] == "frame":
+                    firstFrame = float(raw[1])
+                elif start is None and raw[0] == "stream":
+                    start = float(raw[1])
+            except (ValueError, IndexError):
+                continue
+        if firstFrame is None or start is None:
+            return 0.0
+        return max(0.0, firstFrame - start)
          
          
     def _readData(self):
@@ -687,6 +718,7 @@ class FFStreamProbe():
             elif a.isSubTitle():
                 self.subtitle.append(a)
                 a.slot=len(self.subtitle)
+                Log.info("Found subtitle slot %d: codec=%s lang=%s", a.slot, a.getCodec(), a.getLanguage())
 
     def sanityCheck(self):
         if logging.root.level!=logging.DEBUG:
@@ -1346,7 +1378,10 @@ class FFmpegVersion():
             
         if len(result[0]) > 0:
             text = result[0].decode("utf-8")
-            m = re.search("[0-9].[0-9]+", text)
+            m = re.search(r"(\d+)\.(\d+)", text)
+            if m is None:
+                self.error = "Can't parse ffmpeg version"
+                return
             g1 = m.group(0)
             print(g1)
             self.version = float(g1)

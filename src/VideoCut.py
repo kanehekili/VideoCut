@@ -25,7 +25,7 @@ from FFMPEGTools import  FFStreamProbe,  OSTools, ConfigAccessor, FFmpegVersion
 from Cutter import FFMPEGCutter,CuttingConfig,VCCutter
 import FFMPEGTools 
 import Cutter
-from time import sleep, time
+from time import time
 import xml.etree.cElementTree as CT
 #####################################################
 Version = "@xxx@"
@@ -39,6 +39,7 @@ SIZE_ICON = 80
 ITEM_ROW_COUNT = 3
 
 
+OSTools().setEnvironment("QT_LOGGING_RULES", "qt.qpa.theme.gnome=false;qt.qpa.services=false")
 saneCheck = FFmpegVersion()
 if not saneCheck.confirmFFmpegInstalled():
     app = QApplication(sys.argv)
@@ -413,7 +414,6 @@ class LayoutWindow(QWidget):
         item = QtWidgets.QListWidgetItem()
         item.setSizeHint(QtCore.QSize(SIZE_ICON, self.ITEM_HEIGHT))
         item.setIcon(QtGui.QIcon(cutEntry.pixmap()))
-        #TODO: Respect theme
         if cutEntry.isStartMode():
             item.setBackground(QtGui.QColor(224, 255, 224))
         else:
@@ -452,7 +452,7 @@ class LayoutWindow(QWidget):
         self.ui_GotoField.setValue(int(frameNbr))
         self.ui_GotoField.blockSignals(False)
     
-    def keyReleaseEvent(self, event):
+    def keyReleaseEvent(self, __event):
         self.__resetDial()
      
     def _hookListActions(self):
@@ -536,7 +536,7 @@ class LayoutWindow(QWidget):
         self.ui_List.clear()
         self.__videoController.purgeVideoCuts()
         
-    def _gotoFromMarker(self, whatis):
+    def _gotoFromMarker(self, __ignore):
         selectionList = self.ui_List.selectedIndexes()
         if len(selectionList) == 0:
             return
@@ -1457,12 +1457,11 @@ class VideoControl(QtCore.QObject):
         self._addVideoCut(cutEntry, True)
         
         
-    def _restoreVideoCutEntry(self,cutEntry,mode):
-        isLegacy = cutEntry.pixmap() is None 
-        if isLegacy: #compatibility: read data and generate a thumbnail
-            VideoPlugin.setCutEntry(cutEntry,restore=True)
-        self._addVideoCut(cutEntry, isLegacy)
-        return isLegacy
+    def _restoreVideoCutEntry(self,cutEntry):
+        if cutEntry.pixmap() is None: #ancient entry without thumbnail - not supported anymore
+            Log.warning("Ignoring legacy cut entry without thumbnail (frame %s)",cutEntry.frameNumber)
+            return
+        self._addVideoCut(cutEntry, False)
                 
 
     def _addVideoCut(self, cutEntry, updateXML):
@@ -1488,21 +1487,15 @@ class VideoControl(QtCore.QObject):
 
     def restoreVideoCuts(self):
         QApplication.setOverrideCursor(QtCore.Qt.CursorShape.WaitCursor)
-        recover=False
         try:
             cutList = XMLAccessor(self.currentPath).readXML()
         except Exception:
-            Log.exception("Error restore:")  
-            return  
+            Log.exception("Error restore:")
+            return
         for cut in cutList:
-            mode = VideoCutEntry.MODE_STOP
-            if cut.isStartMode():
-                mode = VideoCutEntry.MODE_START
-            recover = self._restoreVideoCutEntry(cut,mode)
-        if recover:    
-            VideoPlugin.showFirstFrame()
+            self._restoreVideoCutEntry(cut)
 
-        QApplication.restoreOverrideCursor()          
+        QApplication.restoreOverrideCursor()
     
     # remove/clear all cuts but leave the file untouched
     def clearVideoCutEntries(self):
@@ -1726,25 +1719,6 @@ class VideoControl(QtCore.QObject):
 
 # -- threads
 
-#Delegates a message into the main queue...Main loop must be present..
-class Delegator(QtCore.QThread):
-    kick = pyqtSignal()
-    def __init__(self,func):
-        QtCore.QThread.__init__(self)
-        self.func=func
-
-    def run(self):
-        self.kick.emit()  
-        self.quit()
-        self.deleteLater()
-        
-    def go(self):
-        self.kick.connect(self.func)
-        self.start()
-
-
-
-
 class SignalOnEvent(QtCore.QObject):
     clicked = pyqtSignal()
     
@@ -1962,7 +1936,7 @@ def main():
         sys_tuple = sys.exc_info()
         QtWidgets.QMessageBox.critical(None,"Error!",str(sys_tuple[1]))
 
-#TODO: Respect theme
+
 def stylesheet():
     # return "QSlider{margin:1px;padding:1px;background:yellow}" #to view the focus border QSlider:focus{border: 1px solid  #000}
     # No focus and no ticks are available using stylesheets.

@@ -77,6 +77,7 @@
 		<chmod file="${ffmpeg}/bin/V5/remux5" perm="uo+rwx"/>
 		<chmod file="${ffmpeg}/bin/V6/remux5" perm="uo+rwx"/>
 		<chmod file="${ffmpeg}/bin/V7/remux5" perm="uo+rwx"/>
+		<chmod file="${ffmpeg}/bin/V8/remux5" perm="uo+rwx"/>
 		
 		<copy todir="${rootDir}">
      		<fileset file="${source}/*.py" />

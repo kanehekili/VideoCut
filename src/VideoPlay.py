@@ -1074,7 +1074,7 @@ def main():
         wd = OSTools().getLocalPath(__file__)
         localPath = OSTools().getActiveDirectory()
         OSTools().setMainWorkDir(wd)
-        ep_config = ConfigAccessor("VideoCut", "vp.ini", "videoplay")  # folder,name&section
+        ep_config = ConfigAccessor("VideoCut", "vc.ini", "videoplay")  # folder,name&section
         ep_config.read();    
         ICOMAP = IconMapper(ep_config.get("icoSet", "default"))  
         argv = sys.argv
@@ -1085,6 +1085,7 @@ def main():
         if de not in OSTools.QT_DESKTOPS:        
             OSTools().setGTKEnvironment()
             Log.info("GTK based - switched to QT_QPA_PLATFORM = xcb" )
+        OSTools().setEnvironment("QT_LOGGING_RULES", "qt.qpa.theme.gnome=false;qt.qpa.services=false")
         app = QApplication(argv)
         # Set the application name (this sets WM_CLASS)
         app.setApplicationName(AppName)

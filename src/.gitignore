@@ -1,7 +1,6 @@
 /FFMPEGTools.pyc
 /Configuration.py
 __pycache__/
-/*.log
 *.pyc
 .project
 .pydevproject

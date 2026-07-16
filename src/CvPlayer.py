@@ -457,12 +457,9 @@ class CvPlugin():
     def gpuMode(self,gpumode):
         pass    
     
-    #TODO based on time, not frame...        
-    def setCutEntry(self,cutEntry,restore=False): #this is a cv restore hack
+    #TODO based on time, not frame...
+    def setCutEntry(self,cutEntry):
         frameNumber = cutEntry.frameNumber
-        if restore:
-            frameNumber=frameNumber-1; #legacy bug
-            cutEntry.frameNumber=frameNumber
         self.player.setFrameAt(frameNumber)
         frame = self.player.getNextFrame()
         framePos = self.player.getCurrentFrameNumber()

@@ -1,7 +1,7 @@
 # VideoCut
-Version 3.1.2
+Version 3.2.0
 
-![Download](https://github.com/kanehekili/VideoCut/releases/download/3.1.2/videocut3.1.2.tar)
+![Download](https://github.com/kanehekili/VideoCut/releases/download/3.2.0/videocut3.2.0.tar)
 
 MP2/MP4 Cutter for Linux on base of mpv and ffmpeg. Cutting is lossless, the target file will not be reencoded. 
 
@@ -9,7 +9,7 @@ It can be used for cutting out certain parts of the film. Has been written in co
 
 Lossless cutting implies not to reencode (decode/encode) the frames. So cutting can only be done at "I-Frames". The library searches for the closest Frame at the given cutting point.
 
-Reencoding is possible for exact cutting as well as converting to different containers and codecs. 
+Reencoding is possible for exact cutting as well as converting to different containers and codecs. The precision of the exact cut has been improved in version 3.2.0. 
 
 VideoCut supports the cutting of subtitles when "Show subtitles"  in the settings dialog is enabled. This flag will display the "first" subtitles stream and will cut all subtitles that have been defined in the "language" dialog.
 
@@ -47,7 +47,7 @@ The frame type (IBP) will be shown at the upper left corner. Subtitles can be di
 
 Instead of using the ffmpeg command line, Videocut offers its own muxer, which is based on the libavcodec libs. It provides better cuttings results and less artifacts than  ffmpeg.  This is set by default, but can be changed to the ffmpeg command line interface via the "Settings" dialog. 
 
-Videocut supports subtitle cut. This is work in progress. 
+Videocut supports subtitle cut. Since version 3.2.0 subtitles survive the exact cut (reencode) as well: VC1 films are reencoded into a mkv container, keeping the image subtitles (PGS). The first subtitle track is flagged as "default", so players show it without selecting it manually. Disabling "Show subtitles" in the settings dialog removes the subtitles from the target file. 
 
 As of version 2.1.x wayland is supported. For old hardware, the openGL feature may be disabled in the "Settings" dialog.
 Since version 2.2.x the audio track can be omitted from the target file. (Video only) 
@@ -63,11 +63,15 @@ Using ffmpeg as cutting/joining tool some of the older versions of ffmpeg seem t
 
 :boom: hevc codecs can be reencoded into an mp4 container but not remuxed - neither remux nor ffmpeg work can "copy" that codec. 
 
+:boom: Image subtitles (PGS) are copied as-is. A PGS subtitle stays visible until its "clear" event arrives as a separate packet - if a cut ends while a subtitle is displayed, that clear event is cut off and the subtitle lingers into the next scene until the next subtitle appears. (ffmpeg stream copy behaves the same way.)
+
 ### Virtualenv or conda 
 The fast remux binary doesn't run in a virtual environment, since the ffmpeg libraries used are not available. The ffmpeg blob could be used, if it would be on the /usr/bin path on the host system. Cross OS binary calls tend be a lot slower that in the native environment - so this software is limited to Linux (native or virtualized)
 
 ### Subtitles
-Finalized in Version 1.3.0, improved in Version 2.0.0.  Not all containers (e.g. mp4) accept subtitles. A AVCH (h264 TS) Stream with DVB_SUB codec cannot be converted into mp4, so your miles may vary if you change the output container (defined by the file extension)
+Finalized in Version 1.3.0, improved in Version 2.0.0 and 3.2.0.  Not all containers (e.g. mp4) accept subtitles. A AVCH (h264 TS) Stream with DVB_SUB codec cannot be converted into mp4, so your miles may vary if you change the output container (defined by the file extension)
+
+Since version 3.2.0 the exact cut (reencode) keeps image subtitles (PGS): VC1 sources are reencoded into a mkv container instead of mp4. The subtitle tracks are selected by the languages defined in the "language" dialog (one track per language, the first matching track wins). The first subtitle track in the target is flagged as "default".
 
 For DVB transport stream you should keep the ".m2t" ending, mkv containers shouldn't be changed either. See [here](https://en.wikipedia.org/wiki/Comparison_of_video_container_formats) for a overview of containers.
 
@@ -89,7 +93,7 @@ The cog icon at the toolbar will open the settings dialog, providing the followi
 * VideoCut Muxer: Toggle between the internal Muxer or the ffmpeg command line. Default is on.
 * Audio Mute: Mute all audio streams and extract video only. Default is off (no mute)
 * Quick Search: Makes seeking faster, but only on I frames. The jog dial stays precise
-* Show Subtitles: Show subtitles in the preview window (mpv backend only)
+* Show Subtitles: Show subtitles in the preview window (mpv backend only). If disabled, no subtitles are written into the cut file
 * Use GL Widgets (mpv backend only). Needed for wayland. Default is on (works with X11 as well)
 
 Pressing one of the lightgreen "buttons" toggles the settings directly. 
@@ -162,7 +166,8 @@ sudo dnf python3-qt6 ffmpeg python3-pillow-qt mpv-libs.x86_64
 
 ### Still on my list:
 * Multi language support
-* Videoplayer as spinoff
+* Subtitles: Synthesize a PGS clear display set at the segment tail on each cut. (Not trivial)
+* Fast remux of hevc streams. The libavcodec libs can copy hevc, but remux5 needs to detect hevc keyframes and drop the leading pictures at the cut - similar to the VC1 handling. Until then hevc can only be cut by reencoding.
 
 ### Using ffmpeg instead of Videocut muxer
 remux5 is a c binary based on the libavcodec library, but uses an integrated approach to cut and join videos. It seems to be more precise than the ffmpeg API. It supports reencoding as well. It is activated by default and runs on all threads available. To activate FFMPEG, use the "coggs" icon (or click on the green labels) and deselect "VideoCut Muxer".
@@ -180,6 +185,12 @@ Copy the .desktop file and change the exec line to "Exec= python3 .../VideoCut.p
 Opencv will not be displaying subtitles nor frametypes.
 
 ### Changes 
+13.07.2026
+* Fixed VC-1 keyframe detection in remux5 (vc1Check): keyframes prefixed with sequence/entry-point headers are now accepted as random access points. Cuts on VC-1 mkv sources (e.g. MakeMKV rips) no longer start seconds before the selected frame.
+* Cut marks are now stored in container time: if a file's first packet decodes to no frame, mpv's timeline runs one frame ahead of the container timestamps - the offset is measured at load and compensated when a mark is set. Removed the legacy restore path for ancient XML cut lists without thumbnails.
+* remux5 drops orphaned leading B-frames at VC-1 segment starts (open GOP) and no longer extends VC-1 segment ends to the next keyframe: no more pixelated flash or single frames of the discarded scene at cut seams.
+* Same treatment for h264 DVB streams (which broadcast without IDR frames): leading pictures that display before the cut-in keyframe are dropped - removes the pixelated frames at cut seams of .m2t recordings.
+
 21.03.2026
 * Support weak/virtual devices via Settings
 

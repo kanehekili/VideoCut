@@ -107,6 +107,7 @@ typedef struct {
     double_t videoLen; //Approx duration in seconds
     int isDebug;
     int muteAudio;
+    int noSubtitles;
     int muxMode;
     char* sourceFile;
     char* targetFile;
@@ -198,7 +199,6 @@ static int _collectAllStreams(){
 	int audioData[]={0,0,0};
 	int audioCount=1;
 	int videoCount=0;
-	int titleCount=0;
 	int bestAudio=0;
 	context.refAudioIndex=1;
 	int ret;
@@ -252,7 +252,6 @@ static int _collectAllStreams(){
         		info->frame_nbr=0;
         		context.stream_mapping[i]=titleIndex;
         		av_log(NULL, AV_LOG_INFO,"Potential Subtitle @:%d\n",i);
-        		titleCount++;
     		}
 
     	}
@@ -285,10 +284,9 @@ static const AVOutputFormat* checkVideoFormat(struct StreamInfo *info,char *out_
         av_log(NULL, AV_LOG_INFO,"MPEG2 set to PS-stream\n");
     }else if(codecID == AV_CODEC_ID_VC1){
     	context.fmtFlags |= AVFMT_NOTIMESTAMPS;
-    	if (context.muxMode==MODE_TRANSCODE){//VC-1 - we can't encode that
-    		ofmt= av_guess_format("mp4", NULL, NULL);//libavcodec dosn't support mkv (vorbis seems to be the problem)
-    	    av_log(NULL, AV_LOG_INFO,"Matroska/VC1 set to mp4\n");
-    	}
+    	//No mp4 forcing for MODE_TRANSCODE anymore. The old mkv failure ("libavcodec
+    	//doesn't support mkv") was really missing h264 extradata at write_header time -
+    	//solved by the encoder pre-init in _initOutputContext. mkv keeps the PGS subtitles.
     }else if ((codecID == AV_CODEC_ID_VP8 || codecID == AV_CODEC_ID_VP9) && context.muxMode==MODE_TRANSCODE){
         ofmt= av_guess_format("webm", NULL, NULL);//is usually VP9, even if VP8 is preferred
     //}else if(codecID == AV_CODEC_ID_HEVC){ doesn't even run with ffmepg
@@ -494,6 +492,20 @@ static int _copySidedata(struct StreamInfo *info){
 
 void _createOutputForSubTitles(int destIndx){
     int ret;
+    int subDefaultSet=0;
+
+    if (context.noSubtitles){
+        //unmap the collected subtitle streams - a mapped stream without an
+        //output stream crashes write_packet on the first subtitle packet
+        for (int i = 0; i < LANG_COUNT; ++i) {
+            struct StreamInfo *subTitleStream = &allStreams[i+SUBTEXT_IDX];
+            if (subTitleStream->inStream){
+                context.stream_mapping[subTitleStream->srcIndex]=-1;
+                subTitleStream->inStream=NULL;
+            }
+        }
+        return;
+    }
 
     for (int i = 0; i < LANG_COUNT; ++i) {
     	struct StreamInfo *subTitleStream = &allStreams[i+SUBTEXT_IDX];
@@ -519,6 +531,10 @@ void _createOutputForSubTitles(int destIndx){
 		_copySidedata(subTitleStream);
 
         subTitleStream->dstIndex = destIndx++;
+        if (!subDefaultSet){//flag the first subtitle track, so players show it by default
+            subTitleStream->outStream->disposition |= AV_DISPOSITION_DEFAULT;
+            subDefaultSet=1;
+        }
         if (subTitleStream->lang){
 			AVDictionary *meta = NULL;
 			av_dict_set(&meta,"language",subTitleStream->lang,0);
@@ -527,6 +543,8 @@ void _createOutputForSubTitles(int destIndx){
         //why twice ? _copySidedata(subTitleStream);
     }
 }
+
+static int _initEncoder(struct StreamInfo *info, AVFrame *frame);
 
 int _initOutputContext(const AVOutputFormat *pre_ofmt, char *out_filename){
 	struct StreamInfo *videoInfo = getVideoRef();
@@ -599,6 +617,15 @@ int _initOutputContext(const AVOutputFormat *pre_ofmt, char *out_filename){
 
     _copySidedata(videoInfo);
 
+    if (context.muxMode == MODE_TRANSCODE){
+        //matroska needs the h264 extradata (CodecPrivate) at header time - open the encoder now
+        AVFrame *tmpFrame = av_frame_alloc();
+        ret = _initEncoder(videoInfo,tmpFrame);
+        av_frame_free(&tmpFrame);
+        if (ret < 0)
+            return -1;
+    }
+
     av_dump_format(ofmt_ctx, 0, out_filename, 1);
 
     if (!(ofmt->flags & AVFMT_NOFILE)) {
@@ -638,7 +665,6 @@ static int _initDecoder(struct StreamInfo *info){
        return -1;
     }
     avcodec_parameters_to_context(dec_ctx, info->inStream->codecpar);
-    av_dict_set(&opts, "refcounted_frames","1",0);
     dec_ctx->framerate = av_guess_frame_rate(context.ifmt_ctx, info->inStream, NULL);
     //configure multi threading
     dec_ctx->thread_count=context.nprocs;
@@ -756,26 +782,21 @@ static int _initEncoder(struct StreamInfo *info, AVFrame *frame){
     enc_ctx->thread_count=context.nprocs;
     enc_ctx->thread_type = FF_THREAD_FRAME | FF_THREAD_SLICE;
     av_log(NULL,AV_LOG_INFO,"Registered %d encoding threads \n",enc_ctx->thread_count);
-    if ((ret=avcodec_open2(enc_ctx,encoder,&opts))<0){ 
+    if (context.ofmt_ctx->oformat->flags & AVFMT_GLOBALHEADER){
+        av_log(NULL, AV_LOG_INFO,"Using GLOBAL encode headers\n");
+        enc_ctx->flags |= AV_CODEC_FLAG_GLOBAL_HEADER;
+    }
+
+    if ((ret=avcodec_open2(enc_ctx,encoder,&opts))<0){
        av_log(NULL, AV_LOG_ERROR,"Err: Failed to open en-codec context\n");
        return -1;
     }
 
-    //Despite other examples: flags MUST be set after open2
+    //copy AFTER open2: the encoder generates its extradata (SPS/PPS) there
     ret = avcodec_parameters_from_context(info->outStream->codecpar, enc_ctx);
     if (ret < 0) {
         av_log(NULL, AV_LOG_ERROR,"Err: Failed to copy encoder parameters to output stream \n");
         return ret;
-    }   
-
-    if (context.ofmt_ctx->oformat->flags & AVFMT_GLOBALHEADER){
-        av_log(NULL, AV_LOG_INFO,"Using GLOBAL encode headers\n");
-        enc_ctx->flags |= AV_CODEC_FLAG_GLOBAL_HEADER; 
-    }
-
-    if (context.ofmt_ctx->oformat->flags & AVFMT_VARIABLE_FPS){
-    	av_log(NULL, AV_LOG_INFO,"Detected VAR FPS\n");
-    	enc_ctx->flags |= AVFMT_VARIABLE_FPS;
     }
 
     frame->format = info->in_codec_ctx->pix_fmt;
@@ -833,7 +854,13 @@ int _setupStreams(SourceContext *sctx ){
 //SPS Example: https://gist.github.com/annidy/3f0f1d790f01b9bd8acccc2e8381e6e3
 //This code only works for VC1 !
 static inline int vc1Check(const uint8_t * const data){
-	return  data[4]==0xC0; //Incredible hack,but working
+	if (data[0]==0x00 && data[1]==0x00 && data[2]==0x01){
+		if (data[3]==0x0F || data[3]==0x0E) //sequence or entry-point header: always a random access point
+			return 1;
+		if (data[3]==0x0D) //bare frame start code: I-frame check
+			return data[4]==0xC0;
+	}
+	return data[4]==0xC0; //legacy fallback for packets without start code alignment
 }
 
 static inline int h264Check(const uint8_t * const data){
@@ -846,7 +873,7 @@ static inline int h264Check(const uint8_t * const data){
 }
 
 static int isRealIFrame(struct StreamInfo *info, const AVPacket* pkt){
-	if (pkt->flags!=AV_PKT_FLAG_KEY)
+	if (!(pkt->flags & AV_PKT_FLAG_KEY))
 		return 0;
 
 	if (pkt->data && pkt->size >= 5) {
@@ -858,6 +885,29 @@ static int isRealIFrame(struct StreamInfo *info, const AVPacket* pkt){
 	}
 
 	return 1;
+}
+
+//B frames directly after a cut-in keyframe reference frames that are not
+//part of the segment (open GOP) and decode as garbage. VC1 only.
+static inline int isVC1LeadingB(struct StreamInfo *info, const AVPacket* pkt){
+	if (info->in_codec_ctx->codec_id!=AV_CODEC_ID_VC1)
+		return 0;
+	if (pkt->data && pkt->size >= 5 && pkt->data[0]==0x00 && pkt->data[1]==0x00
+			&& pkt->data[2]==0x01 && pkt->data[3]==0x0D)
+		return (pkt->data[4] & 0xC0) == 0x80; //PTYPE '10' = B frame
+	return 0;
+}
+
+//Leading pictures at a cut-in display before the head keyframe and reference
+//dropped content. VC1 is detected via bitstream (mkv lacing has no pts on keys),
+//h264 broadcast streams (no IDR frames) via pts.
+static inline int isLeadingPicture(struct StreamInfo *info, const AVPacket* pkt, int64_t headKeyPts){
+	if (isVC1LeadingB(info,pkt))
+		return 1;
+	if (info->in_codec_ctx->codec_id==AV_CODEC_ID_H264 && info->isTransportStream
+			&& pkt->pts != AV_NOPTS_VALUE && headKeyPts != AV_NOPTS_VALUE)
+		return pkt->pts < headKeyPts;
+	return 0;
 }
 /*some test code:
 static inline void traceNal(const AVPacket* pkt,const uint8_t * const dp){
@@ -881,9 +931,9 @@ static void testNal(struct StreamInfo *info, const AVPacket* pkt){
 
 /**************** MUXING SECTION ***********************/
 static int seekTailGOP(struct StreamInfo *info, int64_t ts,CutData *borders) {
-    AVPacket pkt;
     int64_t lookback=ptsFromTime(10.0,info->inStream->time_base); //go 10 seconds back in time
     int timeHit=0;
+    int keyAtEnd=0;
     int keyFrameCount=0;
     int maxFrames=3;
     int64_t gop[3]={0,0,0};
@@ -891,20 +941,22 @@ static int seekTailGOP(struct StreamInfo *info, int64_t ts,CutData *borders) {
 
     if (lookback > ts)
         lookback=0;
-     pkt= *av_packet_alloc();
+    AVPacket *pkt = av_packet_alloc();
     if(av_seek_frame(context.ifmt_ctx, info->srcIndex, ts-lookback, AVSEEK_FLAG_BACKWARD) < 0){
         av_log(NULL, AV_LOG_ERROR,"Err: av_seek_frame failed.\n");
+        av_packet_free(&pkt);
         return -1;
     }
-   
-    while (av_read_frame(context.ifmt_ctx, &pkt)>=0) {
-       if (pkt.stream_index != info->srcIndex){
-            av_packet_unref(&pkt); 
+
+    while (av_read_frame(context.ifmt_ctx, pkt)>=0) {
+       if (pkt->stream_index != info->srcIndex){
+            av_packet_unref(pkt);
             continue;
-        }    
+        }
         int i;
-        secureTs=pkt.dts==AV_NOPTS_VALUE?pkt.pts:pkt.dts;
-        if (pkt.flags == AV_PKT_FLAG_KEY){
+        int isKey=pkt->flags & AV_PKT_FLAG_KEY;
+        secureTs=pkt->dts==AV_NOPTS_VALUE?pkt->pts:pkt->dts;
+        if (isKey){
             for (i =0; i< maxFrames-1; i++){
                 gop[i]=gop[i+1];
             }
@@ -912,16 +964,18 @@ static int seekTailGOP(struct StreamInfo *info, int64_t ts,CutData *borders) {
             keyFrameCount++;
             if (timeHit)
                 break;
-        } 
+        }
         if (secureTs >= ts && !timeHit){
             timeHit=1;
 			borders->dts=secureTs;
-            borders->pts=pkt.pts;
+            borders->pts=pkt->pts;
+            keyAtEnd=isKey;//a keyframe at/after the stop displays after it - never part of the tail
         }
-        av_packet_unref(&pkt); 
+        av_packet_unref(pkt);
     }
 
-    av_packet_unref(&pkt); 
+    av_packet_unref(pkt);
+    av_packet_free(&pkt);
     int idx=0;
     int t1 = llabs((int64_t)(ts - gop[1]));
     int t2 = llabs((int64_t)(ts - gop[2]));
@@ -936,7 +990,16 @@ static int seekTailGOP(struct StreamInfo *info, int64_t ts,CutData *borders) {
     //h264 non TS precise cut:
     short isTS = info->isTransportStream;
     short isMP4 = info->in_codec_ctx->codec_id==AV_CODEC_ID_H264 || info->in_codec_ctx->codec_id==AV_CODEC_ID_AV1;
-	if (isMP4 && !isTS){
+    short isVC1 = info->in_codec_ctx->codec_id==AV_CODEC_ID_VC1;
+	if (isVC1){
+		//omit the trailing reference I: no frame of the next scene is shown,
+		//but the last B frames lose their forward anchor (may decode degraded).
+		//If the stop lands exactly on a keyframe packet (scene cut right after
+		//the stop frame), exclude that keyframe from the tail.
+		borders->end=keyAtEnd?borders->dts-1:borders->dts;
+		av_log(NULL, AV_LOG_VERBOSE,"<VC1 precise>");
+	}
+	else if (isMP4 && !isTS){
 		borders->end=borders->dts;
 	    av_log(NULL, AV_LOG_VERBOSE,"<mp4&!TS>");
 	}
@@ -945,7 +1008,7 @@ static int seekTailGOP(struct StreamInfo *info, int64_t ts,CutData *borders) {
 		borders->end=borders->dts;
 	}
 	else{
-		borders->end=gop[idx+1];//e.g. MP4 with TS...or VC1
+		borders->end=gop[idx+1];//h264/AV1 in transport streams, or other codecs (e.g. mpeg2, vp9)
 		av_log(NULL, AV_LOG_VERBOSE,"<fullGOP>");
 	}
     AVRational time_base = info->inStream->time_base;
@@ -965,7 +1028,6 @@ static int seekTailGOP(struct StreamInfo *info, int64_t ts,CutData *borders) {
 
 //seeking only the video stream head
 static int seekHeadGOP(struct StreamInfo *info, int64_t ts,CutData *borders) {
-    AVPacket pkt;
     int64_t lookback=ptsFromTime(4.0,info->inStream->time_base);
     int timeHit=0;
     int keyFrameCount=0;
@@ -973,39 +1035,52 @@ static int seekHeadGOP(struct StreamInfo *info, int64_t ts,CutData *borders) {
     int maxFrames=3;
     int64_t gop[3]={0,0,0};
     int64_t secureTs =0;
+    int64_t prevTs = AV_NOPTS_VALUE;
+    int64_t prevPts = AV_NOPTS_VALUE;
 
     if (lookback > ts)
         lookback=ts;
     //const int genPts= context.ifmt_ctx->flags & AVFMT_FLAG_GENPTS; alway 0->so packet buffer is used
-    pkt= *av_packet_alloc();
+    AVPacket *pkt = av_packet_alloc();
     if(av_seek_frame(context.ifmt_ctx, info->srcIndex, ts-lookback, AVSEEK_FLAG_BACKWARD) < 0){
         av_log(NULL, AV_LOG_ERROR,"Err: av_seek_frame failed.\n");
+        av_packet_free(&pkt);
         return -1;
     }
-    while (av_read_frame(context.ifmt_ctx, &pkt)>=0) {
-       if (pkt.stream_index != info->srcIndex){
-            av_packet_unref(&pkt); 
+    while (av_read_frame(context.ifmt_ctx, pkt)>=0) {
+       if (pkt->stream_index != info->srcIndex){
+            av_packet_unref(pkt);
             continue;
-        }    
-       secureTs=pkt.dts==AV_NOPTS_VALUE?pkt.pts:pkt.dts;
-       if (secureTs != AV_NOPTS_VALUE && isRealIFrame(info, &pkt)){
+        }
+       secureTs=pkt->dts==AV_NOPTS_VALUE?pkt->pts:pkt->dts;
+       if (secureTs != AV_NOPTS_VALUE && isRealIFrame(info, pkt)){
 			if (timeHit)
 				gopIndx++;
 			gop[gopIndx]=secureTs;
 			keyFrameCount++;
 			if (gopIndx==maxFrames-1)//one gop == 2 frames are needed
 				break;
-        } 
-        
-        if (pkt.dts >= ts && !timeHit){
-            timeHit=1;
-            borders->dts=secureTs;
-            borders->pts=pkt.pts;
         }
-        av_packet_unref(&pkt); 
+
+        if (pkt->dts >= ts && !timeHit){
+            timeHit=1;
+            //cut at the frame being displayed at ts: floor to the previous packet
+            //unless ts hits a packet border exactly (field-time marks on interlaced material)
+            if (pkt->dts > ts && prevTs != AV_NOPTS_VALUE){
+                borders->dts=prevTs;
+                borders->pts=prevPts;
+            } else {
+                borders->dts=secureTs;
+                borders->pts=pkt->pts;
+            }
+        }
+        prevTs=secureTs;
+        prevPts=pkt->pts;
+        av_packet_unref(pkt);
     }
 
-    av_packet_unref(&pkt); 
+    av_packet_unref(pkt);
+    av_packet_free(&pkt);
     int idx=0;
 	int t1 = llabs((int64_t)(ts - gop[0]));
 	int t2 = llabs((int64_t)(ts - gop[1]));
@@ -1047,7 +1122,7 @@ static int write_packet(struct StreamInfo *info,AVPacket *pkt){
 
         if (isVideo) {
             //context.frame_number+=1;
-            if (pkt->flags == AV_PKT_FLAG_KEY){
+            if (pkt->flags & AV_PKT_FLAG_KEY){
               frm='I';
             }
             else
@@ -1102,6 +1177,8 @@ static int write_packet(struct StreamInfo *info,AVPacket *pkt){
         	if (context.audioRef)
         		audioRefTime= av_rescale_q(context.audioRef,audioRef->inStream->time_base,info->inStream->time_base);
         	pkt->dts = d1-audioRefTime;
+        	if (dur != 0)
+        		pkt->duration = av_rescale_q(dur, in_stream->time_base, out_stream->time_base);
         }else { //Audio
         	//lets try with our dts...
         	int64_t lastTS = info->writtenDTS;
@@ -1234,12 +1311,11 @@ static void updateAudioRef(int64_t audioRef,struct StreamInfo *info){
 //Plain muxing, no encoding.Expect an Iframe first
 static int mux1(CutData head,CutData tail){
     struct StreamInfo *streamInfo;
-    AVPacket pkt = { .data = NULL, .size = 0 };
     struct StreamInfo *audioref = getAudioRef();
     struct StreamInfo *videoStream = getVideoRef();
     int fcnt =0;
     context.audioRef=0;
-    pkt= *av_packet_alloc();
+    AVPacket *pkt = av_packet_alloc();
     if (context.muteAudio)
     	av_log(NULL, AV_LOG_INFO,"Mux without audio \n");
 
@@ -1247,74 +1323,88 @@ static int mux1(CutData head,CutData tail){
     av_log(NULL,AV_LOG_VERBOSE,">>> Audio tail: %ld tail.end: %ld\n",audioTail,tail.end);
     short audioAtEnd = audioTail==0;
     short videoAtEnd = 0;
-    while (av_read_frame(context.ifmt_ctx, &pkt)>=0) {
-        streamInfo = getStream(pkt.stream_index);
+    short dropLeadB = 0;
+    int64_t headKeyPts = AV_NOPTS_VALUE;
+    while (av_read_frame(context.ifmt_ctx, pkt)>=0) {
+        streamInfo = getStream(pkt->stream_index);
         if (!streamInfo){
-            av_packet_unref(&pkt);
+            av_packet_unref(pkt);
             continue; //No usable packet.
         }
         int isVideo = streamInfo->type==TYPE_VIDEO;
         int isAudio = streamInfo->type==TYPE_AUDIO;
         if (isVideo){
-            int64_t secureTS=pkt.dts==AV_NOPTS_VALUE?pkt.pts:pkt.dts;
+            int64_t secureTS=pkt->dts==AV_NOPTS_VALUE?pkt->pts:pkt->dts;
             char frm='v';
-            if (pkt.flags == AV_PKT_FLAG_KEY && pkt.dts >=head.start){
+            if ((pkt->flags & AV_PKT_FLAG_KEY) && pkt->dts >=head.start){
                 fcnt++;
                 frm='I';
-                if (fcnt==1)
-                	updateRefTime(pkt.dts,videoStream);
+                if (fcnt==1){
+                	updateRefTime(pkt->dts,videoStream);
+                	dropLeadB=1;//open GOP: pictures after the head I reference dropped content
+                	headKeyPts=pkt->pts;
+                }
             }
-            //ignore leading and trailing video packets. 
+            //ignore leading and trailing video packets.
             if (fcnt==0 ){
-                av_log(NULL,AV_LOG_VERBOSE,"Skip head video packet %ld\n",pkt.dts);
-                av_packet_unref(&pkt);
+                av_log(NULL,AV_LOG_VERBOSE,"Skip head video packet %ld\n",pkt->dts);
+                av_packet_unref(pkt);
                 continue;
+            }
+            if (dropLeadB && !(pkt->flags & AV_PKT_FLAG_KEY)){
+                if (isLeadingPicture(streamInfo,pkt,headKeyPts)){
+                    av_log(NULL,AV_LOG_VERBOSE,"Drop leading picture %ld\n",pkt->dts);
+                    av_packet_unref(pkt);
+                    continue;
+                }
+                dropLeadB=0;//first non-leading packet closes the window
             }
             if (secureTS >tail.end){
               if (audioAtEnd){
-            	  av_log(NULL,AV_LOG_VERBOSE,"Stop V packet %ld [*]\n",pkt.dts);
+            	  av_log(NULL,AV_LOG_VERBOSE,"Stop V packet %ld [*]\n",pkt->dts);
                  break;
               }
                else {
-              	av_log(NULL,AV_LOG_VERBOSE,"Skip tail video packet %ld [%c]\n",pkt.dts,frm);
-             	av_packet_unref(&pkt);
+              	av_log(NULL,AV_LOG_VERBOSE,"Skip tail video packet %ld [%c]\n",pkt->dts,frm);
+             	av_packet_unref(pkt);
                 videoAtEnd=1;
                 continue;
                }
             }
-              
+
         } else {
             //run audio until it reaches tail.end as well
         	//int64_t refTime= av_rescale_q(context.refTime,videoStream->inStream->time_base,streamInfo->inStream->time_base);
         	int64_t refTime= av_rescale_q(context.audio_sync_dts,audioref->inStream->time_base,streamInfo->inStream->time_base);
-        	if (pkt.dts<refTime){//independent of any flagkey!
-        		av_log(NULL,AV_LOG_VERBOSE,"Skip head A/S packet %ld [*]\n",pkt.dts);
-        		  av_packet_unref(&pkt);
+        	if (pkt->dts<refTime){//independent of any flagkey!
+        		av_log(NULL,AV_LOG_VERBOSE,"Skip head A/S packet %ld [*]\n",pkt->dts);
+        		  av_packet_unref(pkt);
         		  continue;
         	}
         	else if (!fcnt) {
-        		av_log(NULL,AV_LOG_VERBOSE,"Audio ahead package %ld [*]\n",pkt.dts);
+        		av_log(NULL,AV_LOG_VERBOSE,"Audio ahead package %ld [*]\n",pkt->dts);
         	}
-        	else if (pkt.dts >= audioTail){
+        	else if (pkt->dts >= audioTail){
             	if (videoAtEnd){
-            		av_log(NULL,AV_LOG_VERBOSE,"Stop audio packet %ld [*] index %d\n",pkt.dts,pkt.stream_index);
+            		av_log(NULL,AV_LOG_VERBOSE,"Stop audio packet %ld [*] index %d\n",pkt->dts,pkt->stream_index);
             		break;
             	}
 
                 else {
-                	av_log(NULL,AV_LOG_VERBOSE,"Skip tail packet %ld [*] index %d\n",pkt.dts,pkt.stream_index);
-                	av_packet_unref(&pkt);
+                	av_log(NULL,AV_LOG_VERBOSE,"Skip tail packet %ld [*] index %d\n",pkt->dts,pkt->stream_index);
+                	av_packet_unref(pkt);
                 	audioAtEnd=1;
                 	continue;
               }
 		    }
 			if (isAudio)
-				updateAudioRef(pkt.dts,streamInfo);
-        }  
+				updateAudioRef(pkt->dts,streamInfo);
+        }
 
-        write_packet(streamInfo,&pkt);
+        write_packet(streamInfo,pkt);
     }
-    av_packet_unref(&pkt);
+    av_packet_unref(pkt);
+    av_packet_free(&pkt);
     //av_interleaved_write_frame(context.ofmt_ctx, NULL);//flushing
     return 1;
 }
@@ -1341,30 +1431,30 @@ static int decode(AVCodecContext *dec_ctx,AVPacket *pkt,AVFrame *frame){
 //find offset correction: Take the first I Frame
 
 static int64_t seekPrimaryOffset(struct StreamInfo *info){
-    AVPacket pkt;
     int64_t first_dts = 0;
-    
-     pkt= *av_packet_alloc();
-     if(av_seek_frame(context.ifmt_ctx, info->srcIndex,0, AVSEEK_FLAG_BACKWARD) < 0){
+    AVPacket *pkt = av_packet_alloc();
+    if(av_seek_frame(context.ifmt_ctx, info->srcIndex,0, AVSEEK_FLAG_BACKWARD) < 0){
         av_log(NULL, AV_LOG_ERROR,"Err: av_seek_frame failed.\n");
+        av_packet_free(&pkt);
         return -1;
     }
-    
-    while (av_read_frame(context.ifmt_ctx, &pkt)>=0) {
-       if (pkt.stream_index != info->srcIndex){
-            av_packet_unref(&pkt); 
+
+    while (av_read_frame(context.ifmt_ctx, pkt)>=0) {
+       if (pkt->stream_index != info->srcIndex){
+            av_packet_unref(pkt);
             continue;
         }
-        if (pkt.flags == AV_PKT_FLAG_KEY ){
-            first_dts = pkt.dts;
+        if (pkt->flags & AV_PKT_FLAG_KEY ){
+            first_dts = pkt->dts;
             break;
         }
-        av_packet_unref(&pkt); 
+        av_packet_unref(pkt);
     }
-    av_packet_unref(&pkt); 
-    
+    av_packet_unref(pkt);
+    av_packet_free(&pkt);
+
     avcodec_flush_buffers(info->in_codec_ctx);
-    
+
     return first_dts;
 }
 
@@ -1382,19 +1472,17 @@ static int flushFrames(struct StreamInfo *info, AVFrame *frame){
                 ret2=avcodec_send_frame(info->out_codec_ctx,frame);
                 if (ret2==0){
                     av_log(NULL, AV_LOG_VERBOSE,"flush Frame sent: P:%ld dur:%ld\n",frame->pts,frame->AVFRAME_PKTDURATION);
-                    AVPacket enc_pkt;
-                    enc_pkt.data = NULL;
-                    enc_pkt.size = 0;
-                    enc_pkt= *av_packet_alloc();
+                    AVPacket *enc_pkt = av_packet_alloc();
                     int ret3 =0;
                     while (ret3 >=0){
-                        ret3=avcodec_receive_packet(info->out_codec_ctx,&enc_pkt);
+                        ret3=avcodec_receive_packet(info->out_codec_ctx,enc_pkt);
                         if (ret3 ==0){
                             av_log(NULL, AV_LOG_VERBOSE,"f->");
-                            enc_pkt.stream_index=info->inStream->index;//compatibility
-                            writeTranscoded(info,&enc_pkt,0);
+                            enc_pkt->stream_index=info->inStream->index;//compatibility
+                            writeTranscoded(info,enc_pkt,0);
                         }
                     }
+                    av_packet_free(&enc_pkt);
                 }else {
                     av_log(NULL, AV_LOG_ERROR,"Err: -Frame error %d\n",ret2);
                 }
@@ -1405,37 +1493,35 @@ static int flushFrames(struct StreamInfo *info, AVFrame *frame){
 }
 
 static int flushPackets(struct StreamInfo *info,int64_t stop){
-    AVPacket pkt;
     int ret;
     if (!info->out_codec_ctx)
         return 1;
-    pkt.data = NULL;
-    pkt.size = 0;
-    pkt= *av_packet_alloc();
+    AVPacket *pkt = av_packet_alloc();
     av_log(NULL, AV_LOG_VERBOSE,"Flush packets\n");
     if((ret = avcodec_send_frame(info->out_codec_ctx, NULL))>=0){
         while (ret >=0){
-            ret = avcodec_receive_packet(info->out_codec_ctx,&pkt);
+            ret = avcodec_receive_packet(info->out_codec_ctx,pkt);
             if (ret==0){
                 av_log(NULL, AV_LOG_VERBOSE,"p->");
-                pkt.stream_index=info->inStream->index;//compatibility
-                int64_t probe =  pkt.pts==AV_NOPTS_VALUE?pkt.dts:pkt.pts;
-                if (probe >= stop || (pkt.pts==AV_NOPTS_VALUE && (context.fmtFlags & AVFMT_NOTIMESTAMPS))){//observed on vc1
-                 	av_log(NULL,AV_LOG_VERBOSE,"Flush pkt END: %ld\n",pkt.dts);
-                 	av_packet_unref(&pkt);
+                pkt->stream_index=info->inStream->index;//compatibility
+                int64_t probe =  pkt->pts==AV_NOPTS_VALUE?pkt->dts:pkt->pts;
+                if (probe >= stop || (pkt->pts==AV_NOPTS_VALUE && (context.fmtFlags & AVFMT_NOTIMESTAMPS))){//observed on vc1
+                 	av_log(NULL,AV_LOG_VERBOSE,"Flush pkt END: %ld\n",pkt->dts);
+                 	av_packet_unref(pkt);
                  	break;
                  }
-                writeTranscoded(info,&pkt,0);
+                writeTranscoded(info,pkt,0);
             }else {
-                av_packet_unref(&pkt);
+                av_packet_unref(pkt);
                 if (ret == AVERROR(EAGAIN) || ret == AVERROR_EOF)
                     av_log(NULL, AV_LOG_VERBOSE,"Flush packet-Queue empty\n");
-                else 
+                else
                     av_log(NULL, AV_LOG_ERROR,"Err: Flush packet-receive error:%d\n",ret);
              }
         }
     }
-    
+
+    av_packet_free(&pkt);
     avcodec_free_context(&info->out_codec_ctx);
     return 1;
 }
@@ -1443,45 +1529,44 @@ static int flushPackets(struct StreamInfo *info,int64_t stop){
  * After frames have been transcoded write remaining audio frames - if there are any
  */
 static int pushTailAudio(){
-    AVPacket pkt;
     struct StreamInfo *audioRef = getAudioRef();
     struct StreamInfo *videoRef = getVideoRef();
     if (!audioRef->inStream || context.muteAudio)
     	return 1;
     int64_t audioTail = av_rescale_q(context.video_trail_dts,videoRef->outStream->time_base, audioRef->outStream->time_base);
-    pkt= *av_packet_alloc();
+    AVPacket *pkt = av_packet_alloc();
 
-    while (av_read_frame(context.ifmt_ctx, &pkt)>=0) {
-    	struct StreamInfo *info = getStream(pkt.stream_index);
+    while (av_read_frame(context.ifmt_ctx, pkt)>=0) {
+    	struct StreamInfo *info = getStream(pkt->stream_index);
     	if (!info ){
-        	av_packet_unref(&pkt);
+        	av_packet_unref(pkt);
         	continue;
     	}
         //int isAudio = info->type==TYPE_AUDIO;
         //if (!isAudio){
     	int isVideo = info->type==TYPE_VIDEO;
     	if (isVideo){
-        	av_packet_unref(&pkt);
+        	av_packet_unref(pkt);
         	continue;
         }
         //ffmgpeg 5: int64_t counter = info->outStream->cur_dts;
     	int64_t counter = info->outDTS;
-        counter+=av_rescale_q(pkt.duration,info->inStream->time_base,info->outStream->time_base);
+        counter+=av_rescale_q(pkt->duration,info->inStream->time_base,info->outStream->time_base);
         if (counter >= audioTail){
-      		av_log(NULL,AV_LOG_VERBOSE,"Audio tail (P:%ld) %ld of:%ld\n", pkt.pts,counter,audioTail);
-   			av_packet_unref(&pkt);
+      		av_log(NULL,AV_LOG_VERBOSE,"Audio tail (P:%ld) %ld of:%ld\n", pkt->pts,counter,audioTail);
+   			av_packet_unref(pkt);
    			break;
         }
-        double_t outtime= av_q2d(info->outStream->time_base)*(pkt.dts);
-        double_t intime= av_q2d(info->inStream->time_base)*(pkt.dts);
-        av_log(NULL,AV_LOG_VERBOSE,"**Audio Tail P/D:%ld in:%.3f out:%.3f cnt:%ld\n",pkt.dts,intime,outtime,counter);
-        write_packet(info,&pkt);//unreffed there
+        double_t outtime= av_q2d(info->outStream->time_base)*(pkt->dts);
+        double_t intime= av_q2d(info->inStream->time_base)*(pkt->dts);
+        av_log(NULL,AV_LOG_VERBOSE,"**Audio Tail P/D:%ld in:%.3f out:%.3f cnt:%ld\n",pkt->dts,intime,outtime,counter);
+        write_packet(info,pkt);//unreffed there
     }
+    av_packet_free(&pkt);
     return 1;
 }
 
 static int transcode( int64_t start, int64_t stop){
-    AVPacket pkt;
     int ret;
     AVFrame *frame;
     int64_t audioTail = 0;
@@ -1493,12 +1578,18 @@ static int transcode( int64_t start, int64_t stop){
     if (audioref->inStream)
     		audioTail = av_rescale_q(stop,videoref->inStream->time_base,audioref->inStream->time_base);
 
-    frame = av_frame_alloc();    
-    ret = _initEncoder(videoref,frame);
-    if (ret <0)
-        return -1; 
-    
-    pkt= *av_packet_alloc();
+    frame = av_frame_alloc();
+    if (videoref->out_codec_ctx == NULL){//segments after the first: encoder was flushed and freed
+        ret = _initEncoder(videoref,frame);
+        if (ret <0)
+            return -1;
+    }else {//first segment reuses the encoder pre-opened in _initOutputContext
+        frame->format = videoref->in_codec_ctx->pix_fmt;
+        frame->width = videoref->in_codec_ctx->width;
+        frame->height = videoref->in_codec_ctx->height;
+    }
+
+    AVPacket *pkt = av_packet_alloc();
 
     int64_t tcStart = _preTransposeScale(start, videoref);
     int64_t tcStop = _preTransposeScale(stop, videoref);
@@ -1507,15 +1598,15 @@ static int transcode( int64_t start, int64_t stop){
     //int64_t tcStop = stop;
     av_log(NULL, AV_LOG_VERBOSE,"Video start:%ld tc:%ld Stop: %ld tc:%ld Audio cutoff: %ld\n",start,tcStart,stop,tcStop,audioTail);
 
-    while (av_read_frame(context.ifmt_ctx, &pkt)>=0) {
-    	if (pkt.dts == AV_NOPTS_VALUE){
+    while (av_read_frame(context.ifmt_ctx, pkt)>=0) {
+    	if (pkt->dts == AV_NOPTS_VALUE){
     		av_log(NULL, AV_LOG_VERBOSE,"Skip frame-invalid DTS\n");
     		continue; //Not able
     	}
-    	struct StreamInfo *info = getStream(pkt.stream_index);
+    	struct StreamInfo *info = getStream(pkt->stream_index);
     	if (!info){
             //unusable packet
-            av_packet_unref(&pkt);
+            av_packet_unref(pkt);
             continue;
     	}
 
@@ -1528,25 +1619,25 @@ static int transcode( int64_t start, int64_t stop){
         if (!isVideo){
         	int64_t head = av_rescale_q(context.audio_sync_dts,audioref->inStream->time_base,audioref->inStream->time_base);
         	int64_t tail = av_rescale_q(stop,videoref->inStream->time_base,audioref->inStream->time_base);
-        	if (pkt.dts>= head && pkt.dts <= tail){
+        	if (pkt->dts>= head && pkt->dts <= tail){
         		if (isAudio)
-        			updateAudioRef(pkt.dts,info);
-        		write_packet(info,&pkt);
+        			updateAudioRef(pkt->dts,info);
+        		write_packet(info,pkt);
         	}
         	else {
         		char frm=isAudio?'A':'S';
-        		av_log(NULL, AV_LOG_VERBOSE,"Drop %c packet - dts:%ld\n",frm,pkt.dts);
-                av_packet_unref(&pkt);
+        		av_log(NULL, AV_LOG_VERBOSE,"Drop %c packet - dts:%ld\n",frm,pkt->dts);
+                av_packet_unref(pkt);
         	}
         	continue;
         }
 
-        double_t dtime= av_q2d(info->inStream->time_base)*(pkt.dts);//Instream time...
+        double_t dtime= av_q2d(info->inStream->time_base)*(pkt->dts);//Instream time...
 
         /* prepare packet for muxing*/
-     	_preTransposePacket(&pkt, info);
-        if ((ret = decode(info->in_codec_ctx,&pkt,frame))<0) {
-            av_log(NULL, AV_LOG_VERBOSE,"Buffer pkt: isKey:%d p:%ld d:%ld [%.3f] dur:%ld\n",pkt.flags, pkt.pts,pkt.dts,dtime,pkt.duration);
+     	_preTransposePacket(pkt, info);
+        if ((ret = decode(info->in_codec_ctx,pkt,frame))<0) {
+            av_log(NULL, AV_LOG_VERBOSE,"Buffer pkt: isKey:%d p:%ld d:%ld [%.3f] dur:%ld\n",pkt->flags, pkt->pts,pkt->dts,dtime,pkt->duration);
         }else {
         	//either PTS or DTS ..
         	int64_t pts = frame->pts;
@@ -1559,12 +1650,12 @@ static int transcode( int64_t start, int64_t stop){
 				char ptype = av_get_picture_type_char(frame->pict_type);
 				double_t fptime= av_q2d(info->inStream->time_base)*(pts);
 				//DTS is always==PTS- since its decoded...
-				av_log(NULL, AV_LOG_VERBOSE,"%ld) decode key: %d (%d) type: %c, pts: %ld time: %.3f frm dur %ld",(int64_t)info->in_codec_ctx->AVCODECCONTEXT_FRAMENUMBER,AVFRAME_KEYFRAME(frame),pkt.flags,ptype,pts,fptime,frame->AVFRAME_PKTDURATION);
+				av_log(NULL, AV_LOG_VERBOSE,"%ld) decode key: %d (%d) type: %c, pts: %ld time: %.3f frm dur %ld",(int64_t)info->in_codec_ctx->AVCODECCONTEXT_FRAMENUMBER,AVFRAME_KEYFRAME(frame),pkt->flags,ptype,pts,fptime,frame->AVFRAME_PKTDURATION);
         	}
 			//if (frame->pts != AV_NOPTS_VALUE && frame->pts < start){
             if (pts < tcStart){
 				av_log(NULL, AV_LOG_VERBOSE,"- Ignore\n");
-				av_packet_unref(&pkt);
+				av_packet_unref(pkt);
 				continue;
 			}else if (pts > tcStop){
 				av_log(NULL, AV_LOG_VERBOSE,"- End of GOP: %ld\n",pts);
@@ -1574,10 +1665,10 @@ static int transcode( int64_t start, int64_t stop){
             ret = av_frame_make_writable(frame);
             if (ret<0){
                 av_log(NULL, AV_LOG_ERROR,"Err: frame not writable\n");
-                av_packet_unref(&pkt);
+                av_packet_unref(pkt);
                 continue;
             }
-            frame->pict_type = AV_PICTURE_TYPE_NONE;                               
+            frame->pict_type = AV_PICTURE_TYPE_NONE;
             ret=avcodec_send_frame(info->out_codec_ctx,frame);
             // Make sure Closed Captions will not be duplicated
             av_frame_remove_side_data(frame, AV_FRAME_DATA_A53_CC);
@@ -1589,23 +1680,23 @@ static int transcode( int64_t start, int64_t stop){
                 av_log(NULL, AV_LOG_VERBOSE,"-Error EAGAIN\n");
             else if (ret==0){
                 av_log(NULL, AV_LOG_VERBOSE,"+\n");
-                AVPacket enc_pkt={ .data = NULL, .size = 0 };
-
-                enc_pkt = *av_packet_alloc();
-                while (avcodec_receive_packet(info->out_codec_ctx,&enc_pkt)>=0){
-                    enc_pkt.stream_index=info->inStream->index;//compatibility
-                    short update = (enc_pkt.flags == AV_PKT_FLAG_KEY && !fcnt);
+                AVPacket *enc_pkt = av_packet_alloc();
+                while (avcodec_receive_packet(info->out_codec_ctx,enc_pkt)>=0){
+                    enc_pkt->stream_index=info->inStream->index;//compatibility
+                    short update = ((enc_pkt->flags & AV_PKT_FLAG_KEY) && !fcnt);
                     fcnt++;
-                    writeTranscoded(info, &enc_pkt,update);//will unref package...
+                    writeTranscoded(info, enc_pkt,update);//will unref package...
                 }
-            }    
+                av_packet_free(&enc_pkt);
+            }
             else
                 av_log(NULL, AV_LOG_ERROR,"Err: -Frame error %d\n",ret);
         }
-        
-        av_packet_unref(&pkt);     
+
+        av_packet_unref(pkt);
     }
-    av_packet_unref(&pkt);     
+    av_packet_unref(pkt);
+    av_packet_free(&pkt);
     flushFrames(videoref,frame);
     flushPackets(videoref,tcStop);
     videoref->out_codec_ctx=NULL;
@@ -1633,7 +1724,7 @@ static int split(int64_t start, int64_t stop){
 		if (isVideo){
 			 //streamInfo = videoStream;
 			 check = pkt.dts;
-			 if (pkt.flags == AV_PKT_FLAG_KEY && flag==0){
+			 if ((pkt.flags & AV_PKT_FLAG_KEY) && flag==0){
 				 flag=1;
 			 }
 		}else if (isAudio) {
@@ -1688,51 +1779,48 @@ static int dumpDecodingData(){
     struct StreamInfo *audioStream = getAudioRef();
     struct StreamInfo *videoStream = getVideoRef();
 	char frm;
-    AVPacket pkt;
     AVFrame *frame;
-    
-    pkt.data = NULL;
-    pkt.size = 0;
-    pkt= *av_packet_alloc();
-    frame = av_frame_alloc(); 
-    
-    while (av_read_frame(context.ifmt_ctx, &pkt)>=0) {
+    AVPacket *pkt = av_packet_alloc();
+    frame = av_frame_alloc();
 
-        int isVideo = videoStream->srcIndex==pkt.stream_index;
+    while (av_read_frame(context.ifmt_ctx, pkt)>=0) {
+
+        int isVideo = videoStream->srcIndex==pkt->stream_index;
         if (isVideo) {
             streamInfo = videoStream;
-            if (pkt.flags == AV_PKT_FLAG_KEY)
-                frm='I';      
+            if (pkt->flags & AV_PKT_FLAG_KEY)
+                frm='I';
             else
-                frm='v';      
+                frm='v';
         }else {//Audio
-            frm='*';        
+            frm='*';
             streamInfo = audioStream;
-        }		
+        }
         int64_t streamOffset = streamInfo->inStream->start_time;
-        double_t dtsCalcTime = av_q2d(streamInfo->outStream->time_base)*pkt.dts;
-        double_t ptsCalcTime = av_q2d(streamInfo->outStream->time_base)*pkt.pts;
-        double_t xxx = av_q2d(streamInfo->inStream->time_base)*(pkt.dts-streamOffset);
-        
-        av_log(NULL, AV_LOG_INFO,"%ld [%c] P:%ld  D:%ld Pt:%.3f Dt:%.3f Time:%.3f size:%d dur:%ld flags:%d\n",streamInfo->outStream->nb_frames,frm,pkt.pts,pkt.dts,ptsCalcTime,dtsCalcTime,xxx,pkt.size,pkt.duration,pkt.flags);
+        double_t dtsCalcTime = av_q2d(streamInfo->outStream->time_base)*pkt->dts;
+        double_t ptsCalcTime = av_q2d(streamInfo->outStream->time_base)*pkt->pts;
+        double_t xxx = av_q2d(streamInfo->inStream->time_base)*(pkt->dts-streamOffset);
+
+        av_log(NULL, AV_LOG_INFO,"%ld [%c] P:%ld  D:%ld Pt:%.3f Dt:%.3f Time:%.3f size:%d dur:%ld flags:%d\n",streamInfo->outStream->nb_frames,frm,pkt->pts,pkt->dts,ptsCalcTime,dtsCalcTime,xxx,pkt->size,pkt->duration,pkt->flags);
 
         if (isVideo && context.muxMode==MODE_DUMPFRAMES) {
             int ret;
-            if ((ret = decode(streamInfo->in_codec_ctx,&pkt,frame)) == 0) {
+            if ((ret = decode(streamInfo->in_codec_ctx,pkt,frame)) == 0) {
                 char ptype = av_get_picture_type_char(frame->pict_type);
-                double_t fptime= av_q2d(streamInfo->outStream->time_base)*(frame->pts - streamInfo->inStream->start_time);  
+                double_t fptime= av_q2d(streamInfo->outStream->time_base)*(frame->pts - streamInfo->inStream->start_time);
                 //DTS is always==PTS- since its decoded...
-                av_log(NULL, AV_LOG_INFO,"%ld)FRM key: %d(%d) type:%c,pts:%ld time:%.3f\n",(int64_t)streamInfo->in_codec_ctx->AVCODECCONTEXT_FRAMENUMBER,AVFRAME_KEYFRAME(frame),pkt.flags,ptype,frame->pts,fptime);
+                av_log(NULL, AV_LOG_INFO,"%ld)FRM key: %d(%d) type:%c,pts:%ld time:%.3f\n",(int64_t)streamInfo->in_codec_ctx->AVCODECCONTEXT_FRAMENUMBER,AVFRAME_KEYFRAME(frame),pkt->flags,ptype,frame->pts,fptime);
             }else {
-                double_t dtime= av_q2d(streamInfo->outStream->time_base)*(pkt.dts - streamInfo->inStream->start_time);  
-                av_log(NULL, AV_LOG_INFO,"Buffer pkt: isKey:%d p:%ld d:%ld [%.3f]\n",pkt.flags, pkt.pts,pkt.dts,dtime);            
+                double_t dtime= av_q2d(streamInfo->outStream->time_base)*(pkt->dts - streamInfo->inStream->start_time);
+                av_log(NULL, AV_LOG_INFO,"Buffer pkt: isKey:%d p:%ld d:%ld [%.3f]\n",pkt->flags, pkt->pts,pkt->dts,dtime);
             }
         }
 
-          av_packet_unref(&pkt);
+        av_packet_unref(pkt);
     }
+    av_packet_free(&pkt);
     av_frame_free(&frame);
-    return 1;                
+    return 1;
 }
 /** seek to the timeslots and cut them out **/
 static int seekAndMux(double_t timeslots[],int seekCount){
@@ -1798,6 +1886,10 @@ static int seekAndMux(double_t timeslots[],int seekCount){
     }
 
     int64_t lookback = 5*videoDelta;
+    //mpv anchors its timeline at the container start - use the same anchor for the incoming seconds
+    double_t containerStart = 0.0;
+    if (context.ifmt_ctx->start_time != AV_NOPTS_VALUE)
+        containerStart = (double_t)context.ifmt_ctx->start_time/AV_TIME_BASE;
     int i;
     for (i = 0; i < (seekCount); ++i){
         double_t startSecs = timeslots[i];
@@ -1805,8 +1897,8 @@ static int seekAndMux(double_t timeslots[],int seekCount){
         if (endSecs < startSecs)
             endSecs=startSecs+duration;
 
-        int64_t ptsStart = ptsFromTime(startSecs+vStreamStartTime-streamOffsetTime,time_base);
-        int64_t ptsEnd = ptsFromTime(endSecs+vStreamStartTime-streamOffsetTime,time_base);
+        int64_t ptsStart = ptsFromTime(startSecs+containerStart,time_base);
+        int64_t ptsEnd = ptsFromTime(endSecs+containerStart,time_base);
         av_log(NULL, AV_LOG_VERBOSE,"************************\nSearch from %.3f to %.3f pts: %ld - %ld lookback: %ld\n",startSecs,endSecs,ptsStart,ptsEnd,lookback);
         seekHeadGOP(videoStream,ptsStart,&headBorders);//Header GOP
         seekTailGOP(videoStream,ptsEnd,&tailBorders); //TAIL GOP
@@ -1897,7 +1989,7 @@ int parseArgs(int argc, char *argv[],double_t array[]) {
   opterr = 0;
   count=0;
   char *tmp;
-  while ((c = getopt (argc, argv, "l:s:dmrzt:i:c?")) != -1){
+  while ((c = getopt (argc, argv, "l:s:dmrzt:i:cn?")) != -1){
         switch (c){
           case 's':
               i = 0;
@@ -1914,6 +2006,9 @@ int parseArgs(int argc, char *argv[],double_t array[]) {
             break;
           case 'm':
         	  context.muteAudio=1;
+        	  break;
+          case 'n':
+        	  context.noSubtitles=1;
         	  break;
           case 'r':
             context.muxMode=MODE_TRANSCODE;
@@ -2006,6 +2101,7 @@ int main(int argc, char **argv)
     allStreams = av_calloc(MAX_STREAM_SIZE,sizeof(*allStreams));
     context.isDebug=0;
     context.muteAudio=0;
+    context.noSubtitles=0;
     context.calcZeroTime=0;
     context.muxMode = MODE_FAST;
     context.sourceFile = NULL;
