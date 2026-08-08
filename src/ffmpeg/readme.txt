@@ -3,7 +3,7 @@ remux5 copies packets from an input stream into an output stream without reencod
 Fast, but cuts are only exact to the nearest I-frame.
 Frame-exact cutting is available via the -r flag, which re-encodes the affected frames.
 
-Supports ffmpeg 3.4 through 8.x (libavcodec major versions 57-62).
+Supports ffmpeg 3.4 and up (libavcodec major version 57 and higher).
 Tested on Arch Linux, Ubuntu Noble/Questing/Resolute and derivatives.
 
 Is active by setting the "VideoCut Muxer" switch to on (Toolbar -> Cogs icon).

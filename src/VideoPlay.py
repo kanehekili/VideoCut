@@ -155,16 +155,14 @@ class Player(QOpenGLWidget):
         self.mpv.observe_property("time-pos", self._onTimePos)  # messes up timing!
 
     def resizeGL(self, w, h):
-        # Cache it here - resizeGL is called after the widget is properly initialized
-        sc = self.devicePixelRatio()
-        pw = int(w * sc)
-        ph = int(h * sc)
-        self._opengl_fbo = {'w': pw, 'h': ph, 'fbo': self.defaultFramebufferObject()}        
-        
+        self._opengl_fbo = True
 
     def paintGL(self):
         if self.ctx and self._opengl_fbo:
-            self.ctx.render(flip_y=True, opengl_fbo=self._opengl_fbo)
+            sc = self.devicePixelRatio()
+            fbo = {'w': int(self.width() * sc), 'h': int(self.height() * sc),
+                   'fbo': self.defaultFramebufferObject()}
+            self.ctx.render(flip_y=True, opengl_fbo=fbo)
                   
     def do_update(self):
         self.update()

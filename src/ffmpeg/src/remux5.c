@@ -22,13 +22,15 @@
  */
 
 /*
- * Versions supported:
+ * Versions supported: ffmpeg 3.4 and up.
+ * Known major version mapping:
  * ffmpeg 3.4.x  LIBAVCODEC_VERSION_MAJOR=57 _MINOR=107
  * ffmpeg 4.x    LIBAVCODEC_VERSION_MAJOR=58
  * ffmpeg 5.x    LIBAVCODEC_VERSION_MAJOR=59
  * ffmpeg 6.x    LIBAVCODEC_VERSION_MAJOR=60
  * ffmpeg 7.x    LIBAVCODEC_VERSION_MAJOR=61
  * ffmpeg 8.x    LIBAVCODEC_VERSION_MAJOR=62
+ * Newer majors fall into the modern branches of the #if blocks below.
  */
 #include <libavcodec/version.h>
 #if (LIBAVCODEC_VERSION_MAJOR < 57)
