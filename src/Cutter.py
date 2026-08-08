@@ -511,7 +511,10 @@ class VCCutter():
         self.bin=OSTools().joinPathes(p,"ffmpeg","bin","remux5")
         if not OSTools().fileExists(self.bin):
             vFolder ="V" + val
-            self.bin = OSTools().joinPathes(p,"ffmpeg","bin",vFolder,"remux5") 
+            self.bin = OSTools().joinPathes(p,"ffmpeg","bin",vFolder,"remux5")
+            if not OSTools().fileExists(self.bin):
+                self.warn("No VideoCut muxer for ffmpeg %s - choose FFMPEG as muxer"%val)
+                return False
         return True
 
     # cutlist = [ [t1,t2] [t3,t4]...]

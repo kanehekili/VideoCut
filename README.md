@@ -1,7 +1,7 @@
 # VideoCut
-Version 3.2.0
+Version 3.2.1
 
-![Download](https://github.com/kanehekili/VideoCut/releases/download/3.2.0/videocut3.2.0.tar)
+![Download](https://github.com/kanehekili/VideoCut/releases/download/3.2.1/videocut3.2.1.tar)
 
 MP2/MP4 Cutter for Linux on base of mpv and ffmpeg. Cutting is lossless, the target file will not be reencoded. 
 
@@ -24,7 +24,7 @@ As a spinoff a player has been introduced. It handles pictures, plays videos and
 * Ubuntu 26.04 needs additionally qt6-svg-plugins
   #not working for Ubuntu 18.4: libmpv - use python3-opencv instead
 * Fedora: python3-pillow-qt and mpv-libs.x86_64
-* ffmpeg > 3.X to 8.X
+* ffmpeg 3.4 and up
 * python3-pyqt6
 * optional:(legacy) OpenCV 2.4 up to OpenCV 4.x (must be build with ffmpeg - with all its dependencies)
 
@@ -55,7 +55,7 @@ Since version 2.2.x the audio track can be omitted from the target file. (Video 
 ### Limitations
 Using ffmpeg as cutting/joining tool some of the older versions of ffmpeg seem to have problems with syncing audio on avchd (mp4 TS) streams. (see Videocut muxer)
 
-:boom: Only ffmpeg and libavformat versions >=3.1 are supported. 
+:boom: Only ffmpeg and libavformat versions >=3.4 are supported. 
 
 :boom: Be aware that this tool does not cut exact on frame - except you reencode the whole film.
 
@@ -185,6 +185,9 @@ Copy the .desktop file and change the exec line to "Exec= python3 .../VideoCut.p
 Opencv will not be displaying subtitles nor frametypes.
 
 ### Changes 
+08.08.2026
+* Fixed the video frame staying blank until the first resize when GL widgets are active, removed the ffmpeg upper version limit (ffmpeg 9 and newer)
+
 13.07.2026
 * Fixed VC-1 keyframe detection in remux5 (vc1Check): keyframes prefixed with sequence/entry-point headers are now accepted as random access points. Cuts on VC-1 mkv sources (e.g. MakeMKV rips) no longer start seconds before the selected frame.
 * Cut marks are now stored in container time: if a file's first packet decodes to no frame, mpv's timeline runs one frame ahead of the container timestamps - the offset is measured at load and compensated when a mark is set. Removed the legacy restore path for ancient XML cut lists without thumbnails.

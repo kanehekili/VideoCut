@@ -62,8 +62,8 @@ class VideoGLWidget(QOpenGLWidget):
         self._defaultWidth = 921 
         self.onMVPGLUpdate.connect(self.__update)
         self.setUpdateBehavior(QOpenGLWidget.UpdateBehavior.PartialUpdate)
-        self._opengl_fbo=None
-        
+        self._opengl_fbo = None
+
     
     #called implicitly on creation    
     def initializeGL(self):
@@ -77,21 +77,20 @@ class VideoGLWidget(QOpenGLWidget):
                                     opengl_init_params=params)
         self.ctx.update_cb = self.on_update
 
-    def resizeGL(self, w, h):
-        # Cache it here - resizeGL is called after the widget is properly initialized
-        sc = self.devicePixelRatio()
-        pw = int(w * sc)
-        ph = int(h * sc)
-        self._opengl_fbo = {'w': pw, 'h': ph, 'fbo': self.defaultFramebufferObject()}
-
     def shutdown(self):
         if self.ctx is not None:
             self.ctx.free()
             self.ctx = None
 
+    def resizeGL(self, w, h):
+        self._opengl_fbo = True
+
     def paintGL(self):
         if self.ctx and self._opengl_fbo:
-            self.ctx.render(flip_y=True,opengl_fbo=self._opengl_fbo)
+            sc = self.devicePixelRatio()
+            fbo = {'w': int(self.width() * sc), 'h': int(self.height() * sc),
+                   'fbo': self.defaultFramebufferObject()}
+            self.ctx.render(flip_y=True, opengl_fbo=fbo)
 
     @pyqtSlot()
     def __update(self):
@@ -136,17 +135,24 @@ class MpvPlayer():
     
     def initPlayer(self,container):
         kwArgs=self.__baseMpvArgs()
-        kwArgs["vo"]="gpu-next," 
         kwArgs["wid"]=str(int(container.winId()))
+        #the vo list is a fallback chain - mpv takes the first one that initializes.
+        #x11 needs no GL at all, which keeps us alive on VMs without DRI3
         if FFMPEGTools.OSTools().fileExists("/proc/driver/nvidia/version"):
             kwArgs["hwdec"] = "nvdec_copy"
-            Log.info("Switched to nvdec")   
+            kwArgs["vo"] = "gpu-next,gpu,xv,x11"
+            Log.info("Switched to nvdec")
         else:
-            kwArgs["hwdec"] = None
-            kwArgs["vo"]= "gpu"
-        self.mediaPlayer = MPV(**kwArgs)
+            kwArgs["hwdec"] = "no"
+            kwArgs["vo"] = "gpu,xv,x11"
+        try:
+            self.mediaPlayer = MPV(**kwArgs)
+        except Exception:
+            Log.exception("mpv init failed with vo=%s - falling back to software VO"%kwArgs["vo"])
+            kwArgs["vo"] = "x11"
+            self.mediaPlayer = MPV(**kwArgs)
         self._hookEvents()
-        return self.mediaPlayer 
+        return self.mediaPlayer
     
     def initGLPlayer(self):
         #stripes when using file explorer (initial call without file) 
