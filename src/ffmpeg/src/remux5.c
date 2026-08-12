@@ -30,6 +30,7 @@
  * ffmpeg 6.x    LIBAVCODEC_VERSION_MAJOR=60
  * ffmpeg 7.x    LIBAVCODEC_VERSION_MAJOR=61
  * ffmpeg 8.x    LIBAVCODEC_VERSION_MAJOR=62
+ * ffmpeg 9.x    LIBAVCODEC_VERSION_MAJOR=63
  * Newer majors fall into the modern branches of the #if blocks below.
  */
 #include <libavcodec/version.h>
