@@ -1,0 +1,8 @@
+# Best-effort watch file for GitHub release tarballs named e.g.
+# videocut3.2.1.tar, tagged as "3.2.1" (no "v" prefix).
+# Not verified against uscan in this environment - run
+# `uscan --no-download --verbose` on a Debian/Ubuntu box before relying on it.
+version=4
+opts="filenamemangle=s/(?:.*\/)?videocut([\d.]+)\.tar/videocut-$1.tar/" \
+  https://github.com/kanehekili/VideoCut/releases \
+  .*/releases/download/([\d.]+)/videocut[\d.]+\.tar
