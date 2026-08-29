@@ -56,9 +56,14 @@ def copy_payload(pkg_dir, version):
     (src_dir / "icons").parent.mkdir(parents=True, exist_ok=True)
 
     for py_file in sorted(SRC_DIR.glob("*.py")):
+        if py_file.name == "FFMPEGTests.py":
+            continue
         text = py_file.read_text()
         text = substitute_tokens(text, {"xxx": version})
-        (src_dir / py_file.name).write_text(text)
+        target = src_dir / py_file.name
+        target.write_text(text)
+        if py_file.name in ("VideoCut.py", "VideoPlay.py"):
+            target.chmod(0o755)
 
     shutil.copytree(SRC_DIR / "icons", src_dir / "icons")
 
@@ -67,6 +72,9 @@ def copy_payload(pkg_dir, version):
 
     ffmpeg_src = src_dir / "ffmpeg" / "src"
     ffmpeg_src.mkdir(parents=True, exist_ok=True)
+    # the makefile's "all" target copies the binary to ../bin - create it here,
+    # the Debian buildd won't have it otherwise (build.xml does the same for PPA)
+    (src_dir / "ffmpeg" / "bin").mkdir(parents=True, exist_ok=True)
     shutil.copy2(SRC_DIR / "ffmpeg" / "src" / "remux5.c", ffmpeg_src)
     shutil.copy2(SRC_DIR / "ffmpeg" / "src" / "makefile", ffmpeg_src)
 

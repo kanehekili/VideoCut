@@ -2,3 +2,12 @@
 
 %:
 	dh $@
+
+# The desktop files reference the icons by theme name, so install them under
+# hicolor as well - the copies below /usr/lib/videocut stay for the app itself.
+override_dh_install:
+	dh_install
+	install -Dm644 src/icons/movie-icon.png \
+	  debian/videocut/usr/share/icons/hicolor/128x128/apps/videocut.png
+	install -Dm644 src/icons/easyPlay.svg \
+	  debian/videocut/usr/share/icons/hicolor/scalable/apps/videoplay.svg

@@ -2,6 +2,11 @@ Format: https://www.debian.org/doc/packaging-manuals/copyright-format/1.0/
 Upstream-Name: videocut
 Upstream-Contact: kanehekili <kanehekili.media@gmail.com>
 Source: https://github.com/kanehekili/VideoCut
+Files-Excluded: src/ffmpeg/bin/V*/remux5
+Comment:
+ The upstream tree carries pre-built remux5 binaries for several ffmpeg
+ major versions. They are stripped from the orig tarball; the package
+ builds remux5 from src/ffmpeg/src/remux5.c instead.
 
 Files: src/*.py
        src/ffmpeg/src/remux5.c
