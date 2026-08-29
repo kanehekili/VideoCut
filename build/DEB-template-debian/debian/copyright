@@ -1,0 +1,69 @@
+Format: https://www.debian.org/doc/packaging-manuals/copyright-format/1.0/
+Upstream-Name: videocut
+Upstream-Contact: kanehekili <kanehekili.media@gmail.com>
+Source: https://github.com/kanehekili/VideoCut
+
+Files: src/*.py
+       src/ffmpeg/src/remux5.c
+       src/ffmpeg/src/makefile
+Copyright: 2016-2026 kanehekili <kanehekili.media@gmail.com>
+License: GPL-2+
+
+Files: src/lib/mpv.py
+Copyright: 2017-2024 Sebastian Goette <code@jaseg.net>
+License: GPL-2+-or-LGPL-2.1+
+
+Files: src/icons/flaticons/*
+Copyright: RedFraction <https://github.com/RedFraction>
+License: GPL-2+
+Comment:
+ RedFraction created these and gave them to the author for VideoCut,
+ telling him they may be used and shared under the same license as the
+ rest of the project (GPL-2+) - communicated informally, not in writing.
+
+Files: src/icons/flatdark/*
+Copyright: 2016-2026 kanehekili <kanehekili.media@gmail.com>
+License: GPL-2+
+Comment:
+ Created by the VideoCut author, based on RedFraction's contributed
+ icons (see src/icons/flaticons/* above).
+
+Files: src/icons/*
+Copyright: KDE Oxygen Team <https://www.iconarchive.com/artist/oxygen-icons.org.html>
+License: LGPL
+
+Files: debian/*
+Copyright: 2026 kanehekili <kanehekili.media@gmail.com>
+License: GPL-2+
+
+License: GPL-2+
+ This program is free software: you can redistribute it and/or modify it
+ under the terms of the GNU General Public License as published by the
+ Free Software Foundation, either version 2 of the License, or (at your
+ option) any later version.
+ .
+ This program is distributed in the hope that it will be useful, but
+ WITHOUT ANY WARRANTY; without even the implied warranty of
+ MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
+ General Public License for more details.
+ .
+ On Debian systems, the complete text of the GNU General Public License
+ version 2 can be found in "/usr/share/common-licenses/GPL-2".
+
+License: GPL-2+-or-LGPL-2.1+
+ python-mpv is dual licensed and may be used, at the recipient's option,
+ under the terms of either the GNU General Public License version 2 (or
+ later) or the GNU Lesser General Public License version 2.1 (or
+ later).
+ .
+ On Debian systems, the complete texts can be found in
+ "/usr/share/common-licenses/GPL-2" and
+ "/usr/share/common-licenses/LGPL-2.1".
+
+License: LGPL
+ This program is free software: you can redistribute it and/or modify it
+ under the terms of the GNU Lesser General Public License as published
+ by the Free Software Foundation.
+ .
+ On Debian systems, the complete texts of the GNU Lesser General Public
+ License versions can be found in "/usr/share/common-licenses/".

@@ -111,6 +111,8 @@ Note that this selection is ignored if audio is muted.
 ##Install
 
 #### Install via ppa on Linux Mint or Ubuntu (Mint 22.2, Ubuntu 22.04 and newer versions)
+> 📦 **Debian/Ubuntu/Mint Users:** This release is also available via PPA — see install instructions below. If VideoCut helps your workflow, consider starring the repo on GitHub!
+
 ```
 sudo add-apt-repository ppa:jentiger-moratai/mediatools
 sudo apt update
@@ -123,6 +125,8 @@ Remove with:
 `sudo apt remove videocut`
 
 #### Install VideoCut via AUR (Arch Linux /Manjaro only)
+> 📦 **Arch Linux Users:** This release is available on the [AUR here](https://aur.archlinux.org/packages/videocut). If this tool helps your workflow, please drop a vote on the AUR page to help it graduate to the official extra repositories!
+
 * Use pamac or other GUI tools, search for "videocut" in AUR, click install
 * Manually :
     * Download [PKGBUILD ](https://aur.archlinux.org/cgit/aur.git/snapshot/videocut.tar.gz)

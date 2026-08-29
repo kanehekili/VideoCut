@@ -1,4 +1,7 @@
 /AUR/
 *.tar
+*.tar.gz
 
 /DEB/
+/DEB-DEBIAN/
+/stage-debian/

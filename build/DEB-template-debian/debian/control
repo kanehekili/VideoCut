@@ -1,0 +1,25 @@
+Source: videocut
+Maintainer: kanehekili <kanehekili.media@gmail.com>
+Section: video
+Priority: optional
+Build-Depends: debhelper-compat (= 13), libavcodec-dev, libavformat-dev, libavutil-dev
+Standards-Version: 4.6.2
+Homepage: https://github.com/kanehekili/VideoCut
+Vcs-Browser: https://github.com/kanehekili/VideoCut
+Vcs-Git: https://github.com/kanehekili/VideoCut.git
+Rules-Requires-Root: no
+
+Package: videocut
+Architecture: any
+Depends: ${shlibs:Depends}, ${misc:Depends}, python3, python3-pyqt6, python3-pil, @xlibsx@
+Description: fast and lossless video cutter for mp2, mp4, mkv, av1 and more
+ VideoCut is an MP2/MP4 cutter for Linux built on mpv and ffmpeg. Cutting
+ is lossless by default: the target file is remuxed at the nearest
+ I-frame rather than reencoded. Frame-exact cutting via reencoding is
+ available as an option.
+ .
+ Handles avi, mkv, webm, vc1, mp2 and mp4 (program or transport stream)
+ sources, including subtitle and multi audio track selection.
+ .
+ This package also installs VideoPlay, a companion video/audio/picture
+ player built on the same mpv backend.
