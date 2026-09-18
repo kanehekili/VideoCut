@@ -47,7 +47,10 @@ class VideoWidget(QtWidgets.QFrame):
 
     def updateUI(self,frameNumber,framecount,timeinfo):
         self.posChanged.emit(frameNumber,framecount,timeinfo)
-    
+
+    def setQuiet(self, quiet):
+        pass #mpv renders into the window - nothing we can suppress
+
     def cleanup(self):
         pass #nothing to clean
 
@@ -63,6 +66,7 @@ class VideoGLWidget(QOpenGLWidget):
         self.onMVPGLUpdate.connect(self.__update)
         self.setUpdateBehavior(QOpenGLWidget.UpdateBehavior.PartialUpdate)
         self._opengl_fbo = None
+        self._quiet = False
 
     
     #called implicitly on creation    
@@ -94,6 +98,8 @@ class VideoGLWidget(QOpenGLWidget):
 
     @pyqtSlot()
     def __update(self):
+        if self._quiet:
+            return #keyframe search running - don't paint what it passes over
         if self.window().isMinimized():
             self.makeCurrent()
             self.paintGL()
@@ -106,6 +112,12 @@ class VideoGLWidget(QOpenGLWidget):
         # __update method should run on the thread that creates the
         # OpenGLContext, which in general is the main thread.
         self.onMVPGLUpdate.emit()
+
+    #called from the keyframe thread
+    def setQuiet(self, quiet):
+        self._quiet = quiet
+        if not quiet:
+            self.onMVPGLUpdate.emit() #paint where we ended up
     
     def sizeHint(self):
         return QtCore.QSize(self._defaultWidth, self._defaultHeight)
@@ -237,8 +249,10 @@ class MpvPlayer():
         self._readyMsgCount=0
         self._frameOffset=0
         self._ptsShift=0.0
-        self._audioIndex="auto"  
-        self._fastSearch=False   
+        self._audioIndex="auto"
+        self._fastSearch=False
+        self._keyFrameGop=0.0
+        self._isTransportStream=False
     
     def _hookEvents(self):
         ver = self.mpvVersion()
@@ -292,11 +306,6 @@ class MpvPlayer():
     def validate(self):
         pass #ffmpeg can read it ..
 
-    #take the current time and add/subtract a number of frames and return the "absolute" new time
-    def calcOffset(self,frameOffset):
-        nxt=self.timePos()+(frameOffset/self.fps)
-        return nxt
-
     def calcPosition(self,frameNumber):
         return frameNumber/self.fps
   
@@ -322,8 +331,7 @@ class MpvPlayer():
          '''
         mode = "absolute" if self._fastSearch else "absolute+exact"
 
-        self.mediaPlayer.seek(secs,mode)
-        self._waitSeekDone()
+        self._seekAndWait(secs,mode)
 
     #using dialStep with relative leads to different timestamps... 
     def seekStep(self,dialStep,dialMode=False):
@@ -353,8 +361,153 @@ class MpvPlayer():
                 
         self.mediaPlayer.seek(nxt,"relative+exact")
         self.__demuxReset()
-        #print("seek dial %d step1 %f time:%f dur:%f"%(dialStep,nxt,self.timePos(),self.duration)) 
-                               
+        #print("seek dial %d step1 %f time:%f dur:%f"%(dialStep,nxt,self.timePos(),self.duration))
+
+    #mpv finishes a seek asynchronously. _waitSeekDone starts observing "seeking" only
+    #after the seek was issued, and mpv answers with the current value - so it can return
+    #before the seek even started, and the next seek swallows it. Listening for
+    #playback-restart before the command is issued has no such race.
+    def _seekAndWait(self, *args):
+        try:
+            with self.mediaPlayer.prepare_and_wait_for_event("playback-restart", timeout=3):
+                self.mediaPlayer.seek(*args)
+        except Exception:
+            Log.warning("Seek did not complete: %s", str(args))
+
+    #ctrl+left/right: jump to the next/previous I frame
+    KEYFRAME_NUDGE = 0.01       #enough to make mpv skip to the adjacent keyframe
+    KEYFRAME_GOP_NUDGE = 0.5    #fraction of the learned gop, mpegts ignores smaller ones
+    KEYFRAME_GOP_LIMIT = 1.25   #a bigger jump means we skipped a keyframe
+    KEYFRAME_JUMP_MIN = 2.0     #mpv ignores shorter backwards seeks on mpegts (~1.5s)
+    KEYFRAME_JUMP_GOPS = 3.0
+    KEYFRAME_WINDOW = 2.0       #jump back that far if the cheap seeks refuse to move
+    KEYFRAME_WINDOW_MIN = 0.5
+    KEYFRAME_WINDOW_MAX = 32.0
+
+    #runs in the KeyFrameThread - seeking in the main thread blocks mpv's render
+    #callback (VideoGLWidget) and wedges the player: backwards seeks stop working
+    def seekKeyFrame(self, forward):
+        if self.mediaPlayer.seeking:
+            # MPV is still busy - wait for it instead of dropping the key
+            self._waitSeekDone()
+        if forward:
+            self._seekAndWait(self.KEYFRAME_NUDGE, "relative+keyframes")
+        else:
+            self._seekPreviousKeyFrame()
+
+    #mpv has no "previous keyframe" seek. Every container but mpegts lands on the keyframe
+    #before a tiny nudge, so that is all the others ever need. Transport streams ignore a
+    #nudge that small and their demuxer refuses short backwards seeks outside its cache,
+    #so they get two more tries first: both use keyframe seeks only, each of which decodes
+    #a single frame. Only when those fail do we fall through to the walk - it seeks
+    #exactly, and on mpegts one exact seek decodes 1.5s of video (hr_seek_demuxer_offset)
+    #and stalls weak machines, so it stays the last resort.
+    def _seekPreviousKeyFrame(self):
+        start = self.mediaPlayer.time_pos
+        if start is None or start <= self.KEYFRAME_NUDGE:
+            return  # we are at the start of the video
+        #a tiny nudge is correct by construction: mpv lands on the keyframe before it
+        if self._keyFrameStep(start, self.KEYFRAME_NUDGE, "absolute+keyframes"):
+            return
+        if self._isTransportStream:
+            #the gop we measured. Keyframe seeks that fail do not move, so they cost
+            #nothing on screen - but only try it while the target is still cached
+            if self._keyFrameGop > 0 and self._isCached(start - self._keyFrameGop):
+                if self._keyFrameStep(start, self.KEYFRAME_GOP_NUDGE * self._keyFrameGop,
+                                      "absolute+keyframes", True):
+                    return
+            if self._cheapWalkToPreviousKeyFrame(start):
+                return
+        self._walkToPreviousKeyFrame(start)
+
+    #jump back with a cheap keyframe seek - far enough that mpv really seeks - and step
+    #forward to the last keyframe before start. Every seek here decodes a single frame
+    def _cheapWalkToPreviousKeyFrame(self, start):
+        jump = self.KEYFRAME_JUMP_MIN
+        if self._keyFrameGop > 0:
+            jump = max(jump, self.KEYFRAME_JUMP_GOPS * self._keyFrameGop)
+        self._seekAndWait(max(0, start - jump), "absolute")
+        prev = self.mediaPlayer.time_pos
+        if prev is None or prev >= start - self.KEYFRAME_NUDGE or not self._isKeyFrame():
+            return False
+        while True:
+            self._seekAndWait(self.KEYFRAME_NUDGE, "relative+keyframes")
+            pos = self.mediaPlayer.time_pos
+            if pos is None or pos >= start - self.KEYFRAME_NUDGE:
+                break
+            prev = pos
+        pos = self.mediaPlayer.time_pos
+        if pos is not None and abs(pos - prev) > self.KEYFRAME_NUDGE:
+            #we stepped past start - snap back onto the keyframe before it
+            self._seekAndWait((prev + pos) / 2.0, "absolute")
+        return self._acceptKeyFrame(start, True)
+
+    #step back and accept it only if we really landed on an I frame
+    def _keyFrameStep(self, start, delta, mode, limit=False):
+        self._seekAndWait(max(0, start - delta), mode)
+        return self._acceptKeyFrame(start, limit)
+
+    def _acceptKeyFrame(self, start, limit=False):
+        pos = self.mediaPlayer.time_pos
+        if pos is None or pos >= start - self.KEYFRAME_NUDGE or not self._isKeyFrame():
+            return False
+        if limit and self._keyFrameGop > 0 and (start - pos) > self.KEYFRAME_GOP_LIMIT * self._keyFrameGop:
+            return False  # we jumped over a keyframe
+        self._keyFrameGop = start - pos
+        return True
+
+    def _isKeyFrame(self):
+        info = self.mediaPlayer.video_frame_info
+        if not info or "picture-type" not in info:
+            return True  # mpv can not tell us - trust the seek
+        return info["picture-type"] == "I"
+
+    #the demuxer caches only what it has read, and it reads forward only
+    def _isCached(self, timePos):
+        state = self.mediaPlayer.demuxer_cache_state
+        if not state:
+            return True  # no cache info - just try
+        for span in state.get("seekable-ranges") or []:
+            begin = span.get("start")
+            end = span.get("end")
+            if begin is not None and end is not None and begin <= timePos <= end:
+                return True
+        return False
+
+    def _walkToPreviousKeyFrame(self, start):
+        window = self.KEYFRAME_WINDOW
+        if self._keyFrameGop > 0:
+            window = max(self.KEYFRAME_WINDOW_MIN, 2.0 * self._keyFrameGop)
+        while window <= self.KEYFRAME_WINDOW_MAX:
+            prev = self._lastKeyFrameBefore(start, window)
+            if prev is not None:
+                self._seekAndWait(prev, "absolute+exact")
+                #remember the gop - it drives the cheap seek and keeps the walk short
+                self._keyFrameGop = start - self.mediaPlayer.time_pos
+                return
+            if window >= start:
+                #we jumped to the very beginning: the first frame of a playable file is
+                #a keyframe, so that is our target
+                self._seekAndWait(0, "absolute+exact")
+                return
+            window *= 4
+
+    #jump back one window and step forward through the keyframes: the last one before
+    #start is our target. None means the window was too small - we landed inside our own
+    #gop and never passed a keyframe, so prev would not be a keyframe at all.
+    def _lastKeyFrameBefore(self, start, window):
+        self._seekAndWait(max(0, start - window), "absolute+exact")
+        pos = self.mediaPlayer.time_pos
+        if pos is None or pos >= start - self.KEYFRAME_NUDGE:
+            return None
+        found = None
+        while True:
+            self._seekAndWait(self.KEYFRAME_NUDGE, "relative+keyframes")
+            pos = self.mediaPlayer.time_pos
+            if pos is None or pos >= start - self.KEYFRAME_NUDGE:
+                return found
+            found = pos
+
     def screenshotImage(self):
         im=self.mediaPlayer.screenshot_raw(includes="video")
         temp = im.convert('RGBA')
@@ -500,6 +653,7 @@ class MpvPlayer():
     def tweakTansportStreamSettings(self,isInterlaced):
         Log.info("Transport stream. Setting seek offset to high and interlacing: %d"%(isInterlaced))
         self._demuxOffset=1.5#Solution for mpegts seek
+        self._isTransportStream=True #its seeking needs extras - see _seekPreviousKeyFrame
         if isInterlaced:
             self.mediaPlayer.deinterlace="yes"
  
@@ -573,6 +727,7 @@ class MpvPlugin():
         self.iconSize=iconSize
         self.controller=None #VCControl
         self.sliderThread=SliderThread(self.onSeek)
+        self.keyFrameThread=KeyFrameThread(self.onKeyFrame)
         self.audioLanguages=[]
         self.audioMapping={}
         self.virtualGPU=False
@@ -603,6 +758,7 @@ class MpvPlugin():
         
     def shutDown(self):
         self.sliderThread.stop()
+        self.keyFrameThread.stop()
         self.mpvWidget.cleanup()
     
     def createWidget(self,showGL,parent):
@@ -635,9 +791,6 @@ class MpvPlugin():
         self.player= MpvPlayer()
         self.player.initPlayer(self.mpvWidget)
         self.player.connectTo(self.mpvWidget.updateUI)
-    
-    def videoWidget(self):
-        return self.mpvWidget
     
     def setCutEntry(self,cutEntry):
         pilImage = self.player.screenshotImage()
@@ -737,6 +890,24 @@ class MpvPlugin():
     def onDial(self,pos):
         self.player.seekStep(pos,True)
 
+    #ctrl + arrow keys - hand it over to the worker, a held key collapses into one step
+    def seekKeyFrame(self,forward):
+        if self.player:
+            self.keyFrameThread.step(forward)
+
+    #executed in the keyframe thread, not in the main thread
+    def onKeyFrame(self,forward):
+        if self.player is None:
+            return
+        if forward:
+            self.player.seekKeyFrame(True) #one seek - nothing to hide
+            return
+        self.mpvWidget.setQuiet(True)
+        try:
+            self.player.seekKeyFrame(False)
+        finally:
+            self.mpvWidget.setQuiet(False)
+
     def onSeek(self,frameNumber):
         if self.player:
             self.player.seek(frameNumber) 
@@ -816,4 +987,44 @@ class SliderThread(QtCore.QThread):
     def seekTo(self,fn):
         self.pos = fn
         self.condition.wakeOne()#wake up the long wait
-        
+
+
+#ctrl+arrow steps from I frame to I frame. Seeking must not happen in the main thread:
+#it blocks mpv's render callback and the player stops seeking backwards at all.
+#Only one request is kept - holding the key down steps on, but never queues up.
+class KeyFrameThread(QtCore.QThread):
+    def __init__(self,func):
+        QtCore.QThread.__init__(self)
+        self.condition = QtCore.QWaitCondition()
+        self.mutex = QtCore.QMutex()
+        self.func=func #function will be executed here, not in main thread
+        self.request=0 #1 = forward, -1 = backwards, 0 = nothing to do
+        self.__running=True
+        self.start()
+
+    def run(self):
+        while self.__running:
+            #the request is checked under the mutex - a key pressed while we are on our
+            #way into the wait must not be lost, or it takes a second press to move
+            self.mutex.lock()
+            while self.request == 0 and self.__running:
+                self.condition.wait(self.mutex)
+            request = self.request
+            self.request = 0
+            self.mutex.unlock()
+            if request != 0 and self.__running:
+                self.func(request > 0) #Pro: no queue build up
+
+    def stop(self):
+        self.mutex.lock()
+        self.__running=False
+        self.request=0
+        self.mutex.unlock()
+        self.condition.wakeOne()
+
+    def step(self,forward):
+        self.mutex.lock()
+        self.request = 1 if forward else -1
+        self.mutex.unlock()
+        self.condition.wakeOne()#wake up the long wait
+

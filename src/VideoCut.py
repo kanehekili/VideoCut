@@ -60,13 +60,6 @@ def setUpVideoPlugin(mpv):
 def getAppIcon():
     return QtGui.QIcon('icons/movie-icon.png')
 
-def timedeltaToString(deltaTime):
-    s = deltaTime.seconds
-    hours, remainder = divmod(s, 3600)
-    minutes, seconds = divmod(remainder, 60)
-    return '%s:%s:%s' % (hours, minutes, seconds)
-
- 
 
 
 class XMLAccessor():
@@ -242,6 +235,7 @@ class LayoutWindow(QWidget):
 
     def __init__(self,settings,parent=None):
         QWidget.__init__(self, parent)
+        self._settings = settings #for the ctrl hint on the quick search icon
         self.initWidgets(settings)
 
     def initWidgets(self,settings):
@@ -359,27 +353,7 @@ class LayoutWindow(QWidget):
         gridLayout.setRowStretch(1, 1)
 
         return gridLayout
-    #unused
-    def makeBoxLayout(self):
-        vbox = QtWidgets.QVBoxLayout()
-        vbox.addWidget(self.ui_VideoFrame)
-        vbox.addWidget(self.ui_InfoLabel);
-        
-        slidehbox = QtWidgets.QHBoxLayout()
-        slidehbox.addWidget(self.ui_Slider)
-        slidehbox.addWidget(self.ui_Dial)
 
-        midHBox = QtWidgets.QHBoxLayout()
-        midHBox.addWidget(self.ui_List)
-        self.ui_List.setSizePolicy(QtWidgets.QSizePolicy.Policy.Minimum, QtWidgets.QSizePolicy.Policy.Expanding)
-        midHBox.addLayout(vbox)
-        
-        mainVBox = QtWidgets.QVBoxLayout()
-        mainVBox.addLayout(midHBox)
-        mainVBox.addStretch(1)
-        mainVBox.addLayout(slidehbox)
-        return mainVBox
-    
     def showInfo(self, text):
         self.ui_InfoLabel.setText(text)
     
@@ -436,6 +410,12 @@ class LayoutWindow(QWidget):
         self.__videoController = aVideoController  # for menu callbacks
         self.ui_Slider.valueChanged.connect(aVideoController.sliderMoved)
 
+        #ctrl+arrow: I frame search. Plain arrows stay with the slider (1 minute steps)
+        self.nextKeyFrame = QtGui.QShortcut(QtGui.QKeySequence('Ctrl+Right'), self)
+        self.nextKeyFrame.activated.connect(aVideoController.seekNextKeyFrame)
+        self.prevKeyFrame = QtGui.QShortcut(QtGui.QKeySequence('Ctrl+Left'), self)
+        self.prevKeyFrame.activated.connect(aVideoController.seekPrevKeyFrame)
+
         self.ui_Dial.finetune.connect(aVideoController.dialChanged)
         self.ui_Dial.sliderReleased.connect(self.__resetDial)
 
@@ -452,8 +432,22 @@ class LayoutWindow(QWidget):
         self.ui_GotoField.setValue(int(frameNbr))
         self.ui_GotoField.blockSignals(False)
     
-    def keyReleaseEvent(self, __event):
+    #ctrl shows what the arrow keys are about to do: I frame search instead of 1 minute
+    def keyPressEvent(self, event):
+        if event.key() == QtCore.Qt.Key.Key_Control:
+            self.ui_QuickSearch.setPixmap(self.pixFastSearchOn)
+        super(LayoutWindow, self).keyPressEvent(event)
+
+    def keyReleaseEvent(self, event):
+        if event.key() == QtCore.Qt.Key.Key_Control:
+            self.__syncQuickSearchIcon()
         self.__resetDial()
+
+    def __syncQuickSearchIcon(self):
+        if self._settings.quickSearch:
+            self.ui_QuickSearch.setPixmap(self.pixFastSearchOn)
+        else:
+            self.ui_QuickSearch.setPixmap(self.pixFastSearchOff)
      
     def _hookListActions(self):
         # TOO bad-the list model -should be here... 
@@ -669,7 +663,7 @@ class MainFrame(QtWidgets.QMainWindow):
         
         self.backendfilter = SignalOnEvent(widgets.ui_BackendLabel)
         self.backendfilter.clicked.connect(self.settings.toggleRemux)
-        self.enableActions(False) 
+        self.enableActions(False)
         return widgets
 
     ''' this is the place to start all graphical actions. Queue is running '''
@@ -1652,7 +1646,20 @@ class VideoControl(QtCore.QObject):
     #some frames may not be moved. Make sure the spin button is NOT updated.
     def _gotoFrame(self, frameNumber=0):
         VideoPlugin.setFrameDirect(frameNumber)
-    
+
+    #ctrl+right - step to the next I frame
+    def seekNextKeyFrame(self):
+        self._seekKeyFrame(True)
+
+    #ctrl+left - step to the previous I frame
+    def seekPrevKeyFrame(self):
+        self._seekKeyFrame(False)
+
+    def _seekKeyFrame(self, forward):
+        if self.player is None or not self.player.isValid():
+            return
+        VideoPlugin.seekKeyFrame(forward)
+
     def __dispatchShowFrame(self, frameNumber):
         VideoPlugin.enqueueFrame(frameNumber)
     
@@ -1735,11 +1742,8 @@ class SignalOnEvent(QtCore.QObject):
             return False
         else:
             return super(SignalOnEvent, self).eventFilter(anyObject, event)
-   
-    def doit(self):
-        self.widget.installEventFilter(self)
 
-    
+
 ''' Long running operations for actions that do not draw or paint '''        
 class LongRunningOperation(QtCore.QThread):
     signal = pyqtSignal() 

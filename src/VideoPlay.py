@@ -272,17 +272,6 @@ class Player(QOpenGLWidget):
         self.mpv = None
         event.accept()
 
-    def _getMPVArgsEasy(self,isVirtual):
-        kwArgs = {"hwdec":"auto-safe", "log_handler":self._passLog, "loglevel": 'error', "pause":False, "audio": "1", "keep_open": "always", "vo":"libmpv",
-                "input_vo_keyboard": False, "video-latency-hacks": "yes", "hr_seek": 'yes', "hr_seek_demuxer_offset": self._demuxOffset,  # below is test
-                "demuxer_max_back_bytes":'150M', "demuxer_max_bytes":'150M', "demuxer_cache_wait":'no', "stream_buffer_size":'255MiB',
-                "audio-display":"embedded-first"
-                }
-        if isVirtual:
-            kwArgs['gpu-dumb-mode'] = 'yes'
-            kwArgs['vd-lavc-dr'] = 'no'
-        return kwArgs
-    
     def _getMPVArgs(self,isVirtual):
         kwArgs= {"hwdec":"auto-safe",
             "vo":"libmpv", #depends on backend - see below                

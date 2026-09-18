@@ -1,7 +1,7 @@
 # VideoCut
-Version 3.2.2
+Version 3.2.3
 
-[Download](https://github.com/kanehekili/VideoCut/releases/download/3.2.2/videocut3.2.2.tar)
+[Download](https://github.com/kanehekili/VideoCut/releases/download/3.2.3/videocut3.2.3.tar)
 
 MP2/MP4 Cutter for Linux on base of mpv and ffmpeg. Cutting is lossless, the target file will not be reencoded. 
 
@@ -189,6 +189,9 @@ Copy the .desktop file and change the exec line to "Exec= python3 .../VideoCut.p
 Opencv will not be displaying subtitles nor frametypes.
 
 ### Changes 
+19.09.2026
+* Ctrl + arrow left/right jumps from I-frame to I-frame
+
 08.08.2026
 * Fixed the video frame staying blank until the first resize when GL widgets are active, removed the ffmpeg upper version limit (ffmpeg 9 and newer)
 

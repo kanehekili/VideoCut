@@ -51,8 +51,8 @@
 	  "playStart" :"./icons/flatdark/play.svg",
 	  "playPause" :"./icons/flatdark/pause.svg",
 	  "mediaSettings":"./icons/flatdark/settings.svg",
-      "audioOn":"./icons/flaticons/sound.svg",
-      "audioOff":"./icons/flaticons/mute.svg",
+	  "audioOn":"./icons/flatdark/sound.svg",
+	  "audioOff":"./icons/flatdark/mute.svg",
 	  "fullscreen":"./icons/flatdark/fullscreen.png"
 	  }	
     }

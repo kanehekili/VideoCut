@@ -315,11 +315,6 @@ class VideoPlayerCV():
         Log.info("No more frames @" + str(self.framecount + 1));
         return self.__getLastFrame(self.framecount, 0)
 
-    # A test to paint on a frame. Has artefacts..
-    def __markFrame(self, frame, nbr):
-        cv2.putText(frame, "FB: {}".format(nbr),
-        (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 2)    
-
     def __getLastFrame(self, frameIndex, retries):
         if frameIndex < 1 or retries > 8:
             return None
@@ -329,18 +324,6 @@ class VideoPlayerCV():
             return self.__getLastFrame(frameIndex - 1, retries + 1)
         self.currentFrame=frame
         return frame    
-
-    def getCurrentFrame(self):
-        if self.currentFrame is None:
-            return self.getFrameAt(1)
-        return self.currentFrame
-            
-
-    def getPreviousFrame(self):
-        framepos = self.getCurrentFrameNumber()
-        if framepos > 0:
-            framepos -= 1
-        return self.getFrameAt(framepos)
 
     '''
     0-based index of the frame to be decoded/captured next.
@@ -360,21 +343,6 @@ class VideoPlayerCV():
     def getCurrentFrameNumber(self):
         return OPENCV.getFramePosition()-1 #cv is always behind!
 
-    '''
-    seeks a frame based on AV pos (between 0 and 1) -SLOW!!!!!
-    '''
-
-    def getFrameAtAVPos(self, avPos):
-        OPENCV.setAVIPosition(avPos)
-        return self.getNextFrame()
- 
-    def getFrameAtMS(self, ms):
-        OPENCV.setTimePosition(ms)
-        return self.getNextFrame()
- 
-    def getFrameSize(self):
-        return QtCore.QSize(self.frameWidth, self.frameHeight)
-    
     def getCurrentFrameTime(self):
         if not self.isValid():
             timeSlot = 0
@@ -448,10 +416,6 @@ class CvPlugin():
     
     def createWidget(self,useGL,parent):
         self.cvWidget=VideoWidget(parent)
-        return self.cvWidget
-    
-    #unused
-    def videoWidget(self):
         return self.cvWidget
     
     def gpuMode(self,gpumode):
@@ -529,6 +493,9 @@ class CvPlugin():
     #spinbutton    
     def setFrameDirect(self,fn):
         self.sliderThread.showFrame(fn)        
+
+    def seekKeyFrame(self,forward):
+        pass #no keyframes in OpenCV
 
     def onDial(self,dialStep):
         self.sliderThread.wait()  # No concurrency with worker!

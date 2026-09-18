@@ -33,7 +33,7 @@ def setupRotatingLogger(logName,logConsole,logFolder=None):
     logHandlers=[]
     logHandlers.append(fh)
     if logConsole:
-        logHandlers.append(logging.StreamHandler(sys.stdout))    
+        logHandlers.append(logging.StreamHandler(sys.stdout))
     logging.basicConfig(
         handlers=logHandlers,
         #level=logging.INFO
@@ -44,7 +44,7 @@ def setupRotatingLogger(logName,logConsole,logFolder=None):
     '''
     if logConsole:
         cons = logging.StreamHandler(sys.stdout)
-        logger.addHandler(cons)    
+        logger.addHandler(cons)
     '''
 def setLogLevel(levelString):
     if levelString == "Debug":
@@ -56,7 +56,7 @@ def setLogLevel(levelString):
     elif levelString == "Error":
         Log.setLevel(logging.ERROR)
 
-        
+
 class OSTools():
     __instance=None
 
@@ -66,11 +66,11 @@ class OSTools():
         if OSTools.__instance is None:
             OSTools.__instance=object.__new__(cls)
         return OSTools.__instance
-    
+
     def touch(self,fname, times=None):
         with open(fname, 'a'):
             os.utime(fname, times)
-    
+
     def getPathWithoutExtension(self, aPath):
         if aPath:
             # rawPath = os.path.splitext(str(aPath))[0]
@@ -81,7 +81,7 @@ class OSTools():
 
     def getExtension(self,path,withDot=True):
         comp = os.path.splitext(path)
-        if len(comp)>1: 
+        if len(comp)>1:
             if withDot:
                 return comp[1]
             else:
@@ -95,28 +95,31 @@ class OSTools():
     #should be used carefully (OK if FFMPEGTools in the same path as main)
     def getWorkingDirectory(self):
         #os.path.dirname(os.path.realpath(__file__)) > if symlinks a necessary
-        return os.path.dirname(os.path.abspath(__file__))               
+        return os.path.dirname(os.path.abspath(__file__))
 
     def setMainWorkDir(self,dirpath):
-        os.chdir(dirpath)  #changes the "active directory"  
-         
+        os.chdir(dirpath)  #changes the "active directory"
+
     #location of "cwd", i.e where is bash..
     def getActiveDirectory(self):
         return os.getcwd()
-    
+
     '''
     __file__ is the pathname of the file from which the module was loaded
-    This is the only way to ensure the correct working dir, as this module may be 
+    This is the only way to ensure the correct working dir, as this module may be
     located not in the same path as the main module.
     Therefore fileInstance is expected to be __file__ (but not compulsary)
-    ! Fix: If called by link, abspath(__file__) is the cwd of the link ... 
+    ! Fix: If called by link, abspath(__file__) is the cwd of the link ...
     '''
     def getLocalPath(self,fileInstance):
         return os.path.dirname(os.path.realpath(fileInstance))
-    
+
     #check if filename only or the complete path
     def isAbsolute(self,path):
         return os.path.isabs(path)
+
+    def absolutePath(self,path):
+        return os.path.abspath(path)
 
     #The users home directory - not where the code lies
     def getHomeDirectory(self):
@@ -124,10 +127,10 @@ class OSTools():
 
     def getFileNameOnly(self, path):
         return os.path.basename(path)
-    
+
     def fileExists(self, path):
         return os.path.isfile(path)
-    
+
     def removeFile(self, path):
         if self.fileExists(path):
             os.remove(path)
@@ -138,6 +141,39 @@ class OSTools():
     def canReadFromFolder(self,path):
         return os.access(path,os.R_OK)
 
+    def setEnv(self, key, value):
+        os.environ[key] = value
+
+    def isDirectory(self, path):
+        return os.path.isdir(path)
+
+    #the path relative to rootDir, or None if it lies outside rootDir
+    def relativePath(self, path, rootDir):
+        if rootDir and path.startswith(rootDir.rstrip(os.sep) + os.sep):
+            return os.path.relpath(path, rootDir)
+        return None
+
+    #file managers sort case-insensitively and treat numbers as numbers - match them
+    @staticmethod
+    def _naturalSortKey(name):
+        return [(0, int(part)) if part.isdigit() else (1, part.casefold())
+                for part in re.split(r'(\d+)', name) if part]
+
+    #all files below aDir matching the extensions (lowercase, with dot), sorted
+    #like a file manager, hidden folders skipped. maxFiles caps runaway trees.
+    def collectFiles(self, aDir, extensions, maxFiles=5000):
+        found = []
+        for dirpath, dirnames, filenames in os.walk(aDir):
+            dirnames[:] = sorted((d for d in dirnames if not d.startswith('.')),
+                                 key=self._naturalSortKey)
+            for name in sorted(filenames, key=self._naturalSortKey):
+                if self.getExtension(name).lower() in extensions:
+                    found.append(os.path.join(dirpath, name))
+                    if len(found) >= maxFiles:
+                        Log.info("Directory scan capped at %d files", maxFiles)
+                        return found
+        return found
+
     def ensureDirectory(self, path, tail=None):
         # make sure the target dir is present
         if tail is not None:
@@ -145,11 +181,11 @@ class OSTools():
         if not os.access(path, os.F_OK):
             try:
                 os.makedirs(path)
-                os.chmod(path, 0o777) 
+                os.chmod(path, 0o777)
             except OSError as osError:
                 logging.log(logging.ERROR, "target not created:" + path)
                 logging.log(logging.ERROR, "Error: " + str(osError.strerror))
-    
+
     def ensureFile(self, path, tail):
         fn = os.path.join(path, tail)
         self.ensureDirectory(path, None)
@@ -188,7 +224,7 @@ class OSTools():
             with gzip.open(dest,'wb') as gz:
                 gz.write(bindata)
         os.remove(source)
-    
+
     def namer(self,name):
         return name+".gz"
 
@@ -199,7 +235,7 @@ class OSTools():
             return True
         except Exception:
             pass
-    
+
         try:
             # Fallback: parse `lspci` output (less accurate but doesn't need NVIDIA tools)
             result = subprocess.run(["lspci"], stdout=subprocess.PIPE, text=True)
@@ -219,7 +255,7 @@ class OSTools():
         os.environ['QT_QPA_PLATFORM'] = 'xcb'
 
 class ConfigAccessor():
-    __SECTION = "default" 
+    __SECTION = "default"
     homeDir = OSTools().getHomeDirectory()
 
     def __init__(self, folder,filePath,section="default"):
@@ -227,10 +263,10 @@ class ConfigAccessor():
         self._path = OSTools().joinPathes(self.homeDir,".config",folder,filePath)
         self.parser = configparser.ConfigParser()
         self.parser.add_section(self.__SECTION)
-        
+
     def read(self):
         self.parser.read(self._path)
-        
+
     def set(self, key, value):
         self.parser.set(self.__SECTION, key, value)
 
@@ -254,14 +290,14 @@ class ConfigAccessor():
             return self.parser.getfloat(self.__SECTION, key)
         return default
 
-        
+
     def store(self):
         try:
             with open(self._path, 'w') as aFile:
                 self.parser.write(aFile)
         except IOError:
             return False
-        return True     
+        return True
 
 
 
@@ -272,36 +308,36 @@ def parseCVInfos(cvtext):
     cvDict = {}
     for line in lines:
         match = re.search(r"(?<=OpenCV)\s*(\d\S*[a-z]*)+", line)
-        if match: 
+        if match:
             cvDict["OpenCV"] = match.group(1)
             continue
-            
+
         match = re.search(r'(?<=Baseline:)\s*([ \w]+)+', line)
         if match:
-            cvDict["BaseLine"] = match.group(1) 
+            cvDict["BaseLine"] = match.group(1)
             continue
         match = re.search(r"(?<=GTK\+:)\s*(\w+[(\w+ ]*[\d.]+[)]*)+", line)
-        if match: 
+        if match:
             cvDict["GTK+"] = match.group(1)
             continue
         match = re.search(r"(?<=FFMPEG:)\s*(\w+)", line)
         if match:
-            cvDict["FFMPEG"] = match.group(1) 
+            cvDict["FFMPEG"] = match.group(1)
             continue
         match = re.search(r"(?<=avcodec:)\s*(\w+[(\w+ ]*[\d.]+[)]*)+", line)
         if match:
-            cvDict["AVCODEC"] = match.group(1) 
+            cvDict["AVCODEC"] = match.group(1)
             continue
     return cvDict
 
 
-   
+
     # execs an command, yielding the lines to caller. Throws exception on error
 def executeAsync(cmd, commander):
     popen = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, universal_newlines=True)
     commander.setProcess(popen)
     for stdout_line in iter(popen.stdout.readline, ""):
-        yield stdout_line 
+        yield stdout_line
     popen.stdout.close()
     return_code = popen.wait()
     if return_code:
@@ -309,14 +345,14 @@ def executeAsync(cmd, commander):
 
 
 def executeCmd(cmd):
-    return subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT).communicate()    
+    return subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT).communicate()
 
-   
+
 '''
 Probes packets.
 if count = -1 no partial seeking takes place
 time to seek to
-count: number of packets to read 
+count: number of packets to read
 currently only pts,dts,dts_time&flags are read
 Available:
 [PACKET]
@@ -349,7 +385,7 @@ class FFPacketProbe():
         if count is not None:
             cmd = cmd + ["-read_intervals", seekTo + "%+#" + str(count)]
         cmd.extend(("-show_packets", "-select_streams", "v:0", "-show_entries", "packet=pts,pts_time,dts,dts_time,flags", "-of", "csv" , self.path, "-v", "quiet"))
-        Log.debug("FFPacket:%s", cmd)    
+        Log.debug("FFPacket:%s", cmd)
         result = Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE).communicate()
         if len(result[0]) == 0:
             raise IOError('No such media file ' + self.path)
@@ -364,12 +400,12 @@ class FFPacketProbe():
                 pack.dts_time = raw[4]
                 pack.isKeyFrame = ('K' in raw[5])
                 self.packetList.append(pack)
-        
+
         self.printP()
-        
+
     def printP(self):
         for pack in self.packetList:
-            print (">>", pack.asString())   
+            print (">>", pack.asString())
 
 
 class PacketInfo():
@@ -381,11 +417,11 @@ class PacketInfo():
         self.dts_time = 0
         self.index = index
         self.isKeyFrame = 0
-    
+
     def asString(self):
         return str(self.index) + ") P:" + self.pts + " D:" + self.dts + " pt:" + self.pts_time + " dt:" + self.dts_time + " k:" + str(self.isKeyFrame)
 
-    
+
 class FormatMap():
     def __init__(self, fmt, vcList, acList, extensions,targetExt,fmtlib):
         self.format = fmt
@@ -402,25 +438,25 @@ class FormatMap():
     def containsCodecs(self, vCodec, aCodec):
         if aCodec is None:
             return vCodec in self.videoCodecs;
-        
+
         return vCodec in self.videoCodecs and aCodec in self.audioCodecs
-    
+
     def hasExtension(self,fileExt):
         return fileExt in self.extensions
-    
+
     def defaultVideoCodec(self):
         return self.videoCodecs[0]
-    
+
     #Those formats are used for c:v xxx or -f options
     def defaultFormats(self):
         return self.formatLib
-    
+
     def videoFormat(self):
-        return self.formatLib[0]    
+        return self.formatLib[0]
 
     def audioFormat(self):
         return self.formatLib[1]
-    
+
     def subtitleFormat(self):
         return self.formatLib[2]
 
@@ -432,7 +468,7 @@ class FormatMapGenerator():
         dvdsub ok
         pgssub -not an encode
         xsub   -not an encoder
-    
+
     Text-based subtitle codecs in ffmpeg
         ssa,ass  ok
         webvtt   ok
@@ -442,18 +478,18 @@ class FormatMapGenerator():
         mpl2     no
         pjs      no
         realtext no
-        sami     no 
+        sami     no
         stl      no
         subrip   ok
         subviewer no
         subviewer1 no
-        text      ok 
+        text      ok
         vplayer   ?
-        webvtt    ok     
-    '''    
-    SUB_IMG=["dvb_subtitle","hdmv_pgs_subtitle","pgssub","xsub"]
+        webvtt    ok
+    '''
+    SUB_IMG=["dvb_subtitle","dvbsub","hdmv_pgs_subtitle","hdmv_pgs_subtitle*","pgssub","pgssub*","xsub","xsub*"]
     SUB_TEXT=["ssa","ass","webvtt","mov_text","subrip","srt","text","webvtt"]
-    
+
     #supported muxers
     muxers = ["mpegts","mpeg", "vob", "dvd", "mp4", "mov", "matroska", "webm", "3gp", "avi", "flv", "ogg"]
     videoCodecs = {}
@@ -473,8 +509,8 @@ class FormatMapGenerator():
     videoCodecs["3gp"] = ["mp4", "h263", "vc1"]
     videoCodecs["avi"] = ["h264","mpeg1video", "mpeg2video", "wmv?", "vc1", "theora", "mp4", "h265", "vp8", "vp9"]
     videoCodecs["flv"] = ["h264","mp4", "vp6"]
-    videoCodecs["ogg"] = ["theora"] 
-    
+    videoCodecs["ogg"] = ["theora"]
+
     audioCodecs["mpegts"] = ["mp1", "mp2", "mp3"]
     audioCodecs["mpeg"] = ["mp1", "mp2", "mp3"]
     audioCodecs["vob"] = ["mp2"]
@@ -501,7 +537,7 @@ class FormatMapGenerator():
     extensions["3gp"] = ["3gp"]
     extensions["avi"] = ["avi"]
     extensions["flv"] = ["flv"]
-    extensions["ogg"] = ["ogg"]    
+    extensions["ogg"] = ["ogg"]
 
     targetExt["mpegts"] = "mpg"
     targetExt["mpeg"] = "mpg"
@@ -514,7 +550,7 @@ class FormatMapGenerator():
     targetExt["3gp"] = "3gp"
     targetExt["avi"] = "avi"
     targetExt["flv"] = "flv"
-    targetExt["ogg"] = "ogg"    
+    targetExt["ogg"] = "ogg"
 
     #formats name for encoding and codec ->ffmpeg -h muxer=matroska and -encoders
     #video, audio,subtitle
@@ -524,17 +560,17 @@ class FormatMapGenerator():
     formats["dvd"] = ["mpeg2video","mp2","dvdsub"]
     formats["mp4"] = ["libx264","aac","mov_text"]
     formats["mov"] = ["libx264","aac","mov_text"]
-    formats["matroska"] = ["libx264","libvorbis","srt"] 
+    formats["matroska"] = ["libx264","libvorbis","srt"]
     formats["webm"] = ["libvpx-vp9","libvorbis","webvtt"]
     formats["3gp"] = ["h263_v4l2m2m","libopencore_amrnb",None]
     formats["avi"] = ["libx264","libmp3lame",None]
     formats["flv"] = ["flv","libmp3lame",None]
-    formats["ogg"] = ["libtheora","libvorbis",None] 
-    
-    
+    formats["ogg"] = ["libtheora","libvorbis",None]
+
+
     def __init__(self):
         self.setup()
-    
+
     def setup(self):
         self.table = {}
         for fi in self.muxers:
@@ -543,26 +579,26 @@ class FormatMapGenerator():
 
     #need to reflect our internal changes, such as m2t to mpg or mp4
     def getPreferredTargetExtension(self,vCodec,aCodec,currFormats):
-        
-        #mpegts: depends if h264 or mp2.... 
+
+        #mpegts: depends if h264 or mp2....
         fmap = self._findFmtTargetMap(vCodec, aCodec)
-              
+
         for vInfo in currFormats:
             if vInfo=="mpegts":
                 continue
             res = self.targetExt.get(vInfo,None)
             if res and self._verifyAudio(vInfo,aCodec):
                     return res;
-                
+
         #IF not found ...
         if fmap:
             return fmap.targetExt
-        
+
         #fallback
         extList = self.extensions.get(currFormats[0],"matroska") #mkv should never be wrong
-        return extList[0] 
+        return extList[0]
 
-                
+
 
     def getDialogFileExtensionsFor(self, vCodec, aCodec,currFormats):
         extList = set() #Set
@@ -580,10 +616,10 @@ class FormatMapGenerator():
             for ext in fmap.extensions:
                 wc = "*." + ext
                 #if not wc in extList:
-                extList.add(wc)  
+                extList.add(wc)
         return " ".join(extList)
-    
-    #This is target map only!  
+
+    #This is target map only!
     def _findFmtTargetMap(self,vCodec, aCodec):
         for __, fmtMap in self.table.items():
             if fmtMap.containsCodecs(vCodec, aCodec):
@@ -604,23 +640,23 @@ class FormatMapGenerator():
             if fmt:
                 formats.append(fmt)
         return formats
-    
+
     #takes the extension and get the most likely format.
     def fromFilename(self,path):
         ext = OSTools().getExtension(path,withDot=False)
         for __, fmtMap in self.table.items():
             if ext in fmtMap.extensions:
                 return fmtMap
-        
+
         return None
 
     def sameSubGroup(self,codec1,codec2):
-        return codec1 in self.SUB_TEXT and codec2 in self.SUB_TEXT or codec1 in self.SUB_IMG and codec2 in self.SUB_IMG         
+        return codec1 in self.SUB_TEXT and codec2 in self.SUB_TEXT or codec1 in self.SUB_IMG and codec2 in self.SUB_IMG
 
 FORMATS = FormatMapGenerator()
 
 #ffprobe -read_intervals "%+#3" -select_streams v -i self.path -show_entries "frame=interlaced_frame"
-        
+
 class FFStreamProbe():
 
     def __init__(self, video_file):
@@ -629,7 +665,7 @@ class FFStreamProbe():
         self._readData()
         self.interlaced = self._probeInterlacedData()
         self.sanityCheck()
-     
+
     def _probeInterlacedData(self):
         vs = self.getVideoStream()
         if vs is None:
@@ -637,11 +673,11 @@ class FFStreamProbe():
         res = vs.isInterlaced()
         if res is not None:
             return res
-        
+
         cmd = ["ffprobe", "-read_intervals","5%+#10", "-select_streams","v","-i", self.path, '-show_entries',"frame=interlaced_frame","-v", "quiet"]
         #cmd = ["ffprobe", "-select_streams","v", self.path, '-show_entries','"frame=interlaced_frame"',"-v", "quiet"]
 
-        Log.info("ffprobe:%s",cmd) 
+        Log.info("ffprobe:%s",cmd)
         result = Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE).communicate()
         if len(result[0]) == 0:
             return False
@@ -678,8 +714,8 @@ class FFStreamProbe():
         if firstFrame is None or start is None:
             return 0.0
         return max(0.0, firstFrame - start)
-         
-         
+
+
     def _readData(self):
         cmd = ["ffprobe", "-show_format", "-show_streams", self.path, "-v", "quiet"]
         Log.info("ffprobe:%s",cmd)
@@ -723,7 +759,7 @@ class FFStreamProbe():
     def sanityCheck(self):
         if logging.root.level!=logging.DEBUG:
             return
-        
+
         Log.debug("-------- Video -------------")
         s = self.getVideoStream()
         if s:
@@ -741,10 +777,10 @@ class FFStreamProbe():
             Log.debug("isAudio: %r", s.isAudio())
             Log.debug("isVideo: %r", s.isVideo())
             Log.debug("interlaced: %r",self.interlaced)
-        
+
         Log.debug("-------- Audio -------------")
         s = self.getAudioStream()
-        if s:  
+        if s:
             Log.debug("Index:%d", s.getStreamIndex())
             Log.debug("Slot: %d", s.slot)
             Log.debug("getCodec:%s", s.getCodec())
@@ -762,30 +798,34 @@ class FFStreamProbe():
         Log.debug("Fmt dur: %.3f",f.getDuration())
         Log.debug("Fmt size %.3f",f.getSizeKB())
         Log.debug("-----------EOF---------------")
-             
+
     def getVideoStream(self):
         if len(self.video) == 0:
             return None
         return self.video[0]
-    
+
+    def hasEmbeddedCover(self):
+        """Return True if any stream is an attached picture (embedded cover art)."""
+        return any(s._picAttached() for s in self.streams)
+
     def getAudioStream(self):
         for stream in self.audio:
             # if stream.getBitRate()>0:
             if stream.isValidAudio():
-                return stream     
+                return stream
         return None
-    
+
     def getPrimaryAudioCodec(self):
         for stream in self.audio:
             # if stream.getBitRate()>0:
             if stream.getCodec() != VideoStreamInfo.NA:
                 return stream.getCodec()
-        
+
         return None;
-    
+
     def allAudioStreams(self):
         return self.audio
-    
+
     def getDialogFileExtensions(self):
         vcodec = self.getVideoStream().getCodec()
         acodec = self.getPrimaryAudioCodec()
@@ -796,7 +836,7 @@ class FFStreamProbe():
         fmt = self.getFormatNames()[0]
         fmtMap = FORMATS.table[fmt];
         return fmtMap.extensions[0]
-    
+
     #Single extension.
     def getTargetExtension(self):
         if not self.getVideoStream():
@@ -804,8 +844,8 @@ class FFStreamProbe():
         vcodec = self.getVideoStream().getCodec()
         acodec = self.getPrimaryAudioCodec()
         return FORMATS.getPreferredTargetExtension(vcodec, acodec,self.getFormatNames())
-        
-    
+
+
     def getAspectRatio(self):
         if not self.getVideoStream():
             return 1.0
@@ -815,14 +855,14 @@ class FFStreamProbe():
         return ratio
 
     '''
-    This filter is required for copying an AAC stream from 
+    This filter is required for copying an AAC stream from
     a raw ADTS AAC or an MPEG-TS container to MP4A-LATM.
     '''
     def needsAudioADTSFilter(self):
         if self.getAudioStream() is None:
             return False
         return self.getAudioStream().getCodec() == "aac" and (self.isH264Codec() or self.isMP4Container())
-    
+
     '''
     check if needs the h264_mp4toannexb filter-
      Use on: MP4 file(container) containing an H.264 stream to mpegts format
@@ -831,24 +871,24 @@ class FFStreamProbe():
         if self.isTransportStream():
             return False;
         return self.isH264Codec() #also works work mkv
-    
+
     # VideoFormat is format info....
     def getFormatNames(self):
         return self.formatInfo.formatNames()
-    
+
     def getRotation(self):
         if self.getVideoStream():
             return self.getVideoStream().getRotation()
         return 0
-    
+
     def getLanguages(self):
         lang = []
         for audio in self.audio:
             res = audio.getLanguage()
             if res != VideoFormatInfo.NA and res not in lang:
                 lang.append(res)
-        return lang 
-    
+        return lang
+
     # tuple with stream index and the language -for FFmpegCutter
     def getLanguageMapping(self):
         lang={} #key code, value: tuple(audio index, subtitle index)
@@ -860,70 +900,70 @@ class FFStreamProbe():
                 continue
             if key not in lang:
                 lang[key]=[-1,-1]
-            
+
             if stream.isValidAudio():
                 if lang[key][0]==-1:
-                    lang[key][0]=stream.slot #MPV specific, might not be the stream number.. 
-                    
+                    lang[key][0]=stream.slot #MPV specific, might not be the stream number..
+
             elif lang[key][1]==-1:
                 lang[key][1]=stream.slot
-        return lang 
-   
+        return lang
+
     def hasFormat(self, formatName):
-        return formatName in self.getFormatNames() 
-    
+        return formatName in self.getFormatNames()
+
     def isKnownVideoFormat(self):
         fmt = self.getFormatNames()
         for container in fmt:
             if container in FORMATS.table:
                 return True
-        return False 
-    
+        return False
+
     def isTransportStream(self):
         return self.hasFormat("mpegts")
-    
+
     '''
     is MP4? Since its a formatcheck it can't be mp4-TS
     '''
 
-    def isMP4Container(self): 
+    def isMP4Container(self):
         return self.hasFormat("mp4")
-    
+
     def isMPEG2Codec(self):
         if self.getVideoStream():
             return "mpeg" in self.getVideoStream().getCodec()
         return False
-        
+
     def isH264Codec(self):
         if self.getVideoStream():
             return "h264" == self.getVideoStream().getCodec()
         return False
-    
+
     def isVC1Codec(self):
         if self.getVideoStream():
             return "vc1" == self.getVideoStream().getCodec()
         return False
-    
-    
+
+
     '''
     subtitles
-    tested: subrip and move_text 
+    tested: subrip and move_text
     '''
     def hasSubtitles(self):
         return len(self.subtitle) > 0
-    
+
     def subtitleCodec(self):
         if self.hasSubtitles():
             return self.subtitle[0].getCodec()
-        
+
         return None
-        
+
     def firstSubtitleStream(self):
         if self.hasSubtitles():
             return self.subtitle[0]
         return None
-    
-    
+
+
     def printCodecInfo(self):
         print ("-------- Video -------------")
         s = self.getVideoStream()
@@ -939,12 +979,12 @@ class FFStreamProbe():
         print ("getHeight: ", s.getHeight())
         print ("isAudio: ", s.isAudio())
         print ("isVideo: ", s.isVideo())
-        
+
         print ("-------- Audio -------------")
-        s = self.getAudioStream()  
+        s = self.getAudioStream()
         if not s:
             print ("No audio")
-            return  
+            return
         print ("Index:", s.getStreamIndex())
         print ("getCodec:", s.getCodec())
         print ("bitrate(kb)", s.getBitRate())
@@ -1010,34 +1050,34 @@ class VideoFormatInfo():
         print ("***format data***")
         for key, value in self.dataDict.items():
             print (key, "->", value)
-        
+
         print ("***tag data***")
         for key, value in self.tagDict.items():
             print (key, "->", value)
-    
+
     def getDuration(self):
         if "duration" in self.dataDict:
             return float(self.dataDict['duration'])
         return 0.0
-    
+
     def getBitRate(self):
         if "bit_rate" in self.dataDict:
             kbit = int(self.dataDict["bit_rate"]) / float(1024)
             return round(kbit)
         return 0
-    
+
     def formatNames(self):
         if "format_name" in self.dataDict:
             values = self.dataDict['format_name']
             return values.split(',')
         return [self.NA]
-            
+
     def getSizeKB(self):
         if "size" in self.dataDict:
             kbyte = int(self.dataDict["size"]) / float(1024)
             return round(kbyte)
         return 0.0
-         
+
 
 class VideoStreamInfo():
     # int values
@@ -1046,20 +1086,20 @@ class VideoStreamInfo():
     PIC ="DISPOSITION:attached_pic"
 #     keys = ["index","width", "height","avg_frame_rate","duration","sample_rate"]
 #     stringKeys =["codec_type","codec_name"]
-#     divKeys =["display_aspect_ratio"]        
-    
+#     divKeys =["display_aspect_ratio"]
+
     def __init__(self, dataArray):
         self.dataDict = {}
         self.tagDict = {}
         self._parse(dataArray)
         self.slot=1 #thats the index in its list (mpv uses this) starting with 1
-        
-    
+
+
     def _parse(self, dataArray):
         for entry in dataArray:
             if entry.startswith('['):
                 continue;
-            
+
             try:
                 (key, val) = entry.strip().split('=')
             except:
@@ -1071,11 +1111,11 @@ class VideoStreamInfo():
                     self.tagDict[key] = val
                 else:
                     self.dataDict[key] = val
-        
+
     def getStreamIndex(self):
         if 'index' in self.dataDict:
             return int(self.dataDict['index'])
-    
+
     def getAspectRatio(self):
         if 'display_aspect_ratio' in self.dataDict:
             z, n = self.dataDict['display_aspect_ratio'].split(':')
@@ -1098,8 +1138,8 @@ class VideoStreamInfo():
 
     '''
     Smallest framerate in float
-    r_frame_rate is NOT the average frame rate, it is the smallest frame rate that can accurately represent all timestamps. 
-    So no, it is not wrong if it is larger than the average! For example, if you have mixed 25 and 30 fps content, 
+    r_frame_rate is NOT the average frame rate, it is the smallest frame rate that can accurately represent all timestamps.
+    So no, it is not wrong if it is larger than the average! For example, if you have mixed 25 and 30 fps content,
     then r_frame_rate will be 150 (it is the least common multiple).
     '''
     def frameRateMultiple(self):
@@ -1110,14 +1150,14 @@ class VideoStreamInfo():
         return 1.0
 
     '''
-    The average framerate might be wrong on webm muxers (vp8 codec) by a thousand. 
+    The average framerate might be wrong on webm muxers (vp8 codec) by a thousand.
     It usually is ok when using transportstreams (where r_frame_rate shows the non interlaced frequency...)
     '''
     def frameRateAvg(self):
         if "avg_frame_rate" in self.dataDict:
             (n, z) = self.dataDict["avg_frame_rate"].split("/")
             if int(z) != 0:
-                return float(n) / float(z) 
+                return float(n) / float(z)
         return 1.0
 
     def saneFPS(self):
@@ -1127,10 +1167,10 @@ class VideoStreamInfo():
             return self.frameRateMultiple()
 
     '''
-    ‘tt’ =    Interlaced video, top field coded and displayed first 
-    ‘bb’=  Interlaced video, bottom field coded and displayed first 
-    ‘tb’= Interlaced video, top coded first, bottom displayed first 
-    ‘bt’= Interlaced video, bottom coded first, top displayed first 
+    ‘tt’ =    Interlaced video, top field coded and displayed first
+    ‘bb’=  Interlaced video, bottom field coded and displayed first
+    ‘tb’= Interlaced video, top coded first, bottom displayed first
+    ‘bt’= Interlaced video, bottom coded first, top displayed first
     '''
     def isInterlaced(self):
         interlacedID=["tb","tt","bt","bb"]
@@ -1145,24 +1185,24 @@ class VideoStreamInfo():
 
     def getCodec(self):
         return self.dataDict.get('codec_name',self.NA)
-    
-    def codecTag(self): #sth like avc1 on h264 codec 
+
+    def codecTag(self): #sth like avc1 on h264 codec
         return self.dataDict.get('codec_tag_string',self.NA)
-    
+
     def hasAACCodec(self):
         return self.getCodec() == "aac"
-    
+
     def getWidth(self):
         return self.dataDict.get('width',self.NA)
 
     def getHeight(self):
         return self.dataDict.get('height',self.NA)
-    
+
     def isAVC(self):  # MOV, h264
         if 'is_avc' in self.dataDict:
             return "true" == self.dataDict['is_avc']
         return False
-    
+
     def getCodecTimeBase(self):
         if 'codec_time_base' in self.dataDict:
             return self.dataDict['codec_time_base']
@@ -1172,7 +1212,7 @@ class VideoStreamInfo():
         if 'time_base' in self.dataDict:
             return self.dataDict['time_base']
         return self.NA
- 
+
     '''
     bitrate in kb (int)-Audio only
     '''
@@ -1185,25 +1225,25 @@ class VideoStreamInfo():
 
     '''
     length in seconds (float)
-    '''            
+    '''
 
     def duration(self):
         if "duration" in self.dataDict:
             return float(self.dataDict["duration"])
-        return 0.0 
-   
+        return 0.0
+
     '''
     some audio stuff
     '''
     def sampleRate(self):
         return int(self.dataDict.get("sample_rate","0"))
-    
+
     def audioChannels(self):
-        return int(self.dataDict.get("channels","0"))  
+        return int(self.dataDict.get("channels","0"))
 
     def isValidAudio(self):
         return self.sampleRate()>0 and self.audioChannels()>0 and self.getCodec()!= VideoStreamInfo.NA
-   
+
     def getLanguage(self):
         if "language" in self.tagDict:
             val = self.tagDict['language']
@@ -1211,10 +1251,10 @@ class VideoStreamInfo():
                 return self.NA
             return val
         return self.NA
-    
+
     def _picAttached(self):
         return self.dataDict.get(self.PIC,"0")=="1"
-    
+
     def isAudio(self):
         # Is this stream labeled as an audio stream?
         return str(self.dataDict.get('codec_type',"")) == 'audio'
@@ -1222,7 +1262,7 @@ class VideoStreamInfo():
     def isVideo(self):
         #Is the stream labeled as a video stream.
         return str(self.dataDict.get('codec_type',"")) == 'video' and not self._picAttached()
-        
+
     def isSubTitle(self):
         # Is this stream labeled as subtitle stream?
         return str(self.dataDict.get('codec_type',"")) == 'subtitle'
@@ -1235,7 +1275,7 @@ class FFFrameProbe():
         self.path = video_file
         # self._readDataByLines()
         self._readData()
-    
+
     def _readDataByLines(self):
         p = subprocess.Popen(["ffprobe", "-select_streams", "v:0", "-show_frames", self.path, "-v", "quiet"], stdout=subprocess.PIPE)
         proc = 0;
@@ -1245,12 +1285,12 @@ class FFFrameProbe():
                 break
             if re.match(r'\[\/FRAME\]', line):
                 proc += 1
-                
+
 #             dataBucket = self.__processLine(line,dataBucket)
 #             if len(dataBucket)==0:
 #                 proc+=1
 #                 print "p ",proc
-            
+
     def __processLine(self, aString, dataBucket):
         if re.match(r'\[FRAME\]', aString):
             dataBucket = []
@@ -1260,14 +1300,14 @@ class FFFrameProbe():
         else:
             dataBucket.append(aString)
         return dataBucket
-   
+
     def _readData(self):
         result = Popen(["ffprobe", "-select_streams", "v:0", "-show_frames", self.path, "-v", "quiet"], stdout=subprocess.PIPE, stderr=subprocess.PIPE).communicate()
         if len(result[0]) == 0:
             raise IOError('No such media file ' + self.path)
         self.frames = []
         datalines = []
-        
+
         lines = result[0].decode("utf-8").split('\n')
         for a in lines:
             if re.match(r'\[FRAME\]', a):
@@ -1307,14 +1347,14 @@ class VideoFrameInfo():
     repeat_pict=0
     [/FRAME]
     '''
-    
+
     NA = "N/A"
     validKeys = ["key_frame", "pkt_pts_time", "pict_type", "coded_picture_number"]
 
     def __init__(self, dataArray):
         self.dataDict = {}
         self._parse(dataArray)
-    
+
     def _parse(self, dataArray):
         for entry in dataArray:
             result = entry.strip().split('=')
@@ -1323,7 +1363,7 @@ class VideoFrameInfo():
                 val = result[1]
                 if self.NA != val and key in self.validKeys:
                     self.dataDict[key] = val
-    
+
     '''
     Usually an I-Frame
     '''
@@ -1332,7 +1372,7 @@ class VideoFrameInfo():
         if self.dataDict["key_frame"]:
             return self.dataDict["key_frame"] == "1"
         return False
-    
+
     '''
     Frame time in millisconds (float)
     '''
@@ -1341,7 +1381,7 @@ class VideoFrameInfo():
         if self.dataDict["pkt_pts_time"]:
             return float(self.dataDict["pkt_pts_time"]) * 1000.0
         return 0.0
-    
+
     '''
     either P, B or I
     '''
@@ -1350,7 +1390,7 @@ class VideoFrameInfo():
         if self.dataDict["pict_type"]:
             return self.dataDict["pict_type"]
         return self.NA
-    
+
     '''
     Index of frame (int)
     '''
@@ -1359,23 +1399,27 @@ class VideoFrameInfo():
         if self.dataDict["coded_picture_number"]:
             return int(self.dataDict["coded_picture_number"])
 
-        
+
 class FFmpegVersion():
 
     def __init__(self):
         self.error=None
         self.version = 0.0;
-    
+
     def confirmFFmpegInstalled(self):
-        return which(BIN)  
-    
+        return which(BIN)
+
     def figureItOut(self):
+        ffmpeg = which(BIN)
+        if ffmpeg is None:
+            self.error = "ffmpeg not found in PATH"
+            return
         try:
-            result = subprocess.Popen(["/usr/bin/ffmpeg", "-version"], stdout=subprocess.PIPE).communicate()
+            result = subprocess.Popen([ffmpeg, "-version"], stdout=subprocess.PIPE).communicate()
         except Exception as error:
             self.error = str(error)
             return
-            
+
         if len(result[0]) > 0:
             text = result[0].decode("utf-8")
             m = re.search(r"(\d+)\.(\d+)", text)
@@ -1383,7 +1427,6 @@ class FFmpegVersion():
                 self.error = "Can't parse ffmpeg version"
                 return
             g1 = m.group(0)
-            print(g1)
             self.version = float(g1)
             Log.info("FFmepg Version:%.3f", float(g1))
 
@@ -1392,8 +1435,24 @@ class FFmpegPicture():
 
     def __init__(self, timestamp, somedata):
         self.ts = timestamp
-    
+
+    #decode a single still via ffmpeg for formats Qt has no plugin for (avif, heic...)
+    #returns PNG bytes or None
+    @staticmethod
+    def decodeStill(path):
+        cmd = ["ffmpeg", "-hide_banner", "-loglevel", "error", "-i", path,
+               "-frames:v", "1", "-f", "image2", "-c:v", "png", "-"]
+        try:
+            out, err = Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE).communicate()
+        except OSError:
+            Log.info("ffmpeg not available for %s", path)
+            return None
+        if not out:
+            Log.info("ffmpeg could not decode %s: %s", path, err[:200])
+            return None
+        return out
+
     def getPicture(self):
         # big todo - der test stimmt frame genau
         # ffmpeg -ss 00:26:31.131 -i Guardians.of.the.Galaxy.Vol.2UHD.m4v -vframes 1 -filter:v scale=3840:1604 -y gog.png
-        return True 
+        return True
