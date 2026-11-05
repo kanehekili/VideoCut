@@ -10,7 +10,6 @@ sudo cp $DIR/*.desktop /usr/share/applications;
 sudo mkdir -p /opt/videocut;
 sudo cp -r $DIR/* /opt/videocut/;
 sudo ln -s /opt/videocut/VideoCut.py /usr/bin/videocut
-sudo ln -s /opt/videocut/VideoPlay.py /usr/bin/videoplay
 
 echo "######################################################################"
 echo "#                  Ensure you have installed:                        #"                     

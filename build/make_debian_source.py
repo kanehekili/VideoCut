@@ -62,7 +62,7 @@ def copy_payload(pkg_dir, version):
         text = substitute_tokens(text, {"xxx": version})
         target = src_dir / py_file.name
         target.write_text(text)
-        if py_file.name in ("VideoCut.py", "VideoPlay.py"):
+        if py_file.name == "VideoCut.py":
             target.chmod(0o755)
 
     shutil.copytree(SRC_DIR / "icons", src_dir / "icons")

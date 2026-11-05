@@ -1,3 +1,15 @@
+# copyright (c) 2026 kanehekili (kanehekili.media@gmail.com)
+# This program is free software: you can redistribute it and/or modify it under the terms of the GNU General Public License,
+# as published by the Free Software Foundation, either version 2 of the License, or (at your option) any
+# later version.
+#
+# This program is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied
+# warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the  GNU General Public License for more
+# details.
+#
+# You should have received a copy of the GNU General Public License along with
+# this program; if not, see <https://www.gnu.org/licenses/>.
+
 '''
 Created on Oct 4, 2014
 FFMPEG Wrapper - AVCONV will not be supported - ever.
@@ -13,6 +25,7 @@ import logging
 from logging.handlers import RotatingFileHandler
 from itertools import tee
 import configparser
+import glob
 import gzip
 
 BIN = "ffmpeg"
@@ -228,21 +241,6 @@ class OSTools():
     def namer(self,name):
         return name+".gz"
 
-    def is_nvidia_gpu_active(self):
-        try:
-            # Try to detect active GPU via `nvidia-smi` (most reliable if installed)
-            subprocess.run(["nvidia-smi"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True)
-            return True
-        except Exception:
-            pass
-
-        try:
-            # Fallback: parse `lspci` output (less accurate but doesn't need NVIDIA tools)
-            result = subprocess.run(["lspci"], stdout=subprocess.PIPE, text=True)
-            return "NVIDIA" in result.stdout
-        except Exception:
-            return False
-
     def currentDesktop(self):
         return os.environ.get("XDG_CURRENT_DESKTOP", "").lower()
 
@@ -253,6 +251,68 @@ class OSTools():
         #won't work on cinn 22.2 / numbat: needs qt6ct
         #os.environ["QT_QPA_PLATFORMTHEME"] = "@qtplatform@"
         os.environ['QT_QPA_PLATFORM'] = 'xcb'
+
+class GPUTools():
+    """GPU detection and the mpv decoder options that follow from it. Static -
+    none of it has state, and OSTools has no business knowing about GPUs."""
+    #PCI vendor ids of the real DRM cards. Connector dirs (card1-HDMI-A-1) carry
+    #no vendor file, so they drop out of the glob by themselves. No lspci needed.
+    MESA_GPUS = ("0x8086", "0x1002")  #intel, amd
+    #exists exactly while the kernel module is loaded - which is what libcuda and
+    #nvdec need. nvidia-smi is a separate package and its lspci fallback only
+    #proves a card is present, not that the driver can be talked to.
+    NVIDIA_PROC = "/proc/driver/nvidia/version"
+
+    @staticmethod
+    def hasNvidiaDriver():
+        return os.path.isfile(GPUTools.NVIDIA_PROC)
+
+    @staticmethod
+    def is_intel_gpu_active():
+        """Intel graphics - discrete (Arc/DG2) or integrated. Only the display
+        controller line counts: 'Intel' appears all over lspci on any Intel
+        board, so matching the whole output would hit AMD/NVIDIA boxes too."""
+        try:
+            result = subprocess.run(["lspci"], stdout=subprocess.PIPE, text=True)
+            for line in result.stdout.splitlines():
+                if "Intel" not in line:
+                    continue
+                if ("VGA compatible controller" in line
+                        or "Display controller" in line
+                        or "3D controller" in line):
+                    return True
+            return False
+        except Exception:
+            return False
+
+    @staticmethod
+    def hasMesaGpu():
+        for path in glob.glob("/sys/class/drm/card*/device/vendor"):
+            try:
+                with open(path) as f:
+                    if f.read().strip() in GPUTools.MESA_GPUS:
+                        return True
+            except OSError:
+                pass
+        return False
+
+    #mpv decoder options for the GPU we run on. Explicit candidate lists on purpose:
+    #"auto-safe" probes nvdec, and the failed dlopen of libcuda.so.1 arrives as an
+    #mpv error on every box without the nvidia driver. isVirtual means software GL.
+    @staticmethod
+    def gpuArgs(isVirtual=False, nvdecCopy=True):
+        if isVirtual:
+            Log.info("Virtual GPU - software rendering, no hwdec")
+            return {"hwdec":"no", "gpu-dumb-mode":'yes', "vd-lavc-dr":'no'}
+        if GPUTools.hasNvidiaDriver():
+            Log.info("Nvidia detected - nvdec")
+            return {"hwdec":"nvdec_copy" if nvdecCopy else "nvdec"}
+        if GPUTools.hasMesaGpu():
+            #vaapi-copy is the one hw path that engages inside a GL FBO
+            Log.info("Intel/AMD detected - vaapi")
+            return {"hwdec":"vaapi-copy,no"}
+        Log.info("No known GPU - software decoding")
+        return {"hwdec":"no"}
 
 class ConfigAccessor():
     __SECTION = "default"

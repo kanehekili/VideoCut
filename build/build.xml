@@ -87,8 +87,7 @@
 			</filterset>	
 		</copy>	
 		<chmod file="${rootDir}/VideoCut.py" perm="ugo+rwx"/>
-		<chmod file="${rootDir}/VideoPlay.py" perm="ugo+rwx"/>				
-		
+
 	</target>
 
 	<target name="deploy" depends="build_dir">
@@ -103,11 +102,11 @@
 		</exec>
 		
 		<!-- PKBUILD -->
-		<checksum file="videocut${version}.tar" property="aurMD5"/>
+		<checksum file="videocut${version}.tar" algorithm="SHA-256" property="aurSHA256"/>
 		<copy todir="${aurTarget}">
 			<fileset file="${aurSource}/*"/>
 			<filterset>
-				<filter token="md5sum" value="${aurMD5}"/>
+				<filter token="sha256sum" value="${aurSHA256}"/>
 				<filter token="xxx" value="${version}"/>
 				<filter token="xpkgrelx" value="${pkgrelease}"/>
 			</filterset>
@@ -159,7 +158,6 @@
 		</copy>
 		
 		<chmod file="${ubu0Target}/src/VideoCut.py" perm="ug+rwx"/>
-		<chmod file="${ubu0Target}/src/VideoPlay.py" perm="ug+rwx"/>
 		
 		<copy todir="${ubu0Target}/addons">
 			<fileset file="*.desktop"/>
@@ -211,7 +209,6 @@
 		</copy>
 		
 		<chmod file="${ubu1Target}/src/VideoCut.py" perm="ug+rwx"/>
-		<chmod file="${ubu1Target}/src/VideoPlay.py" perm="ug+rwx"/>
 		
 		<copy todir="${ubu1Target}/addons">
 			<fileset file="*.desktop"/>
@@ -262,7 +259,6 @@
 			</filterset>
 		</copy>
 		<chmod file="${ubu2Target}/src/VideoCut.py" perm="ug+rwx"/>
-		<chmod file="${ubu2Target}/src/VideoPlay.py" perm="ug+rwx"/>
 				
 		<copy todir="${ubu2Target}/addons">
 			<fileset file="*.desktop"/>

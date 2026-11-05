@@ -15,9 +15,6 @@ VideoCut supports the cutting of subtitles when "Show subtitles"  in the setting
 
 The current version is written in python3 and uses the qt6 widget kit.  
 
-## :boom: VideoPlay Video/Audio player included
-As a spinoff a player has been introduced. It handles pictures, plays videos and audio files. 
-
 ### Prerequisites
 * Arch: python3, python-pillow and mpv
 * Debian/Mint/Ubuntu: python3 python3-pil libmpv2 (or libmpv1) (no-recommends) 
@@ -80,9 +77,6 @@ MPV supports audio streams while playing. Unfortunately it relies on the audio s
 
 ### Support for Qemu:
 -v will use a virtual GL driver for the preview window. (videocut -v)
-
-### Player included
-videoplay is a spinoff as a small easy to use media player. 
 
 ### Settings
 The cog icon at the toolbar will open the settings dialog, providing the following settings:
@@ -189,6 +183,10 @@ Copy the .desktop file and change the exec line to "Exec= python3 .../VideoCut.p
 Opencv will not be displaying subtitles nor frametypes.
 
 ### Changes 
+05.11.2026
+* Videoplayer has been retired. Use the EasyPlayer project.
+* Video decoder detection detached from MPV probe
+
 19.09.2026
 * Ctrl + arrow left/right jumps from I-frame to I-frame
 

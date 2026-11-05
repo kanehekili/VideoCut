@@ -15,6 +15,7 @@ from PyQt6.QtOpenGLWidgets import QOpenGLWidget
 
 from threading import Condition
 import FFMPEGTools,Cutter
+from FFMPEGTools import GPUTools
 import time,re
 import locale
 
@@ -148,14 +149,15 @@ class MpvPlayer():
     def initPlayer(self,container):
         kwArgs=self.__baseMpvArgs()
         kwArgs["wid"]=str(int(container.winId()))
+        #no GL on this widget - the virtual flag has nothing to dumb down here
+        gpuArgs=GPUTools.gpuArgs(False)
+        kwArgs.update(gpuArgs)
         #the vo list is a fallback chain - mpv takes the first one that initializes.
-        #x11 needs no GL at all, which keeps us alive on VMs without DRI3
-        if FFMPEGTools.OSTools().fileExists("/proc/driver/nvidia/version"):
-            kwArgs["hwdec"] = "nvdec_copy"
+        #x11 needs no GL at all, which keeps us alive on VMs without DRI3.
+        #gpu-next leads on nvidia only, where it is proven
+        if gpuArgs["hwdec"] == "nvdec_copy":
             kwArgs["vo"] = "gpu-next,gpu,xv,x11"
-            Log.info("Switched to nvdec")
         else:
-            kwArgs["hwdec"] = "no"
             kwArgs["vo"] = "gpu,xv,x11"
         try:
             self.mediaPlayer = MPV(**kwArgs)
@@ -166,15 +168,22 @@ class MpvPlayer():
         self._hookEvents()
         return self.mediaPlayer
     
-    def initGLPlayer(self):
-        #stripes when using file explorer (initial call without file) 
+    def initGLPlayer(self,isVirtual=False):
+        #stripes when using file explorer (initial call without file)
         kwArgs=self.__baseMpvArgs()
-        if FFMPEGTools.OSTools().fileExists("/proc/driver/nvidia/version"):
-            kwArgs["hwdec"] = "nvdec_copy"
-            Log.info("Switched to nvdec")        
-        self.mediaPlayer = MPV(**kwArgs)
+        kwArgs.update(GPUTools.gpuArgs(isVirtual))
+        try:
+            self.mediaPlayer = MPV(**kwArgs)
+        except Exception:
+            #vo has to stay libmpv here - the render context only gets frames from
+            #that VO - so unlike initPlayer there is no vo chain to fall back on.
+            #Retry with the software rendering options gpuArgs sets when virtual.
+            Log.exception("mpv init failed - retrying with software rendering")
+            kwArgs["gpu-dumb-mode"] = 'yes'
+            kwArgs["vd-lavc-dr"] = 'no'
+            self.mediaPlayer = MPV(**kwArgs)
         self._hookEvents()
-        return self.mediaPlayer 
+        return self.mediaPlayer
 
     '''
     Profile low-latency: 
@@ -194,8 +203,8 @@ class MpvPlayer():
     Offset should be 0.1 for fast seek and 1.5 to 2.5 for slow seek (especially mpgts)
     '''    
     def __baseMpvArgs(self):
-        return {"hwdec":"auto-safe",
-            "vo":"libmpv", #depends on backend - see below                
+        return {"hwdec":"no", #_gpuArgs decides - never "auto-safe", that probes nvdec
+            "vo":"libmpv", #depends on backend - see below
             #video_sync="display-desync", #no effect on mkv/vc1
             "log_handler":self._passLog,
             "loglevel" : 'error',
@@ -665,12 +674,6 @@ class MpvPlayer():
         Log.info("Set VC1 codec in MPV explictly")
         self.mediaPlayer.hwdec_codecs="vc1" 
         
-    def tweakVirtual(self,virtualGPU):
-        if virtualGPU:
-            Log.info("Activating software rendering for GL")
-            self.mediaPlayer.gpu_dumb_mode = 'yes'
-            self.mediaPlayer.vd_lavc_dr = 'no'        
- 
     def resetCodecs(self):
         #self.mediaPlayer.hwdec_codecs = "h264,hevc,vp8,vp9,av1,mpeg2video,mpeg4,vc1"
         self.mediaPlayer.hwdec_codecs ="all"
@@ -777,15 +780,14 @@ class MpvPlugin():
     
     def _createGLWidget(self,parent):
         self.player= MpvPlayer()
-        mpv=self.player.initGLPlayer()    
+        mpv=self.player.initGLPlayer(self.virtualGPU)
         self.mpvWidget=VideoGLWidget(parent,mpv)
         self.player.connectTo(self.mpvWidget.updateUI) #GL connect
         return self.mpvWidget
     
     def __setupPlayer(self):
         if self.showGL:
-            self.player.tweakVirtual(self.virtualGPU)
-            return #already happened
+            return #already happened - GPUTools.gpuArgs ran at initGLPlayer time
         if self.player: #Non GL connect
             self.player.close()
         self.player= MpvPlayer()
