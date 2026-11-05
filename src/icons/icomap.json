@@ -53,6 +53,6 @@
 	  "mediaSettings":"./icons/flatdark/settings.svg",
 	  "audioOn":"./icons/flatdark/sound.svg",
 	  "audioOff":"./icons/flatdark/mute.svg",
-	  "fullscreen":"./icons/flatdark/fullscreen.png"
+	  "fullscreen":"./icons/flatdark/fullscreen.svg"
 	  }	
     }
