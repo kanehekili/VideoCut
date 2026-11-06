@@ -314,20 +314,28 @@ class GPUTools():
     #"auto-safe" probes nvdec, and the failed dlopen of libcuda.so.1 arrives as an
     #mpv error on every box without the nvidia driver. Software rendering is used
     #when asked for (-v) or when the only cards present are emulated ones.
+    #gpu-hwdec-interop is just as explicit: on vo=libmpv its "auto" means "all", so
+    #mpv loads every interop context (cuda included) when the render context is
+    #created - no matter what hwdec says. "no" blocks that, which is right wherever
+    #we decode in software or copy back: those frames live in system memory anyway.
     @staticmethod
     def gpuArgs(isVirtual=False, nvdecCopy=True):
         if isVirtual or GPUTools.isVirtualGpu():
             Log.info("Virtual GPU - software rendering, no hwdec")
-            return {"hwdec":"no", "gpu-dumb-mode":'yes', "vd-lavc-dr":'no'}
+            return {"hwdec":"no", "gpu-dumb-mode":'yes', "vd-lavc-dr":'no',
+                    "gpu-hwdec-interop":"no"}
         if GPUTools.hasNvidiaDriver():
             Log.info("Nvidia detected - nvdec")
-            return {"hwdec":"nvdec_copy" if nvdecCopy else "nvdec"}
+            if nvdecCopy:
+                return {"hwdec":"nvdec_copy", "gpu-hwdec-interop":"no"}
+            #plain nvdec renders straight from cuda memory - this one needs it
+            return {"hwdec":"nvdec", "gpu-hwdec-interop":"cuda"}
         if GPUTools.hasMesaGpu():
             #vaapi-copy is the one hw path that engages inside a GL FBO
             Log.info("Intel/AMD detected - vaapi")
-            return {"hwdec":"vaapi-copy,no"}
+            return {"hwdec":"vaapi-copy,no", "gpu-hwdec-interop":"no"}
         Log.info("No known GPU - software decoding")
-        return {"hwdec":"no"}
+        return {"hwdec":"no", "gpu-hwdec-interop":"no"}
 
 class ConfigAccessor():
     __SECTION = "default"

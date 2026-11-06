@@ -102,6 +102,14 @@ class MpvInitFallbackTest(unittest.TestCase):
             args = MPV.call_args.kwargs
         self.assertEqual(args.get('hwdec'), 'nvdec_copy')
 
+    def test_interopIsNeverLeftToMpv(self):
+        """vo=libmpv reads interop "auto" as "all" and dlopens libcuda.so.1 at
+        render context creation, whatever hwdec says - so it is always explicit"""
+        for kw in ({}, {'nvidia': True}, {'virtual': True}):
+            with self.subTest(**kw), gpu(**kw), mock.patch.object(MpvPlayer, 'MPV') as MPV:
+                self.player.initGLPlayer()
+                self.assertEqual(MPV.call_args.kwargs.get('gpu-hwdec-interop'), 'no')
+
 
 class WidVoChainTest(unittest.TestCase):
     """The wid path picks its vo chain from what the GPU detection found. On an
@@ -122,6 +130,7 @@ class WidVoChainTest(unittest.TestCase):
         self.assertEqual(args.get('vo'), 'xv,x11')
         self.assertEqual(args.get('hwdec'), 'no')
         self.assertEqual(args.get('gpu-dumb-mode'), 'yes')
+        self.assertEqual(args.get('gpu-hwdec-interop'), 'no')
 
     def test_realGpuKeepsTheGpuVo(self):
         self.assertEqual(self.built().get('vo'), 'gpu,xv,x11')
