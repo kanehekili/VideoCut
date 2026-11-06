@@ -146,17 +146,20 @@ class MpvPlayer():
         self._frameInfoFunc = None
         self._resetState()
     
-    def initPlayer(self,container):
+    def initPlayer(self,container,isVirtual=False):
         kwArgs=self.__baseMpvArgs()
         kwArgs["wid"]=str(int(container.winId()))
-        #no GL on this widget - the virtual flag has nothing to dumb down here
-        gpuArgs=GPUTools.gpuArgs(False)
+        gpuArgs=GPUTools.gpuArgs(isVirtual)
         kwArgs.update(gpuArgs)
         #the vo list is a fallback chain - mpv takes the first one that initializes.
-        #x11 needs no GL at all, which keeps us alive on VMs without DRI3.
-        #gpu-next leads on nvidia only, where it is proven
+        #gpu-next leads on nvidia only, where it is proven. In software mode the gpu
+        #VO is no option at all: it probes egl, then drm - which wants DRM master,
+        #is refused and takes the process down instead of raising - and then vulkan.
+        #xv and x11 need no GL, which keeps us alive on VMs without DRI3.
         if gpuArgs["hwdec"] == "nvdec_copy":
             kwArgs["vo"] = "gpu-next,gpu,xv,x11"
+        elif "gpu-dumb-mode" in gpuArgs:
+            kwArgs["vo"] = "xv,x11"
         else:
             kwArgs["vo"] = "gpu,xv,x11"
         try:
@@ -791,7 +794,7 @@ class MpvPlugin():
         if self.player: #Non GL connect
             self.player.close()
         self.player= MpvPlayer()
-        self.player.initPlayer(self.mpvWidget)
+        self.player.initPlayer(self.mpvWidget,self.virtualGPU)
         self.player.connectTo(self.mpvWidget.updateUI)
     
     def setCutEntry(self,cutEntry):

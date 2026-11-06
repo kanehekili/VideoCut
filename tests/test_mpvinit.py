@@ -11,6 +11,7 @@ Plain unittest, offscreen Qt, nothing installed beyond what VideoCut needs:
 
     cd /home/matze/git/VideoCut && python3 -m unittest discover -s tests
 """
+import contextlib
 import os
 import sys
 import unittest
@@ -25,13 +26,20 @@ if SRC not in sys.path:
 import MpvPlayer  # noqa: E402
 
 
+@contextlib.contextmanager
+def gpu(nvidia=False, virtual=False):
+    """the box the suite runs on must not decide the outcome of a test"""
+    with mock.patch.object(MpvPlayer.GPUTools, 'hasNvidiaDriver', return_value=nvidia), \
+         mock.patch.object(MpvPlayer.GPUTools, 'isVirtualGpu', return_value=virtual):
+        yield
+
+
 def noNvidia():
-    """/proc/driver/nvidia/version must not decide the outcome of a test"""
-    return mock.patch.object(MpvPlayer.GPUTools, 'hasNvidiaDriver', return_value=False)
+    return gpu()
 
 
 def withNvidia():
-    return mock.patch.object(MpvPlayer.GPUTools, 'hasNvidiaDriver', return_value=True)
+    return gpu(nvidia=True)
 
 
 class MpvInitFallbackTest(unittest.TestCase):
@@ -93,6 +101,44 @@ class MpvInitFallbackTest(unittest.TestCase):
             self.player.initGLPlayer()
             args = MPV.call_args.kwargs
         self.assertEqual(args.get('hwdec'), 'nvdec_copy')
+
+
+class WidVoChainTest(unittest.TestCase):
+    """The wid path picks its vo chain from what the GPU detection found. On an
+    emulated adapter the gpu VO must not even be offered: it probes egl, then drm
+    - which wants DRM master, is refused and aborts the process rather than
+    raising - so the try/except below could never catch it."""
+
+    def built(self, **kw):
+        player = MpvPlayer.MpvPlayer()
+        container = mock.Mock(**{'winId.return_value': 42})
+        with gpu(**kw), mock.patch.object(MpvPlayer.MpvPlayer, 'mpvVersion', return_value='0.41.0'), \
+             mock.patch.object(MpvPlayer, 'MPV') as MPV:
+            player.initPlayer(container)
+            return MPV.call_args.kwargs
+
+    def test_emulatedGpuNeverGetsTheGpuVo(self):
+        args = self.built(virtual=True)
+        self.assertEqual(args.get('vo'), 'xv,x11')
+        self.assertEqual(args.get('hwdec'), 'no')
+        self.assertEqual(args.get('gpu-dumb-mode'), 'yes')
+
+    def test_realGpuKeepsTheGpuVo(self):
+        self.assertEqual(self.built().get('vo'), 'gpu,xv,x11')
+
+    def test_nvidiaLeadsWithGpuNext(self):
+        self.assertEqual(self.built(nvidia=True).get('vo'), 'gpu-next,gpu,xv,x11')
+
+    def test_virtualFlagReachesTheWidPath(self):
+        """-v means software rendering on both widgets, not just the GL one"""
+        player = MpvPlayer.MpvPlayer()
+        container = mock.Mock(**{'winId.return_value': 42})
+        with gpu(), mock.patch.object(MpvPlayer.MpvPlayer, 'mpvVersion', return_value='0.41.0'), \
+             mock.patch.object(MpvPlayer, 'MPV') as MPV:
+            player.initPlayer(container, True)
+            args = MPV.call_args.kwargs
+        self.assertEqual(args.get('vo'), 'xv,x11')
+        self.assertEqual(args.get('vd-lavc-dr'), 'no')
 
 
 if __name__ == '__main__':
