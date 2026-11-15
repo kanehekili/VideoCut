@@ -75,8 +75,9 @@ For DVB transport stream you should keep the ".m2t" ending, mkv containers shoul
 ### Audio Monitoring
 MPV supports audio streams while playing. Unfortunately it relies on the audio stream while seeking (precise) thus rendering exact seeking sometimes difficult due to problems decoding it. So audio is turned of (not just muted) while seeking. The "auto" mode has been replaced with the first valid audio stream and seems to work better for listening while cutting. 
 
-### Support for Qemu:
--v will use a virtual GL driver for the preview window. (videocut -v)
+### Support for Qemu and old hardware:
+* Virtual machines are detected automatically - software rendering and software decoding are switched on without any option.
+* -v enforces that mode on any machine (videocut -v). Last resort, should the detection be wrong.
 
 ### Settings
 The cog icon at the toolbar will open the settings dialog, providing the following settings:

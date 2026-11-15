@@ -20,7 +20,8 @@ import os,sys
 import subprocess
 from subprocess import Popen
 import re
-from shutil import which
+import inspect
+from shutil import which,move
 import logging
 from logging.handlers import RotatingFileHandler
 from itertools import tee
@@ -33,7 +34,8 @@ BIN = "ffmpeg"
 
 def setupRotatingLogger(logName,logConsole,logFolder=None):
     logSize=5*1024*1024 #5MB
-    scriptDir = OSTools().getLocalPath(__file__)
+    #the app's folder, not ours - see OSTools.getWorkingDirectory
+    scriptDir = OSTools().getWorkingDirectory()
     if os.access(scriptDir, os.W_OK):
         folder = scriptDir
     else:
@@ -104,11 +106,24 @@ class OSTools():
     def getDirectory(self,aPath):
         return os.path.dirname(aPath)
 
-    #that is the directory where this file resides - not the main
-    #should be used carefully (OK if FFMPEGTools in the same path as main)
+    '''
+    Where is the app that asks? The directory of the python file that called
+    this - never this file's own. Both are the same once a package is built,
+    because FFMPEGTools is copied next to the main script; while developing
+    they are not, since the other projects read it from VideoCut. Asking for
+    __file__ in here would answer "VideoCut/src" for every one of them.
+    Frames of this module are skipped, so our own functions can ask on behalf
+    of their caller.
+    '''
+
     def getWorkingDirectory(self):
-        #os.path.dirname(os.path.realpath(__file__)) > if symlinks a necessary
-        return os.path.dirname(os.path.abspath(__file__))
+        here = os.path.abspath(__file__)
+        frame = inspect.currentframe().f_back
+        while frame and os.path.abspath(frame.f_code.co_filename) == here:
+            frame = frame.f_back
+        if frame is None:
+            return os.path.dirname(here)
+        return self.getLocalPath(frame.f_code.co_filename)
 
     def setMainWorkDir(self,dirpath):
         os.chdir(dirpath)  #changes the "active directory"
@@ -148,6 +163,14 @@ class OSTools():
         if self.fileExists(path):
             os.remove(path)
 
+    #os.replace is atomic and overwrites, but refuses to cross devices - which
+    #a home or a /tmp on its own mount would. Then it has to be copy & delete.
+    def moveFile(self, source, dest):
+        try:
+            os.replace(source, dest)
+        except OSError:
+            move(source, dest)
+
     def canWriteToFolder(self,path):
         return os.access(path,os.W_OK)
 
@@ -181,6 +204,21 @@ class OSTools():
                                  key=self._naturalSortKey)
             for name in sorted(filenames, key=self._naturalSortKey):
                 if self.getExtension(name).lower() in extensions:
+                    found.append(os.path.join(dirpath, name))
+                    if len(found) >= maxFiles:
+                        Log.info("Directory scan capped at %d files", maxFiles)
+                        return found
+        return found
+
+    #all files below aDir whose name contains fragment, same ordering rules as
+    #collectFiles. For finding a file again when only part of its name is known.
+    def findFiles(self, aDir, fragment, maxFiles=5000):
+        found = []
+        for dirpath, dirnames, filenames in os.walk(aDir):
+            dirnames[:] = sorted((d for d in dirnames if not d.startswith('.')),
+                                 key=self._naturalSortKey)
+            for name in sorted(filenames, key=self._naturalSortKey):
+                if fragment in name:
                     found.append(os.path.join(dirpath, name))
                     if len(found) >= maxFiles:
                         Log.info("Directory scan capped at %d files", maxFiles)
@@ -263,6 +301,17 @@ class GPUTools():
     #nvdec need. nvidia-smi is a separate package and its lspci fallback only
     #proves a card is present, not that the driver can be talked to.
     NVIDIA_PROC = "/proc/driver/nvidia/version"
+    #h264 hardware encoder recipes. nvenc takes frames straight out of system
+    #memory, vaapi insists on its own surfaces - hence the upload filter. The qp
+    #values are deliberately plain: "-rc constqp" exists on every nvenc
+    #generation, unlike the p1..p7 presets a Kepler card would reject.
+    HW_NVENC_ARGS = ["-c:v", "h264_nvenc", "-rc", "constqp", "-qp", "23"]
+    HW_VAAPI_ARGS = ["-c:v", "h264_vaapi", "-qp", "24"]
+    HW_VAAPI_FILTER = "format=nv12,hwupload"
+    RENDER_NODE_GLOB = "/dev/dri/renderD*"
+    PROBE_FRAMES = "3"
+    #recipe dict or None once probed - "unprobed" means no attempt was made yet
+    _h264Encoder = "unprobed"
 
     @staticmethod
     def hasNvidiaDriver():
@@ -337,6 +386,65 @@ class GPUTools():
         Log.info("No known GPU - software decoding")
         return {"hwdec":"no", "gpu-hwdec-interop":"no"}
 
+    '''
+    The ffmpeg arguments that encode h264 on this machine's GPU, or None if
+    nothing here can. Shape:
+      {"encoder":[...], "device":[...], "filter":"..."|None}
+    "device" goes in front of the inputs, "filter" is the chain a software frame
+    has to pass before it reaches the encoder. Probed once per process.
+    '''
+    @staticmethod
+    def h264HardwareEncoder():
+        if GPUTools._h264Encoder != "unprobed":
+            return GPUTools._h264Encoder
+        GPUTools._h264Encoder = GPUTools._probeH264Encoder()
+        return GPUTools._h264Encoder
+
+    #A listed encoder proves nothing: ffmpeg advertises h264_qsv on an Arc that
+    #has no oneVPL runtime. A vendor match proves even less - a Kepler card on
+    #nouveau has no nvenc at all. So every candidate is run before it is trusted.
+    @staticmethod
+    def _probeH264Encoder():
+        if GPUTools.isVirtualGpu():
+            Log.info("Virtual GPU - no hardware encoding")
+            return None
+        candidates = []
+        if GPUTools.hasNvidiaDriver():
+            candidates.append({"encoder":GPUTools.HW_NVENC_ARGS, "device":[], "filter":None})
+        if GPUTools.hasMesaGpu():
+            for node in sorted(glob.glob(GPUTools.RENDER_NODE_GLOB)):
+                candidates.append({"encoder":GPUTools.HW_VAAPI_ARGS,
+                                   "device":["-vaapi_device", node],
+                                   "filter":GPUTools.HW_VAAPI_FILTER})
+        for recipe in candidates:
+            if GPUTools._encoderWorks(recipe):
+                Log.info("Hardware h264 encoder: %s", " ".join(recipe["encoder"]))
+                return recipe
+        Log.info("No usable hardware h264 encoder - software encoding")
+        return None
+
+    #runs the real argument vector: options an old encoder rejects must disable
+    #the hardware path here, not fail a conversion halfway through
+    @staticmethod
+    def _encoderWorks(recipe):
+        cmd = ["ffmpeg", "-hide_banner", "-v", "error", "-y"] + recipe["device"]
+        cmd += ["-f", "lavfi", "-i", "color=c=black:s=320x240:r=25",
+                "-frames:v", GPUTools.PROBE_FRAMES]
+        if recipe["filter"]:
+            cmd += ["-vf", recipe["filter"]]
+        cmd += recipe["encoder"] + ["-f", "null", "-"]
+        Log.info("probe: %s", " ".join(cmd))
+        try:
+            proc = Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+            __, err = proc.communicate(timeout=30)
+            if proc.returncode == 0:
+                return True
+            Log.info("%s unusable: %s", recipe["encoder"][1],
+                     err.decode("utf-8", "replace").strip()[:200])
+        except Exception:
+            Log.exception("Encoder probe:")
+        return False
+
 class ConfigAccessor():
     __SECTION = "default"
     homeDir = OSTools().getHomeDirectory()
@@ -344,6 +452,10 @@ class ConfigAccessor():
     def __init__(self, folder,filePath,section="default"):
         self.__SECTION=section
         self._path = OSTools().joinPathes(self.homeDir,".config",folder,filePath)
+        #store() would raise IOError and lose the settings while that folder is
+        #missing - setupRotatingLogger only creates it on its fallback path, so
+        #a run from the sources would never have one.
+        OSTools().ensureDirectory(OSTools().getDirectory(self._path))
         self.parser = configparser.ConfigParser()
         self.parser.add_section(self.__SECTION)
 
@@ -741,6 +853,10 @@ FORMATS = FormatMapGenerator()
 #ffprobe -read_intervals "%+#3" -select_streams v -i self.path -show_entries "frame=interlaced_frame"
 
 class FFStreamProbe():
+    #codecs that must be unwrapped from length prefixed NALs for mpegts
+    TS_BITSTREAM_FILTER = {"h264":"h264_mp4toannexb", "hevc":"hevc_mp4toannexb"}
+    #largest start offset that can't accumulate into a noticeable drift, in frames
+    START_TOLERANCE_FRAMES = 1.0
 
     def __init__(self, video_file):
         # self._setupConversionTable()
@@ -1012,6 +1128,52 @@ class FFStreamProbe():
     def isMP4Container(self):
         return self.hasFormat("mp4")
 
+    '''
+    The bitstream filter required to push this video stream into an mpegts
+    container, or None if none is needed. MP4 style containers (and mkv) carry
+    h264/hevc as length prefixed NALs - mpegts wants AnnexB. A transport stream
+    is AnnexB already, so it needs no filter.
+    Broader than needsH264Filter(), which only answers for h264.
+    '''
+
+    def tsBitstreamFilter(self):
+        if self.isTransportStream():
+            return None
+        vs = self.getVideoStream()
+        if vs is None:
+            return None
+        return self.TS_BITSTREAM_FILTER.get(vs.getCodec())
+
+    '''
+    True if every stream starts where the container starts, and the first video
+    frame decodes there too. Non zero start offsets - mp4 edit lists, audio
+    priming - are dropped when segments are concatenated by stream copy, so they
+    accumulate into an audio/video drift over a list of files. Only a clean start
+    may be concat-copied; anything else needs the mpegts detour.
+    Subtitles are ignored: they carry no sync a viewer would notice.
+    '''
+
+    def hasCleanStart(self):
+        vs = self.getVideoStream()
+        if vs is None:
+            return False
+        fps = vs.saneFPS()
+        if fps <= 0:
+            return False
+        tolerance = self.START_TOLERANCE_FRAMES / fps
+        for stream in self.streams:
+            if stream.isSubTitle():
+                continue
+            raw = stream.dataDict.get("start_time")
+            if raw is None:
+                continue  #nothing declared, nothing that could drift
+            try:
+                if abs(float(raw)) > tolerance:
+                    return False
+            except ValueError:
+                continue
+        return self.decodeStartShift() <= tolerance
+
     def isMPEG2Codec(self):
         if self.getVideoStream():
             return "mpeg" in self.getVideoStream().getCodec()
@@ -1117,11 +1279,11 @@ class VideoFormatInfo():
 
     def _parse(self, dataArray):
         for entry in dataArray:
-            val=self.NA
-            try:
-                (key, val) = entry.strip().split('=')
-            except:
-                Log.error("Error in entry:%s", entry)
+            #section markers, and the display matrix rows of a rotated stream,
+            #carry no "key=value" - expected content, not errors
+            if entry.startswith('[') or '=' not in entry:
+                continue
+            (key, val) = entry.strip().split('=', 1)  #a tag value may contain '='
             if self.NA != val:
                 if self.TAG in key:
                     key = key.split(':')[1]
@@ -1180,14 +1342,11 @@ class VideoStreamInfo():
 
     def _parse(self, dataArray):
         for entry in dataArray:
-            if entry.startswith('['):
-                continue;
-
-            try:
-                (key, val) = entry.strip().split('=')
-            except:
-                Log.error("Error in entry:%s", entry)
-
+            #section markers, and the display matrix rows of a rotated stream,
+            #carry no "key=value" - expected content, not errors
+            if entry.startswith('[') or '=' not in entry:
+                continue
+            (key, val) = entry.strip().split('=', 1)  #a tag value may contain '='
             if self.NA != val:
                 if self.TAG in key:
                     key = key.split(':')[1]
